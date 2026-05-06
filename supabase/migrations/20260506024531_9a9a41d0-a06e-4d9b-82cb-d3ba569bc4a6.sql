@@ -1,0 +1,1 @@
+ALTER TABLE public.schedule_items ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'pendente';

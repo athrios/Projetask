@@ -20,6 +20,7 @@ interface ScheduleItem {
   duration_minutes: number;
   position: number;
   task_date: string;
+  status: "pendente" | "fazendo" | "feita";
 }
 
 interface Props {
@@ -27,6 +28,18 @@ interface Props {
   userId: string;
   tasks: Task[];
 }
+
+const STATUS_OPTIONS: { value: ScheduleItem["status"]; label: string }[] = [
+  { value: "pendente", label: "Pendente" },
+  { value: "fazendo", label: "Fazendo" },
+  { value: "feita", label: "Feita" },
+];
+
+const statusColor: Record<ScheduleItem["status"], string> = {
+  pendente: "bg-muted text-muted-foreground",
+  fazendo: "bg-primary/15 text-primary",
+  feita: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
+};
 
 // Durations: 5, 10, 15, then +15 up to 240
 const DURATIONS: number[] = [5, 10, 15, ...Array.from({ length: 15 }, (_, i) => 30 + i * 15)];
@@ -55,7 +68,7 @@ export const SchedulePanel = ({ date, userId, tasks }: Props) => {
       .eq("task_date", date)
       .order("start_time", { ascending: true });
     if (error) return toast.error(error.message);
-    setItems(data ?? []);
+    setItems((data ?? []) as ScheduleItem[]);
   };
 
   useEffect(() => {
@@ -178,46 +191,57 @@ export const SchedulePanel = ({ date, userId, tasks }: Props) => {
           return (
             <li
               key={it.id}
-              className="grid grid-cols-12 gap-2 items-center px-3 py-2 rounded-md hover:bg-secondary/60 group"
+              className="flex flex-wrap items-center gap-2 px-3 py-2 rounded-md hover:bg-secondary/60 group"
             >
-              <div className="col-span-3 sm:col-span-2 flex items-center gap-2">
-                <Input
-                  type="time"
-                  value={fmt(it.start_time)}
-                  onChange={(e) => updateItem(it.id, { start_time: e.target.value + ":00" })}
-                  className="h-8 text-xs"
-                />
-              </div>
-              <div className="col-span-6 sm:col-span-6 text-sm truncate">{it.title}</div>
-              <div className="col-span-2 sm:col-span-3 flex items-center gap-2">
-                <Select
-                  value={String(it.duration_minutes)}
-                  onValueChange={(v) => updateItem(it.id, { duration_minutes: Number(v) })}
-                >
-                  <SelectTrigger className="h-8 text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {DURATIONS.map((d) => (
-                      <SelectItem key={d} value={String(d)}>
-                        {d} min
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <span className="text-xs text-muted-foreground whitespace-nowrap hidden sm:inline">
-                  → {end}
-                </span>
-              </div>
-              <div className="col-span-1 flex justify-end">
-                <button
-                  onClick={() => remove(it.id)}
-                  className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition"
-                  aria-label="Remover"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
-              </div>
+              <Input
+                type="time"
+                value={fmt(it.start_time)}
+                onChange={(e) => updateItem(it.id, { start_time: e.target.value + ":00" })}
+                className="h-8 text-xs w-[100px]"
+              />
+              <span className={`flex-1 min-w-[120px] text-sm truncate ${it.status === "feita" ? "line-through text-muted-foreground" : ""}`}>
+                {it.title}
+              </span>
+              <Select
+                value={String(it.duration_minutes)}
+                onValueChange={(v) => updateItem(it.id, { duration_minutes: Number(v) })}
+              >
+                <SelectTrigger className="h-8 text-xs w-[90px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {DURATIONS.map((d) => (
+                    <SelectItem key={d} value={String(d)}>
+                      {d} min
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <span className="text-xs text-muted-foreground whitespace-nowrap hidden sm:inline">
+                → {end}
+              </span>
+              <Select
+                value={it.status}
+                onValueChange={(v) => updateItem(it.id, { status: v as ScheduleItem["status"] })}
+              >
+                <SelectTrigger className={`h-7 w-[110px] text-xs border-0 ${statusColor[it.status]}`}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {STATUS_OPTIONS.map((o) => (
+                    <SelectItem key={o.value} value={o.value} className="text-xs">
+                      {o.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <button
+                onClick={() => remove(it.id)}
+                className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition"
+                aria-label="Remover"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
             </li>
           );
         })}

@@ -21,6 +21,7 @@ export type Database = {
           id: string
           position: number
           start_time: string
+          status: string
           task_date: string
           title: string
           user_id: string
@@ -31,6 +32,7 @@ export type Database = {
           id?: string
           position?: number
           start_time: string
+          status?: string
           task_date?: string
           title: string
           user_id: string
@@ -41,6 +43,7 @@ export type Database = {
           id?: string
           position?: number
           start_time?: string
+          status?: string
           task_date?: string
           title?: string
           user_id?: string

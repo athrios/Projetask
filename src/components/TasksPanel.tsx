@@ -3,13 +3,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Trash2, Plus, ListTree, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 
@@ -18,7 +11,6 @@ export interface Task {
   title: string;
   done: boolean;
   task_date: string;
-  status: "pendente" | "fazendo" | "feita";
 }
 
 interface Subtask {
@@ -34,17 +26,6 @@ interface Props {
   onTasksChange?: (tasks: Task[]) => void;
 }
 
-const STATUS_OPTIONS: { value: Task["status"]; label: string }[] = [
-  { value: "pendente", label: "Pendente" },
-  { value: "fazendo", label: "Fazendo" },
-  { value: "feita", label: "Feita" },
-];
-
-const statusColor: Record<Task["status"], string> = {
-  pendente: "bg-muted text-muted-foreground",
-  fazendo: "bg-primary/15 text-primary",
-  feita: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
-};
 
 export const TasksPanel = ({ date, userId, onTasksChange }: Props) => {
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -97,20 +78,11 @@ export const TasksPanel = ({ date, userId, onTasksChange }: Props) => {
     load();
   };
 
-  const setStatus = async (task: Task, status: Task["status"]) => {
-    const { error } = await supabase
-      .from("tasks")
-      .update({ status, done: status === "feita" })
-      .eq("id", task.id);
-    if (error) return toast.error(error.message);
-    load();
-  };
 
   const toggle = async (task: Task) => {
-    const next = !task.done;
     const { error } = await supabase
       .from("tasks")
-      .update({ done: next, status: next ? "feita" : "pendente" })
+      .update({ done: !task.done })
       .eq("id", task.id);
     if (error) return toast.error(error.message);
     load();
@@ -132,23 +104,10 @@ export const TasksPanel = ({ date, userId, onTasksChange }: Props) => {
       .eq("task_id", taskId);
     if (!subs || subs.length === 0) return;
     const allDone = subs.every((s) => s.done);
-    const { data: t } = await supabase
+    await supabase
       .from("tasks")
-      .select("status")
-      .eq("id", taskId)
-      .maybeSingle();
-    if (!t) return;
-    if (allDone && t.status !== "feita") {
-      await supabase
-        .from("tasks")
-        .update({ status: "feita", done: true })
-        .eq("id", taskId);
-    } else if (!allDone && t.status === "feita") {
-      await supabase
-        .from("tasks")
-        .update({ status: "fazendo", done: false })
-        .eq("id", taskId);
-    }
+      .update({ done: allDone })
+      .eq("id", taskId);
   };
 
   const addSub = async (taskId: string) => {
@@ -217,20 +176,6 @@ export const TasksPanel = ({ date, userId, onTasksChange }: Props) => {
                     </span>
                   )}
                 </span>
-                <Select value={t.status} onValueChange={(v) => setStatus(t, v as Task["status"])}>
-                  <SelectTrigger
-                    className={`h-7 w-[110px] text-xs border-0 ${statusColor[t.status]}`}
-                  >
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {STATUS_OPTIONS.map((o) => (
-                      <SelectItem key={o.value} value={o.value} className="text-xs">
-                        {o.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
                 <button
                   onClick={() => toggleExpand(t.id)}
                   className="text-muted-foreground hover:text-foreground transition"
