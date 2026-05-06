@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Trash2, Plus } from "lucide-react";
+import { Trash2, Plus, ListTree, ChevronDown, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 
 export interface Task {
@@ -11,6 +11,13 @@ export interface Task {
   title: string;
   done: boolean;
   task_date: string;
+}
+
+interface Subtask {
+  id: string;
+  task_id: string;
+  title: string;
+  done: boolean;
 }
 
 interface Props {
@@ -22,6 +29,9 @@ interface Props {
 export const TasksPanel = ({ date, userId, onTasksChange }: Props) => {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [title, setTitle] = useState("");
+  const [subtasks, setSubtasks] = useState<Record<string, Subtask[]>>({});
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [subInput, setSubInput] = useState<Record<string, string>>({});
 
   const load = async () => {
     const { data, error } = await supabase
@@ -30,8 +40,23 @@ export const TasksPanel = ({ date, userId, onTasksChange }: Props) => {
       .eq("task_date", date)
       .order("created_at", { ascending: true });
     if (error) return toast.error(error.message);
-    setTasks(data ?? []);
-    onTasksChange?.(data ?? []);
+    const list = data ?? [];
+    setTasks(list);
+    onTasksChange?.(list);
+    if (list.length) {
+      const { data: subs } = await supabase
+        .from("subtasks")
+        .select("*")
+        .in("task_id", list.map((t) => t.id))
+        .order("created_at", { ascending: true });
+      const grouped: Record<string, Subtask[]> = {};
+      (subs ?? []).forEach((s: Subtask) => {
+        (grouped[s.task_id] ||= []).push(s);
+      });
+      setSubtasks(grouped);
+    } else {
+      setSubtasks({});
+    }
   };
 
   useEffect(() => {
@@ -67,6 +92,36 @@ export const TasksPanel = ({ date, userId, onTasksChange }: Props) => {
     load();
   };
 
+  const toggleExpand = (id: string) =>
+    setExpanded((p) => ({ ...p, [id]: !p[id] }));
+
+  const addSub = async (taskId: string) => {
+    const t = (subInput[taskId] ?? "").trim();
+    if (!t) return;
+    if (t.length > 200) return toast.error("Título muito longo");
+    const { error } = await supabase
+      .from("subtasks")
+      .insert({ task_id: taskId, user_id: userId, title: t });
+    if (error) return toast.error(error.message);
+    setSubInput((p) => ({ ...p, [taskId]: "" }));
+    load();
+  };
+
+  const toggleSub = async (s: Subtask) => {
+    const { error } = await supabase
+      .from("subtasks")
+      .update({ done: !s.done })
+      .eq("id", s.id);
+    if (error) return toast.error(error.message);
+    load();
+  };
+
+  const removeSub = async (id: string) => {
+    const { error } = await supabase.from("subtasks").delete().eq("id", id);
+    if (error) return toast.error(error.message);
+    load();
+  };
+
   return (
     <section className="space-y-4">
       <header>
@@ -88,24 +143,88 @@ export const TasksPanel = ({ date, userId, onTasksChange }: Props) => {
         {tasks.length === 0 && (
           <li className="text-sm text-muted-foreground py-4 text-center">Nenhuma tarefa ainda.</li>
         )}
-        {tasks.map((t) => (
-          <li
-            key={t.id}
-            className="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-secondary/60 group"
-          >
-            <Checkbox checked={t.done} onCheckedChange={() => toggle(t)} />
-            <span className={`flex-1 text-sm ${t.done ? "line-through text-muted-foreground" : ""}`}>
-              {t.title}
-            </span>
-            <button
-              onClick={() => remove(t.id)}
-              className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition"
-              aria-label="Remover"
-            >
-              <Trash2 className="h-4 w-4" />
-            </button>
-          </li>
-        ))}
+        {tasks.map((t) => {
+          const subs = subtasks[t.id] ?? [];
+          const isOpen = expanded[t.id];
+          return (
+            <li key={t.id} className="rounded-md hover:bg-secondary/40">
+              <div className="flex items-center gap-3 px-3 py-2 group">
+                <Checkbox checked={t.done} onCheckedChange={() => toggle(t)} />
+                <span className={`flex-1 text-sm ${t.done ? "line-through text-muted-foreground" : ""}`}>
+                  {t.title}
+                  {subs.length > 0 && (
+                    <span className="ml-2 text-xs text-muted-foreground">
+                      ({subs.filter((s) => s.done).length}/{subs.length})
+                    </span>
+                  )}
+                </span>
+                <button
+                  onClick={() => toggleExpand(t.id)}
+                  className="text-muted-foreground hover:text-foreground transition"
+                  aria-label="Sub-tarefas"
+                  title="Sub-tarefas"
+                >
+                  {isOpen ? (
+                    <ChevronDown className="h-4 w-4" />
+                  ) : (
+                    <ListTree className="h-4 w-4" />
+                  )}
+                </button>
+                <button
+                  onClick={() => remove(t.id)}
+                  className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition"
+                  aria-label="Remover"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
+              {isOpen && (
+                <div className="pl-10 pr-3 pb-3 space-y-2">
+                  <ul className="space-y-1">
+                    {subs.map((s) => (
+                      <li key={s.id} className="flex items-center gap-2 group/sub">
+                        <Checkbox checked={s.done} onCheckedChange={() => toggleSub(s)} />
+                        <span className={`flex-1 text-sm ${s.done ? "line-through text-muted-foreground" : ""}`}>
+                          {s.title}
+                        </span>
+                        <button
+                          onClick={() => removeSub(s.id)}
+                          className="opacity-0 group-hover/sub:opacity-100 text-muted-foreground hover:text-destructive transition"
+                          aria-label="Remover sub-tarefa"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </li>
+                    ))}
+                    {subs.length === 0 && (
+                      <li className="text-xs text-muted-foreground">Nenhuma sub-tarefa.</li>
+                    )}
+                  </ul>
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      addSub(t.id);
+                    }}
+                    className="flex gap-2"
+                  >
+                    <Input
+                      value={subInput[t.id] ?? ""}
+                      onChange={(e) =>
+                        setSubInput((p) => ({ ...p, [t.id]: e.target.value }))
+                      }
+                      placeholder="Nova sub-tarefa..."
+                      maxLength={200}
+                      className="h-8 text-sm"
+                    />
+                    <Button type="submit" size="icon" className="h-8 w-8" aria-label="Adicionar sub-tarefa">
+                      <Plus className="h-3.5 w-3.5" />
+                    </Button>
+                  </form>
+                </div>
+              )}
+            </li>
+          );
+        })}
       </ul>
     </section>
   );
