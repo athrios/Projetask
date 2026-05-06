@@ -198,20 +198,6 @@ export const TasksPanel = ({ date, userId, onTasksChange }: Props) => {
                     </span>
                   )}
                 </span>
-                <Select value={t.status} onValueChange={(v) => setStatus(t, v as Task["status"])}>
-                  <SelectTrigger
-                    className={`h-7 w-[110px] text-xs border-0 ${statusColor[t.status]}`}
-                  >
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {STATUS_OPTIONS.map((o) => (
-                      <SelectItem key={o.value} value={o.value} className="text-xs">
-                        {o.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
                 <button
                   onClick={() => toggleExpand(t.id)}
                   className="text-muted-foreground hover:text-foreground transition"
