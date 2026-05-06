@@ -26,17 +26,6 @@ interface Props {
   onTasksChange?: (tasks: Task[]) => void;
 }
 
-const STATUS_OPTIONS: { value: Task["status"]; label: string }[] = [
-  { value: "pendente", label: "Pendente" },
-  { value: "fazendo", label: "Fazendo" },
-  { value: "feita", label: "Feita" },
-];
-
-const statusColor: Record<Task["status"], string> = {
-  pendente: "bg-muted text-muted-foreground",
-  fazendo: "bg-primary/15 text-primary",
-  feita: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
-};
 
 export const TasksPanel = ({ date, userId, onTasksChange }: Props) => {
   const [tasks, setTasks] = useState<Task[]>([]);
