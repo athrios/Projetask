@@ -78,14 +78,6 @@ export const TasksPanel = ({ date, userId, onTasksChange }: Props) => {
     load();
   };
 
-  const setStatus = async (task: Task, status: "pendente" | "fazendo" | "feita") => {
-    const { error } = await supabase
-      .from("tasks")
-      .update({ status, done: status === "feita" })
-      .eq("id", task.id);
-    if (error) return toast.error(error.message);
-    load();
-  };
 
   const toggle = async (task: Task) => {
     const next = !task.done;
