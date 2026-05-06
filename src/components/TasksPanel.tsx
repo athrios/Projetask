@@ -105,23 +105,10 @@ export const TasksPanel = ({ date, userId, onTasksChange }: Props) => {
       .eq("task_id", taskId);
     if (!subs || subs.length === 0) return;
     const allDone = subs.every((s) => s.done);
-    const { data: t } = await supabase
+    await supabase
       .from("tasks")
-      .select("status")
-      .eq("id", taskId)
-      .maybeSingle();
-    if (!t) return;
-    if (allDone && t.status !== "feita") {
-      await supabase
-        .from("tasks")
-        .update({ status: "feita", done: true })
-        .eq("id", taskId);
-    } else if (!allDone && t.status === "feita") {
-      await supabase
-        .from("tasks")
-        .update({ status: "fazendo", done: false })
-        .eq("id", taskId);
-    }
+      .update({ done: allDone })
+      .eq("id", taskId);
   };
 
   const addSub = async (taskId: string) => {
