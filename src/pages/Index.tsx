@@ -100,13 +100,13 @@ const Index = () => {
               <TasksPanel date={date} userId={user.id} onTasksChange={setTasks} />
             )}
           </Card>
-          {/* Keep tasks loaded in background for schedule's task picker */}
-          {view === "schedule" && (
-            <div className="hidden">
-              <TasksPanel date={date} userId={user.id} onTasksChange={setTasks} />
-            </div>
-          )}
         </div>
+      </div>
+    </main>
+  );
+};
+
+export default Index;
       </div>
     </main>
   );
