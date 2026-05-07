@@ -99,6 +99,7 @@ export const TasksPanel = ({ date, userId, onTasksChange }: Props) => {
   const [subInput, setSubInput] = useState<Record<string, string>>({});
   const [notesOpen, setNotesOpen] = useState<Record<string, boolean>>({});
   const [notes, setNotes] = useState<Record<string, string>>(() => loadNotes(userId));
+  const [subStatus, setSubStatus] = useState<Record<string, string>>(() => loadSubStatus(userId));
 
   const [view, setView] = useState<ViewMode>(
     () => (localStorage.getItem("tasksView") as ViewMode) || "list",
