@@ -4,32 +4,69 @@ import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card } from "@/components/ui/card";
-import { TasksPanel, type Task } from "@/components/TasksPanel";
+import { TasksPanel, type Task, type TasksFilter } from "@/components/TasksPanel";
 import { SchedulePanel } from "@/components/SchedulePanel";
-import { LogOut, CalendarClock, ListChecks } from "lucide-react";
+import {
+  LogOut,
+  CalendarClock,
+  ListChecks,
+  Sun,
+  CheckCircle2,
+  Settings,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const today = () => new Date().toISOString().slice(0, 10);
 
-type View = "schedule" | "tasks";
+type Section = "today" | "schedule" | "tasks" | "done" | "settings";
+
+const SECTION_META: Record<
+  Section,
+  { label: string; icon: typeof Sun; subtitle: string }
+> = {
+  today: {
+    label: "Hoje",
+    icon: Sun,
+    subtitle: "O que precisa acontecer hoje.",
+  },
+  schedule: {
+    label: "Cronograma",
+    icon: CalendarClock,
+    subtitle: "Sua agenda do dia, bloco a bloco.",
+  },
+  tasks: {
+    label: "Tarefas",
+    icon: ListChecks,
+    subtitle: "Tudo que você está cuidando.",
+  },
+  done: {
+    label: "Concluídas",
+    icon: CheckCircle2,
+    subtitle: "O que você já tirou da frente.",
+  },
+  settings: {
+    label: "Configurações",
+    icon: Settings,
+    subtitle: "Preferências do app.",
+  },
+};
 
 const Index = () => {
   const { user, loading } = useAuth();
   const nav = useNavigate();
   const [date, setDate] = useState(today());
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [view, setView] = useState<View>("schedule");
+  const [section, setSection] = useState<Section>("today");
 
   useEffect(() => {
     if (!loading && !user) nav("/auth", { replace: true });
   }, [user, loading, nav]);
 
   useEffect(() => {
-    document.title = "Plano do dia";
+    document.title = "Plano do dia · Tarefas e cronograma";
   }, []);
 
-  // Load tasks at root so schedule picker works regardless of active view
+  // Always preload today's tasks for the schedule import picker
   useEffect(() => {
     if (!user) return;
     supabase
@@ -38,68 +75,106 @@ const Index = () => {
       .eq("task_date", date)
       .order("created_at", { ascending: true })
       .then(({ data }) => setTasks((data ?? []) as Task[]));
-  }, [user, date, view]);
+  }, [user, date, section]);
 
   if (loading || !user) return null;
 
-  const tabs: { id: View; label: string; icon: typeof CalendarClock }[] = [
-    { id: "schedule", label: "Cronograma", icon: CalendarClock },
-    { id: "tasks", label: "Tarefas", icon: ListChecks },
-  ];
+  const meta = SECTION_META[section];
+  const Icon = meta.icon;
+  const order: Section[] = ["today", "schedule", "tasks", "done", "settings"];
+
+  const tasksFilter: TasksFilter =
+    section === "today" ? "today" : section === "done" ? "done" : "all";
 
   return (
     <main className="min-h-screen bg-background">
-      <header className="border-b">
-        <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
-          <div>
-            <h1 className="text-xl font-semibold tracking-tight">Plano do dia</h1>
-            <p className="text-xs text-muted-foreground">{user.email}</p>
+      <div className="flex min-h-screen">
+        {/* Sidebar */}
+        <aside className="w-60 shrink-0 border-r bg-sidebar text-sidebar-foreground flex flex-col">
+          <div className="px-4 py-4 border-b border-sidebar-border">
+            <h1 className="text-sm font-semibold tracking-tight text-sidebar-primary">
+              Plano do dia
+            </h1>
+            <p className="text-[11px] text-sidebar-foreground/70 truncate">
+              {user.email}
+            </p>
           </div>
-          <div className="flex items-center gap-2">
-            <Input
-              type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              className="w-auto"
-            />
-            <Button variant="ghost" size="icon" onClick={() => supabase.auth.signOut()} aria-label="Sair">
+          <nav className="flex-1 p-2 space-y-0.5">
+            {order.map((id) => {
+              const m = SECTION_META[id];
+              const I = m.icon;
+              const active = section === id;
+              return (
+                <button
+                  key={id}
+                  onClick={() => setSection(id)}
+                  className={cn(
+                    "w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-sm transition",
+                    active
+                      ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+                      : "text-sidebar-foreground/80 hover:bg-sidebar-accent/60",
+                  )}
+                >
+                  <I className="h-4 w-4" />
+                  <span>{m.label}</span>
+                </button>
+              );
+            })}
+          </nav>
+          <div className="p-2 border-t border-sidebar-border">
+            <button
+              onClick={() => supabase.auth.signOut()}
+              className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-sm text-sidebar-foreground/70 hover:bg-sidebar-accent/60"
+            >
               <LogOut className="h-4 w-4" />
-            </Button>
+              Sair
+            </button>
           </div>
-        </div>
-      </header>
+        </aside>
 
-      <div className="max-w-6xl mx-auto px-6 py-8 flex gap-4">
-        <nav className="flex flex-col gap-1 shrink-0">
-          {tabs.map((t) => {
-            const Icon = t.icon;
-            const active = view === t.id;
-            return (
-              <button
-                key={t.id}
-                onClick={() => setView(t.id)}
-                className={cn(
-                  "flex flex-col items-center gap-1 w-20 py-3 rounded-md text-xs transition border",
-                  active
-                    ? "bg-primary text-primary-foreground border-transparent"
-                    : "bg-card hover:bg-secondary text-muted-foreground border-border",
-                )}
-              >
-                <Icon className="h-4 w-4" />
-                <span className="leading-none text-center">{t.label}</span>
-              </button>
-            );
-          })}
-        </nav>
-
+        {/* Main */}
         <div className="flex-1 min-w-0">
-          <Card className="p-6">
-            {view === "schedule" ? (
+          <div className="max-w-5xl mx-auto px-8 py-8">
+            <header className="mb-6 flex items-start justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1">
+                  <Icon className="h-3.5 w-3.5" />
+                  <span>{meta.label}</span>
+                </div>
+                <h2 className="text-2xl font-semibold tracking-tight">
+                  {section === "today" ? "Hoje" : meta.label}
+                </h2>
+                <p className="text-sm text-muted-foreground mt-1">
+                  {meta.subtitle}
+                </p>
+              </div>
+              {section !== "settings" && section !== "done" && section !== "today" && (
+                <Input
+                  type="date"
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                  className="w-auto h-9"
+                />
+              )}
+            </header>
+
+            {section === "schedule" && (
               <SchedulePanel date={date} userId={user.id} tasks={tasks} />
-            ) : (
-              <TasksPanel date={date} userId={user.id} onTasksChange={setTasks} />
             )}
-          </Card>
+            {(section === "tasks" || section === "today" || section === "done") && (
+              <TasksPanel
+                date={date}
+                userId={user.id}
+                filter={tasksFilter}
+                onTasksChange={setTasks}
+              />
+            )}
+            {section === "settings" && (
+              <div className="rounded-lg border bg-card p-6 text-sm text-muted-foreground">
+                Configurações em breve.
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </main>
