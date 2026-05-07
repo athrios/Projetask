@@ -23,6 +23,7 @@ export type Database = {
           start_time: string
           status: string
           task_date: string
+          task_id: string | null
           title: string
           user_id: string
         }
@@ -34,6 +35,7 @@ export type Database = {
           start_time: string
           status?: string
           task_date?: string
+          task_id?: string | null
           title: string
           user_id: string
         }
@@ -45,10 +47,19 @@ export type Database = {
           start_time?: string
           status?: string
           task_date?: string
+          task_id?: string | null
           title?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "schedule_items_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       subtasks: {
         Row: {
