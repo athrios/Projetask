@@ -30,6 +30,9 @@ import {
   List,
   TableIcon,
   LayoutGrid,
+  Pencil,
+  Check,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -68,28 +71,16 @@ const statusColor: Record<string, string> = {
   feita: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
 };
 
-// Notes are kept locally for now (no backend changes)
-const notesKey = (userId: string) => `taskNotes:${userId}`;
-const loadNotes = (userId: string): Record<string, string> => {
-  try {
-    return JSON.parse(localStorage.getItem(notesKey(userId)) || "{}");
-  } catch {
-    return {};
-  }
+// localStorage helpers (notes + per-item status flags + sub status values)
+const lsGet = <T,>(key: string, fallback: T): T => {
+  try { return JSON.parse(localStorage.getItem(key) || "null") ?? fallback; } catch { return fallback; }
 };
-const saveNotes = (userId: string, n: Record<string, string>) =>
-  localStorage.setItem(notesKey(userId), JSON.stringify(n));
+const lsSet = (key: string, value: unknown) => localStorage.setItem(key, JSON.stringify(value));
 
-const subStatusKey = (userId: string) => `subStatus:${userId}`;
-const loadSubStatus = (userId: string): Record<string, string> => {
-  try {
-    return JSON.parse(localStorage.getItem(subStatusKey(userId)) || "{}");
-  } catch {
-    return {};
-  }
-};
-const saveSubStatus = (userId: string, n: Record<string, string>) =>
-  localStorage.setItem(subStatusKey(userId), JSON.stringify(n));
+const notesKey = (u: string) => `taskNotes:${u}`;
+const subStatusKey = (u: string) => `subStatus:${u}`;
+const taskHasStatusKey = (u: string) => `taskHasStatus:${u}`;
+const subHasStatusKey = (u: string) => `subHasStatus:${u}`;
 
 export const TasksPanel = ({ date, userId, onTasksChange }: Props) => {
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -98,12 +89,21 @@ export const TasksPanel = ({ date, userId, onTasksChange }: Props) => {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [subInput, setSubInput] = useState<Record<string, string>>({});
   const [notesOpen, setNotesOpen] = useState<Record<string, boolean>>({});
-  const [notes, setNotes] = useState<Record<string, string>>(() => loadNotes(userId));
-  const [subStatus, setSubStatus] = useState<Record<string, string>>(() => loadSubStatus(userId));
+  const [notes, setNotes] = useState<Record<string, string>>(() => lsGet(notesKey(userId), {}));
+  const [subStatus, setSubStatus] = useState<Record<string, string>>(() => lsGet(subStatusKey(userId), {}));
+  const [taskHasStatus, setTaskHasStatus] = useState<Record<string, boolean>>(() => lsGet(taskHasStatusKey(userId), {}));
+  const [subHasStatus, setSubHasStatus] = useState<Record<string, boolean>>(() => lsGet(subHasStatusKey(userId), {}));
+
+  // Edit state
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingValue, setEditingValue] = useState("");
+  const [editingSubId, setEditingSubId] = useState<string | null>(null);
+  const [editingSubValue, setEditingSubValue] = useState("");
 
   const [view, setView] = useState<ViewMode>(
     () => (localStorage.getItem("tasksView") as ViewMode) || "list",
   );
+  // Toggles now define behavior for NEW items only
   const [statusOnTasks, setStatusOnTasks] = useState(
     () => localStorage.getItem("statusOnTasks") !== "false",
   );
@@ -119,14 +119,29 @@ export const TasksPanel = ({ date, userId, onTasksChange }: Props) => {
     const next = { ...notes, [key]: value };
     if (!value) delete next[key];
     setNotes(next);
-    saveNotes(userId, next);
+    lsSet(notesKey(userId), next);
   };
 
   const persistSubStatus = (id: string, value: string) => {
     const next = { ...subStatus, [id]: value };
     setSubStatus(next);
-    saveSubStatus(userId, next);
+    lsSet(subStatusKey(userId), next);
   };
+
+  const setTaskFlag = (id: string, value: boolean) => {
+    const next = { ...taskHasStatus, [id]: value };
+    setTaskHasStatus(next);
+    lsSet(taskHasStatusKey(userId), next);
+  };
+  const setSubFlag = (id: string, value: boolean) => {
+    const next = { ...subHasStatus, [id]: value };
+    setSubHasStatus(next);
+    lsSet(subHasStatusKey(userId), next);
+  };
+
+  // Default to true for legacy tasks (created before this feature)
+  const taskShowsStatus = (id: string) => taskHasStatus[id] ?? true;
+  const subShowsStatus = (id: string) => subHasStatus[id] ?? false;
 
   const updateSubStatus = async (s: Subtask, value: string) => {
     persistSubStatus(s.id, value);
@@ -174,10 +189,13 @@ export const TasksPanel = ({ date, userId, onTasksChange }: Props) => {
     const t = title.trim();
     if (!t) return;
     if (t.length > 200) return toast.error("Título muito longo");
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from("tasks")
-      .insert({ title: t, task_date: date, user_id: userId });
+      .insert({ title: t, task_date: date, user_id: userId })
+      .select()
+      .single();
     if (error) return toast.error(error.message);
+    if (data?.id) setTaskFlag(data.id, statusOnTasks);
     setTitle("");
     load();
   };
@@ -206,6 +224,36 @@ export const TasksPanel = ({ date, userId, onTasksChange }: Props) => {
     load();
   };
 
+  const startEdit = (t: Task) => {
+    setEditingId(t.id);
+    setEditingValue(t.title);
+  };
+  const cancelEdit = () => { setEditingId(null); setEditingValue(""); };
+  const saveEdit = async () => {
+    if (!editingId) return;
+    const v = editingValue.trim();
+    if (!v) return toast.error("Título vazio");
+    const { error } = await supabase.from("tasks").update({ title: v }).eq("id", editingId);
+    if (error) return toast.error(error.message);
+    cancelEdit();
+    load();
+  };
+
+  const startEditSub = (s: Subtask) => {
+    setEditingSubId(s.id);
+    setEditingSubValue(s.title);
+  };
+  const cancelEditSub = () => { setEditingSubId(null); setEditingSubValue(""); };
+  const saveEditSub = async () => {
+    if (!editingSubId) return;
+    const v = editingSubValue.trim();
+    if (!v) return toast.error("Título vazio");
+    const { error } = await supabase.from("subtasks").update({ title: v }).eq("id", editingSubId);
+    if (error) return toast.error(error.message);
+    cancelEditSub();
+    load();
+  };
+
   const toggleExpand = (id: string) =>
     setExpanded((p) => ({ ...p, [id]: !p[id] }));
   const toggleNotes = (id: string) =>
@@ -228,10 +276,13 @@ export const TasksPanel = ({ date, userId, onTasksChange }: Props) => {
     const t = (subInput[taskId] ?? "").trim();
     if (!t) return;
     if (t.length > 200) return toast.error("Título muito longo");
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from("subtasks")
-      .insert({ task_id: taskId, user_id: userId, title: t });
+      .insert({ task_id: taskId, user_id: userId, title: t })
+      .select()
+      .single();
     if (error) return toast.error(error.message);
+    if (data?.id) setSubFlag(data.id, statusOnSubs);
     setSubInput((p) => ({ ...p, [taskId]: "" }));
     await maybeAutoComplete(taskId);
     load();
@@ -277,39 +328,69 @@ export const TasksPanel = ({ date, userId, onTasksChange }: Props) => {
           {subs.map((s) => {
             const noteKey = `sub:${s.id}`;
             const noteOpen = notesOpen[noteKey];
+            const isEditing = editingSubId === s.id;
             return (
               <li key={s.id} className="space-y-1">
                 <div className="flex items-center gap-2 group/sub">
                   <Checkbox checked={s.done} onCheckedChange={() => toggleSub(s)} />
-                  <span className={`flex-1 text-sm ${s.done ? "line-through text-muted-foreground" : ""}`}>
-                    {s.title}
-                  </span>
-                  {statusOnSubs && (
-                    <StatusBadge
-                      value={subStatus[s.id] ?? (s.done ? "feita" : "pendente")}
-                      onChange={(v) => updateSubStatus(s, v)}
-                    />
+                  {isEditing ? (
+                    <>
+                      <Input
+                        value={editingSubValue}
+                        onChange={(e) => setEditingSubValue(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === "Enter") saveEditSub(); if (e.key === "Escape") cancelEditSub(); }}
+                        autoFocus
+                        maxLength={200}
+                        className="h-7 text-sm flex-1"
+                      />
+                      <button onClick={saveEditSub} className="text-emerald-600 p-1" aria-label="Salvar">
+                        <Check className="h-3.5 w-3.5" />
+                      </button>
+                      <button onClick={cancelEditSub} className="text-muted-foreground p-1" aria-label="Cancelar">
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <span className={`flex-1 text-sm ${s.done ? "line-through text-muted-foreground" : ""}`}>
+                        {s.title}
+                      </span>
+                      {subShowsStatus(s.id) && (
+                        <StatusBadge
+                          value={subStatus[s.id] ?? (s.done ? "feita" : "pendente")}
+                          onChange={(v) => updateSubStatus(s, v)}
+                        />
+                      )}
+                      <button
+                        onClick={() => toggleNotes(noteKey)}
+                        className={cn(
+                          "transition",
+                          notes[noteKey]
+                            ? "text-primary"
+                            : "text-muted-foreground opacity-0 group-hover/sub:opacity-100",
+                        )}
+                        aria-label="Observação"
+                        title="Observação"
+                      >
+                        <StickyNote className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        onClick={() => startEditSub(s)}
+                        className="opacity-0 group-hover/sub:opacity-100 text-muted-foreground hover:text-foreground transition"
+                        aria-label="Editar sub-tarefa"
+                        title="Editar"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        onClick={() => removeSub(s)}
+                        className="opacity-0 group-hover/sub:opacity-100 text-muted-foreground hover:text-destructive transition"
+                        aria-label="Remover sub-tarefa"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </>
                   )}
-                  <button
-                    onClick={() => toggleNotes(noteKey)}
-                    className={cn(
-                      "transition",
-                      notes[noteKey]
-                        ? "text-primary"
-                        : "text-muted-foreground opacity-0 group-hover/sub:opacity-100",
-                    )}
-                    aria-label="Observação"
-                    title="Observação"
-                  >
-                    <StickyNote className="h-3.5 w-3.5" />
-                  </button>
-                  <button
-                    onClick={() => removeSub(s)}
-                    className="opacity-0 group-hover/sub:opacity-100 text-muted-foreground hover:text-destructive transition"
-                    aria-label="Remover sub-tarefa"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
                 </div>
                 {noteOpen && (
                   <Textarea
@@ -358,7 +439,7 @@ export const TasksPanel = ({ date, userId, onTasksChange }: Props) => {
             {subs.filter((s) => s.done).length}/{subs.length}
           </span>
         )}
-        {statusOnTasks && (
+        {taskShowsStatus(t.id) && (
           <StatusBadge
             value={t.status ?? (t.done ? "feita" : "pendente")}
             onChange={(v) => updateTaskStatus(t, v)}
@@ -384,6 +465,14 @@ export const TasksPanel = ({ date, userId, onTasksChange }: Props) => {
           <StickyNote className="h-4 w-4" />
         </button>
         <button
+          onClick={() => startEdit(t)}
+          className="text-muted-foreground hover:text-foreground transition p-1"
+          aria-label="Editar"
+          title="Editar"
+        >
+          <Pencil className="h-4 w-4" />
+        </button>
+        <button
           onClick={() => remove(t.id)}
           className="text-muted-foreground hover:text-destructive transition p-1"
           aria-label="Remover"
@@ -391,6 +480,34 @@ export const TasksPanel = ({ date, userId, onTasksChange }: Props) => {
           <Trash2 className="h-4 w-4" />
         </button>
       </div>
+    );
+  };
+
+  const renderTaskTitle = (t: Task) => {
+    if (editingId === t.id) {
+      return (
+        <div className="flex items-center gap-1 flex-1">
+          <Input
+            value={editingValue}
+            onChange={(e) => setEditingValue(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") saveEdit(); if (e.key === "Escape") cancelEdit(); }}
+            autoFocus
+            maxLength={200}
+            className="h-8 text-sm"
+          />
+          <button onClick={saveEdit} className="text-emerald-600 p-1" aria-label="Salvar">
+            <Check className="h-4 w-4" />
+          </button>
+          <button onClick={cancelEdit} className="text-muted-foreground p-1" aria-label="Cancelar">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      );
+    }
+    return (
+      <span className={`flex-1 text-sm ${t.done ? "line-through text-muted-foreground" : ""}`}>
+        {t.title}
+      </span>
     );
   };
 
@@ -402,13 +519,13 @@ export const TasksPanel = ({ date, userId, onTasksChange }: Props) => {
           <p className="text-sm text-muted-foreground">Checklist do dia.</p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2" title="Aplica às próximas tarefas criadas">
             <Switch id="st-task" checked={statusOnTasks} onCheckedChange={setStatusOnTasks} />
-            <Label htmlFor="st-task" className="text-xs">Status nas tarefas</Label>
+            <Label htmlFor="st-task" className="text-xs">Status em novas tarefas</Label>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2" title="Aplica às próximas sub-tarefas criadas">
             <Switch id="st-sub" checked={statusOnSubs} onCheckedChange={setStatusOnSubs} />
-            <Label htmlFor="st-sub" className="text-xs">Status nas sub-tarefas</Label>
+            <Label htmlFor="st-sub" className="text-xs">Status em novas sub-tarefas</Label>
           </div>
           <div className="flex rounded-md border overflow-hidden">
             {([
@@ -456,10 +573,8 @@ export const TasksPanel = ({ date, userId, onTasksChange }: Props) => {
               <li key={t.id} className="rounded-md hover:bg-secondary/40">
                 <div className="flex items-center gap-2 px-3 py-2">
                   <Checkbox checked={t.done} onCheckedChange={() => toggle(t)} />
-                  <span className={`flex-1 text-sm ${t.done ? "line-through text-muted-foreground" : ""}`}>
-                    {t.title}
-                  </span>
-                  {renderControls(t)}
+                  {renderTaskTitle(t)}
+                  {editingId !== t.id && renderControls(t)}
                 </div>
                 {notesOpen[noteKey] && (
                   <div className="px-3 pb-3">
@@ -486,8 +601,8 @@ export const TasksPanel = ({ date, userId, onTasksChange }: Props) => {
                 <TableHead className="w-10"></TableHead>
                 <TableHead>Tarefa</TableHead>
                 <TableHead className="w-24">Sub</TableHead>
-                {statusOnTasks && <TableHead className="w-32">Status</TableHead>}
-                <TableHead className="w-32 text-right">Ações</TableHead>
+                <TableHead className="w-32">Status</TableHead>
+                <TableHead className="w-40 text-right">Ações</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -501,19 +616,19 @@ export const TasksPanel = ({ date, userId, onTasksChange }: Props) => {
                         <Checkbox checked={t.done} onCheckedChange={() => toggle(t)} />
                       </TableCell>
                       <TableCell className={t.done ? "line-through text-muted-foreground" : ""}>
-                        {t.title}
+                        {editingId === t.id ? renderTaskTitle(t) : t.title}
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground">
                         {subs.length ? `${subs.filter((s) => s.done).length}/${subs.length}` : "—"}
                       </TableCell>
-                      {statusOnTasks && (
-                        <TableCell>
+                      <TableCell>
+                        {taskShowsStatus(t.id) ? (
                           <StatusBadge
                             value={t.status ?? (t.done ? "feita" : "pendente")}
                             onChange={(v) => updateTaskStatus(t, v)}
                           />
-                        </TableCell>
-                      )}
+                        ) : <span className="text-xs text-muted-foreground">—</span>}
+                      </TableCell>
                       <TableCell className="text-right">
                         <div className="inline-flex">
                           <button onClick={() => toggleExpand(t.id)} className="p-1 text-muted-foreground hover:text-foreground" aria-label="Sub">
@@ -521,6 +636,9 @@ export const TasksPanel = ({ date, userId, onTasksChange }: Props) => {
                           </button>
                           <button onClick={() => toggleNotes(noteKey)} className={cn("p-1", notes[noteKey] ? "text-primary" : "text-muted-foreground hover:text-foreground")} aria-label="Notas">
                             <StickyNote className="h-4 w-4" />
+                          </button>
+                          <button onClick={() => startEdit(t)} className="p-1 text-muted-foreground hover:text-foreground" aria-label="Editar">
+                            <Pencil className="h-4 w-4" />
                           </button>
                           <button onClick={() => remove(t.id)} className="p-1 text-muted-foreground hover:text-destructive" aria-label="Remover">
                             <Trash2 className="h-4 w-4" />
@@ -530,7 +648,7 @@ export const TasksPanel = ({ date, userId, onTasksChange }: Props) => {
                     </TableRow>
                     {(notesOpen[noteKey] || expanded[t.id]) && (
                       <TableRow key={t.id + "-x"}>
-                        <TableCell colSpan={statusOnTasks ? 5 : 4} className="bg-muted/30">
+                        <TableCell colSpan={5} className="bg-muted/30">
                           {notesOpen[noteKey] && (
                             <Textarea
                               value={notes[noteKey] ?? ""}
@@ -559,18 +677,16 @@ export const TasksPanel = ({ date, userId, onTasksChange }: Props) => {
               <div key={t.id} className="rounded-lg border bg-card p-3 space-y-2">
                 <div className="flex items-start gap-2">
                   <Checkbox checked={t.done} onCheckedChange={() => toggle(t)} className="mt-0.5" />
-                  <span className={`flex-1 text-sm ${t.done ? "line-through text-muted-foreground" : ""}`}>
-                    {t.title}
-                  </span>
+                  {renderTaskTitle(t)}
                 </div>
                 <div className="flex items-center justify-between">
-                  {statusOnTasks ? (
+                  {taskShowsStatus(t.id) ? (
                     <StatusBadge
                       value={t.status ?? (t.done ? "feita" : "pendente")}
                       onChange={(v) => updateTaskStatus(t, v)}
                     />
                   ) : <span />}
-                  {renderControls(t)}
+                  {editingId !== t.id && renderControls(t)}
                 </div>
                 {notesOpen[noteKey] && (
                   <Textarea
