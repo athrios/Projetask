@@ -99,7 +99,12 @@ export const SchedulePanel = ({ date, userId, tasks }: Props) => {
     }));
   }, [items]);
 
-  const insertItem = async (start: string, title: string, duration: number) => {
+  const insertItem = async (
+    start: string,
+    title: string,
+    duration: number,
+    taskId: string | null = null,
+  ) => {
     const { error } = await supabase.from("schedule_items").insert({
       user_id: userId,
       task_date: date,
@@ -107,6 +112,7 @@ export const SchedulePanel = ({ date, userId, tasks }: Props) => {
       title: title.trim(),
       duration_minutes: duration,
       position: items.length,
+      task_id: taskId,
     });
     if (error) return toast.error(error.message);
     load();
@@ -115,6 +121,19 @@ export const SchedulePanel = ({ date, userId, tasks }: Props) => {
   const updateItem = async (id: string, patch: Partial<ScheduleItem>) => {
     const { error } = await supabase.from("schedule_items").update(patch).eq("id", id);
     if (error) return toast.error(error.message);
+    // 2-way sync: if status changed and item is linked, mirror to the task
+    if (patch.status !== undefined) {
+      const it = items.find((i) => i.id === id);
+      if (it?.task_id && patch.status !== "pulado") {
+        await supabase
+          .from("tasks")
+          .update({
+            status: patch.status,
+            done: patch.status === "feita",
+          })
+          .eq("id", it.task_id);
+      }
+    }
     load();
   };
 
