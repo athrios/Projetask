@@ -122,6 +122,22 @@ export const TasksPanel = ({ date, userId, onTasksChange }: Props) => {
     saveNotes(userId, next);
   };
 
+  const persistSubStatus = (id: string, value: string) => {
+    const next = { ...subStatus, [id]: value };
+    setSubStatus(next);
+    saveSubStatus(userId, next);
+  };
+
+  const updateSubStatus = async (s: Subtask, value: string) => {
+    persistSubStatus(s.id, value);
+    const wantDone = value === "feita";
+    if (wantDone !== s.done) {
+      await supabase.from("subtasks").update({ done: wantDone }).eq("id", s.id);
+      await maybeAutoComplete(s.task_id);
+      load();
+    }
+  };
+
   const load = async () => {
     const { data, error } = await supabase
       .from("tasks")
