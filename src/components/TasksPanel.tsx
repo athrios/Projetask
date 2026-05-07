@@ -39,6 +39,7 @@ import {
   StickyNote,
   List,
   TableIcon,
+  Columns3,
   LayoutGrid,
   Pencil,
   Check,
