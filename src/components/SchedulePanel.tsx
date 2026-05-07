@@ -300,7 +300,7 @@ const PlaceholderRow = ({
   initialStart: string;
   initialDuration: number;
   tasks: Task[];
-  onCommit: (start: string, title: string, duration: number) => void;
+  onCommit: (start: string, title: string, duration: number, taskId: string | null) => void;
 }) => {
   const [start, setStart] = useState(initialStart);
   const [title, setTitle] = useState("");
@@ -308,8 +308,8 @@ const PlaceholderRow = ({
   useEffect(() => setStart(initialStart), [initialStart]);
   const end = fromMin(toMin(start) + duration);
 
-  const commit = (t: string) => {
-    if (t.trim()) onCommit(start, t, duration);
+  const commit = (t: string, taskId: string | null = null) => {
+    if (t.trim()) onCommit(start, t, duration, taskId);
   };
 
   return (
@@ -322,9 +322,9 @@ const PlaceholderRow = ({
       />
       <ImportButton
         tasks={tasks}
-        onPick={(t) => {
-          setTitle(t);
-          commit(t);
+        onPick={(task) => {
+          setTitle(task.title);
+          commit(task.title, task.id);
         }}
       />
       <Input
