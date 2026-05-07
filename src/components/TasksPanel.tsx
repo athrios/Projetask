@@ -80,6 +80,17 @@ const loadNotes = (userId: string): Record<string, string> => {
 const saveNotes = (userId: string, n: Record<string, string>) =>
   localStorage.setItem(notesKey(userId), JSON.stringify(n));
 
+const subStatusKey = (userId: string) => `subStatus:${userId}`;
+const loadSubStatus = (userId: string): Record<string, string> => {
+  try {
+    return JSON.parse(localStorage.getItem(subStatusKey(userId)) || "{}");
+  } catch {
+    return {};
+  }
+};
+const saveSubStatus = (userId: string, n: Record<string, string>) =>
+  localStorage.setItem(subStatusKey(userId), JSON.stringify(n));
+
 export const TasksPanel = ({ date, userId, onTasksChange }: Props) => {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [title, setTitle] = useState("");
