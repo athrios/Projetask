@@ -80,6 +80,17 @@ const loadNotes = (userId: string): Record<string, string> => {
 const saveNotes = (userId: string, n: Record<string, string>) =>
   localStorage.setItem(notesKey(userId), JSON.stringify(n));
 
+const subStatusKey = (userId: string) => `subStatus:${userId}`;
+const loadSubStatus = (userId: string): Record<string, string> => {
+  try {
+    return JSON.parse(localStorage.getItem(subStatusKey(userId)) || "{}");
+  } catch {
+    return {};
+  }
+};
+const saveSubStatus = (userId: string, n: Record<string, string>) =>
+  localStorage.setItem(subStatusKey(userId), JSON.stringify(n));
+
 export const TasksPanel = ({ date, userId, onTasksChange }: Props) => {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [title, setTitle] = useState("");
@@ -88,6 +99,7 @@ export const TasksPanel = ({ date, userId, onTasksChange }: Props) => {
   const [subInput, setSubInput] = useState<Record<string, string>>({});
   const [notesOpen, setNotesOpen] = useState<Record<string, boolean>>({});
   const [notes, setNotes] = useState<Record<string, string>>(() => loadNotes(userId));
+  const [subStatus, setSubStatus] = useState<Record<string, string>>(() => loadSubStatus(userId));
 
   const [view, setView] = useState<ViewMode>(
     () => (localStorage.getItem("tasksView") as ViewMode) || "list",
@@ -108,6 +120,22 @@ export const TasksPanel = ({ date, userId, onTasksChange }: Props) => {
     if (!value) delete next[key];
     setNotes(next);
     saveNotes(userId, next);
+  };
+
+  const persistSubStatus = (id: string, value: string) => {
+    const next = { ...subStatus, [id]: value };
+    setSubStatus(next);
+    saveSubStatus(userId, next);
+  };
+
+  const updateSubStatus = async (s: Subtask, value: string) => {
+    persistSubStatus(s.id, value);
+    const wantDone = value === "feita";
+    if (wantDone !== s.done) {
+      await supabase.from("subtasks").update({ done: wantDone }).eq("id", s.id);
+      await maybeAutoComplete(s.task_id);
+      load();
+    }
   };
 
   const load = async () => {
@@ -257,9 +285,10 @@ export const TasksPanel = ({ date, userId, onTasksChange }: Props) => {
                     {s.title}
                   </span>
                   {statusOnSubs && (
-                    <span className={`text-xs px-2 py-0.5 rounded-full ${statusColor[s.done ? "feita" : "pendente"]}`}>
-                      {s.done ? "Feita" : "Pendente"}
-                    </span>
+                    <StatusBadge
+                      value={subStatus[s.id] ?? (s.done ? "feita" : "pendente")}
+                      onChange={(v) => updateSubStatus(s, v)}
+                    />
                   )}
                   <button
                     onClick={() => toggleNotes(noteKey)}
