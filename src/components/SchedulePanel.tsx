@@ -360,7 +360,7 @@ const PlaceholderRow = ({
   );
 };
 
-const ImportButton = ({ tasks, onPick }: { tasks: Task[]; onPick: (title: string) => void }) => (
+const ImportButton = ({ tasks, onPick }: { tasks: Task[]; onPick: (task: Task) => void }) => (
   <DropdownMenu>
     <DropdownMenuTrigger
       className="h-8 w-8 inline-flex items-center justify-center rounded-md border border-border text-muted-foreground hover:bg-secondary hover:text-foreground transition"
@@ -376,7 +376,7 @@ const ImportButton = ({ tasks, onPick }: { tasks: Task[]; onPick: (title: string
         </DropdownMenuItem>
       )}
       {tasks.map((t) => (
-        <DropdownMenuItem key={t.id} onSelect={() => onPick(t.title)} className="text-sm">
+        <DropdownMenuItem key={t.id} onSelect={() => onPick(t)} className="text-sm">
           {t.title}
         </DropdownMenuItem>
       ))}
