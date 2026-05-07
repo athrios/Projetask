@@ -159,10 +159,13 @@ const Index = () => {
               )}
             </header>
 
+            {section === "today" && (
+              <TodayPanel date={today()} userId={user.id} />
+            )}
             {section === "schedule" && (
               <SchedulePanel date={date} userId={user.id} tasks={tasks} />
             )}
-            {(section === "tasks" || section === "today" || section === "done") && (
+            {(section === "tasks" || section === "done") && (
               <TasksPanel
                 date={date}
                 userId={user.id}
