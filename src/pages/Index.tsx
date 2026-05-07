@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { TasksPanel, type Task, type TasksFilter } from "@/components/TasksPanel";
 import { SchedulePanel } from "@/components/SchedulePanel";
+import { TodayPanel } from "@/components/TodayPanel";
 import {
   LogOut,
   CalendarClock,
