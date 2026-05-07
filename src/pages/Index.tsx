@@ -29,6 +29,17 @@ const Index = () => {
     document.title = "Plano do dia";
   }, []);
 
+  // Load tasks at root so schedule picker works regardless of active view
+  useEffect(() => {
+    if (!user) return;
+    supabase
+      .from("tasks")
+      .select("*")
+      .eq("task_date", date)
+      .order("created_at", { ascending: true })
+      .then(({ data }) => setTasks((data ?? []) as Task[]));
+  }, [user, date, view]);
+
   if (loading || !user) return null;
 
   const tabs: { id: View; label: string; icon: typeof CalendarClock }[] = [
