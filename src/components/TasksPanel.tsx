@@ -285,9 +285,10 @@ export const TasksPanel = ({ date, userId, onTasksChange }: Props) => {
                     {s.title}
                   </span>
                   {statusOnSubs && (
-                    <span className={`text-xs px-2 py-0.5 rounded-full ${statusColor[s.done ? "feita" : "pendente"]}`}>
-                      {s.done ? "Feita" : "Pendente"}
-                    </span>
+                    <StatusBadge
+                      value={subStatus[s.id] ?? (s.done ? "feita" : "pendente")}
+                      onChange={(v) => updateSubStatus(s, v)}
+                    />
                   )}
                   <button
                     onClick={() => toggleNotes(noteKey)}
