@@ -1,11 +1,9 @@
-import { Fragment, useEffect, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -22,9 +20,21 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
   Trash2,
   Plus,
-  ListTree,
+  ChevronRight,
   ChevronDown,
   StickyNote,
   List,
@@ -33,16 +43,31 @@ import {
   Pencil,
   Check,
   X,
+  Search,
+  MoreHorizontal,
+  Calendar as CalendarIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import {
+  TASK_STATUS,
+  PRIORITIES,
+  statusPill,
+  priorityPill,
+  type TaskStatus,
+  type Priority,
+} from "@/lib/taskTokens";
 
 export interface Task {
   id: string;
   title: string;
   done: boolean;
   task_date: string;
-  status?: "pendente" | "fazendo" | "feita";
+  status: TaskStatus;
+  priority: Priority;
+  due_date: string | null;
+  notes: string;
+  position: number;
 }
 
 interface Subtask {
@@ -50,117 +75,67 @@ interface Subtask {
   task_id: string;
   title: string;
   done: boolean;
+  status: TaskStatus;
+  notes: string;
+  position: number;
 }
+
+export type TasksFilter = "all" | "today" | "done" | "kanban";
+type ViewMode = "list" | "table" | "cards";
 
 interface Props {
   date: string;
   userId: string;
+  filter?: TasksFilter;
   onTasksChange?: (tasks: Task[]) => void;
 }
 
-type ViewMode = "list" | "table" | "cards";
-const STATUS_OPTIONS = [
-  { value: "pendente", label: "Pendente" },
-  { value: "fazendo", label: "Fazendo" },
-  { value: "feita", label: "Feita" },
-] as const;
-
-const statusColor: Record<string, string> = {
-  pendente: "bg-muted text-muted-foreground",
-  fazendo: "bg-primary/15 text-primary",
-  feita: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
+const lsGet = <T,>(k: string, f: T): T => {
+  try {
+    return JSON.parse(localStorage.getItem(k) || "null") ?? f;
+  } catch {
+    return f;
+  }
 };
 
-// localStorage helpers (notes + per-item status flags + sub status values)
-const lsGet = <T,>(key: string, fallback: T): T => {
-  try { return JSON.parse(localStorage.getItem(key) || "null") ?? fallback; } catch { return fallback; }
-};
-const lsSet = (key: string, value: unknown) => localStorage.setItem(key, JSON.stringify(value));
-
-const notesKey = (u: string) => `taskNotes:${u}`;
-const subStatusKey = (u: string) => `subStatus:${u}`;
-const taskHasStatusKey = (u: string) => `taskHasStatus:${u}`;
-const subHasStatusKey = (u: string) => `subHasStatus:${u}`;
-
-export const TasksPanel = ({ date, userId, onTasksChange }: Props) => {
+export const TasksPanel = ({
+  date,
+  userId,
+  filter = "all",
+  onTasksChange,
+}: Props) => {
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [title, setTitle] = useState("");
   const [subtasks, setSubtasks] = useState<Record<string, Subtask[]>>({});
+  const [title, setTitle] = useState("");
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
-  const [subInput, setSubInput] = useState<Record<string, string>>({});
   const [notesOpen, setNotesOpen] = useState<Record<string, boolean>>({});
-  const [notes, setNotes] = useState<Record<string, string>>(() => lsGet(notesKey(userId), {}));
-  const [subStatus, setSubStatus] = useState<Record<string, string>>(() => lsGet(subStatusKey(userId), {}));
-  const [taskHasStatus, setTaskHasStatus] = useState<Record<string, boolean>>(() => lsGet(taskHasStatusKey(userId), {}));
-  const [subHasStatus, setSubHasStatus] = useState<Record<string, boolean>>(() => lsGet(subHasStatusKey(userId), {}));
-
-  // Edit state
+  const [subInput, setSubInput] = useState<Record<string, string>>({});
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingValue, setEditingValue] = useState("");
   const [editingSubId, setEditingSubId] = useState<string | null>(null);
   const [editingSubValue, setEditingSubValue] = useState("");
-
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<TaskStatus | "todos">("todos");
+  const [priorityFilter, setPriorityFilter] = useState<Priority | "todos">("todos");
   const [view, setView] = useState<ViewMode>(
-    () => (localStorage.getItem("tasksView") as ViewMode) || "list",
-  );
-  // Toggles now define behavior for NEW items only
-  const [statusOnTasks, setStatusOnTasks] = useState(
-    () => localStorage.getItem("statusOnTasks") !== "false",
-  );
-  const [statusOnSubs, setStatusOnSubs] = useState(
-    () => localStorage.getItem("statusOnSubs") === "true",
+    () => (lsGet<ViewMode>("tasksView", "list")),
   );
 
-  useEffect(() => localStorage.setItem("tasksView", view), [view]);
-  useEffect(() => localStorage.setItem("statusOnTasks", String(statusOnTasks)), [statusOnTasks]);
-  useEffect(() => localStorage.setItem("statusOnSubs", String(statusOnSubs)), [statusOnSubs]);
+  useEffect(() => {
+    localStorage.setItem("tasksView", JSON.stringify(view));
+  }, [view]);
 
-  const persistNote = (key: string, value: string) => {
-    const next = { ...notes, [key]: value };
-    if (!value) delete next[key];
-    setNotes(next);
-    lsSet(notesKey(userId), next);
-  };
-
-  const persistSubStatus = (id: string, value: string) => {
-    const next = { ...subStatus, [id]: value };
-    setSubStatus(next);
-    lsSet(subStatusKey(userId), next);
-  };
-
-  const setTaskFlag = (id: string, value: boolean) => {
-    const next = { ...taskHasStatus, [id]: value };
-    setTaskHasStatus(next);
-    lsSet(taskHasStatusKey(userId), next);
-  };
-  const setSubFlag = (id: string, value: boolean) => {
-    const next = { ...subHasStatus, [id]: value };
-    setSubHasStatus(next);
-    lsSet(subHasStatusKey(userId), next);
-  };
-
-  // Default to true for legacy tasks (created before this feature)
-  const taskShowsStatus = (id: string) => taskHasStatus[id] ?? true;
-  const subShowsStatus = (id: string) => subHasStatus[id] ?? false;
-
-  const updateSubStatus = async (s: Subtask, value: string) => {
-    persistSubStatus(s.id, value);
-    const wantDone = value === "feita";
-    if (wantDone !== s.done) {
-      await supabase.from("subtasks").update({ done: wantDone }).eq("id", s.id);
-      await maybeAutoComplete(s.task_id);
-      load();
-    }
-  };
+  const today = new Date().toISOString().slice(0, 10);
 
   const load = async () => {
-    const { data, error } = await supabase
-      .from("tasks")
-      .select("*")
-      .eq("task_date", date)
-      .order("created_at", { ascending: true });
+    let query = supabase.from("tasks").select("*");
+    if (filter === "all") query = query.eq("task_date", date);
+    if (filter === "today") query = query.eq("task_date", today);
+    query = query.order("position", { ascending: true }).order("created_at", { ascending: true });
+    const { data, error } = await query;
     if (error) return toast.error(error.message);
-    const list = (data ?? []) as Task[];
+    let list = (data ?? []) as Task[];
+    if (filter === "done") list = list.filter((t) => t.done);
     setTasks(list);
     onTasksChange?.(list);
     if (list.length) {
@@ -168,55 +143,55 @@ export const TasksPanel = ({ date, userId, onTasksChange }: Props) => {
         .from("subtasks")
         .select("*")
         .in("task_id", list.map((t) => t.id))
+        .order("position", { ascending: true })
         .order("created_at", { ascending: true });
       const grouped: Record<string, Subtask[]> = {};
       (subs ?? []).forEach((s: Subtask) => {
         (grouped[s.task_id] ||= []).push(s);
       });
       setSubtasks(grouped);
-    } else {
-      setSubtasks({});
-    }
+    } else setSubtasks({});
   };
 
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [date]);
+  }, [date, filter]);
 
-  const add = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const filtered = useMemo(() => {
+    return tasks.filter((t) => {
+      if (search && !t.title.toLowerCase().includes(search.toLowerCase())) return false;
+      if (statusFilter !== "todos" && (t.status ?? "pendente") !== statusFilter) return false;
+      if (priorityFilter !== "todos" && (t.priority ?? "media") !== priorityFilter) return false;
+      return true;
+    });
+  }, [tasks, search, statusFilter, priorityFilter]);
+
+  const add = async (e?: React.FormEvent) => {
+    e?.preventDefault();
     const t = title.trim();
     if (!t) return;
     if (t.length > 200) return toast.error("Título muito longo");
-    const { data, error } = await supabase
-      .from("tasks")
-      .insert({ title: t, task_date: date, user_id: userId })
-      .select()
-      .single();
+    const targetDate = filter === "today" ? today : date;
+    const { error } = await supabase.from("tasks").insert({
+      title: t,
+      task_date: targetDate,
+      user_id: userId,
+      position: tasks.length,
+    });
     if (error) return toast.error(error.message);
-    if (data?.id) setTaskFlag(data.id, statusOnTasks);
     setTitle("");
     load();
   };
 
-  const toggle = async (task: Task) => {
-    const { error } = await supabase
-      .from("tasks")
-      .update({ done: !task.done })
-      .eq("id", task.id);
+  const updateTask = async (id: string, patch: Partial<Task>) => {
+    const { error } = await supabase.from("tasks").update(patch).eq("id", id);
     if (error) return toast.error(error.message);
     load();
   };
 
-  const updateTaskStatus = async (task: Task, status: string) => {
-    const { error } = await supabase
-      .from("tasks")
-      .update({ status, done: status === "feita" })
-      .eq("id", task.id);
-    if (error) return toast.error(error.message);
-    load();
-  };
+  const setStatus = (t: Task, status: TaskStatus) =>
+    updateTask(t.id, { status, done: status === "feita" });
 
   const remove = async (id: string) => {
     const { error } = await supabase.from("tasks").delete().eq("id", id);
@@ -228,36 +203,27 @@ export const TasksPanel = ({ date, userId, onTasksChange }: Props) => {
     setEditingId(t.id);
     setEditingValue(t.title);
   };
-  const cancelEdit = () => { setEditingId(null); setEditingValue(""); };
   const saveEdit = async () => {
     if (!editingId) return;
     const v = editingValue.trim();
     if (!v) return toast.error("Título vazio");
-    const { error } = await supabase.from("tasks").update({ title: v }).eq("id", editingId);
-    if (error) return toast.error(error.message);
-    cancelEdit();
-    load();
+    await updateTask(editingId, { title: v });
+    setEditingId(null);
   };
 
   const startEditSub = (s: Subtask) => {
     setEditingSubId(s.id);
     setEditingSubValue(s.title);
   };
-  const cancelEditSub = () => { setEditingSubId(null); setEditingSubValue(""); };
   const saveEditSub = async () => {
     if (!editingSubId) return;
     const v = editingSubValue.trim();
     if (!v) return toast.error("Título vazio");
     const { error } = await supabase.from("subtasks").update({ title: v }).eq("id", editingSubId);
     if (error) return toast.error(error.message);
-    cancelEditSub();
+    setEditingSubId(null);
     load();
   };
-
-  const toggleExpand = (id: string) =>
-    setExpanded((p) => ({ ...p, [id]: !p[id] }));
-  const toggleNotes = (id: string) =>
-    setNotesOpen((p) => ({ ...p, [id]: !p[id] }));
 
   const maybeAutoComplete = async (taskId: string) => {
     const { data: subs } = await supabase
@@ -275,43 +241,71 @@ export const TasksPanel = ({ date, userId, onTasksChange }: Props) => {
   const addSub = async (taskId: string) => {
     const t = (subInput[taskId] ?? "").trim();
     if (!t) return;
-    if (t.length > 200) return toast.error("Título muito longo");
-    const { data, error } = await supabase
+    const subs = subtasks[taskId] ?? [];
+    const { error } = await supabase
       .from("subtasks")
-      .insert({ task_id: taskId, user_id: userId, title: t })
-      .select()
-      .single();
+      .insert({ task_id: taskId, user_id: userId, title: t, position: subs.length });
     if (error) return toast.error(error.message);
-    if (data?.id) setSubFlag(data.id, statusOnSubs);
     setSubInput((p) => ({ ...p, [taskId]: "" }));
     await maybeAutoComplete(taskId);
     load();
   };
 
   const toggleSub = async (s: Subtask) => {
-    const { error } = await supabase
+    await supabase
       .from("subtasks")
-      .update({ done: !s.done })
+      .update({ done: !s.done, status: !s.done ? "feita" : "pendente" })
       .eq("id", s.id);
-    if (error) return toast.error(error.message);
     await maybeAutoComplete(s.task_id);
     load();
   };
 
   const removeSub = async (s: Subtask) => {
-    const { error } = await supabase.from("subtasks").delete().eq("id", s.id);
-    if (error) return toast.error(error.message);
+    await supabase.from("subtasks").delete().eq("id", s.id);
     await maybeAutoComplete(s.task_id);
     load();
   };
 
-  const StatusBadge = ({ value, onChange }: { value: string; onChange: (v: string) => void }) => (
-    <Select value={value} onValueChange={onChange}>
-      <SelectTrigger className={`h-7 w-[110px] text-xs border-0 rounded-full ${statusColor[value]}`}>
+  const persistNote = (id: string, value: string, kind: "task" | "sub") => {
+    if (kind === "task") {
+      setTasks((p) => p.map((t) => (t.id === id ? { ...t, notes: value } : t)));
+    } else {
+      setSubtasks((p) => {
+        const next: typeof p = {};
+        for (const k in p) next[k] = p[k].map((s) => (s.id === id ? { ...s, notes: value } : s));
+        return next;
+      });
+    }
+  };
+  const flushNote = (id: string, value: string, kind: "task" | "sub") => {
+    supabase.from(kind === "task" ? "tasks" : "subtasks").update({ notes: value }).eq("id", id);
+  };
+
+  const toggleExpand = (id: string) => setExpanded((p) => ({ ...p, [id]: !p[id] }));
+  const toggleNotes = (id: string) => setNotesOpen((p) => ({ ...p, [id]: !p[id] }));
+
+  // ─────────── shared bits ───────────
+  const StatusPill = ({
+    value,
+    onChange,
+    size = "sm",
+  }: {
+    value: TaskStatus;
+    onChange: (v: TaskStatus) => void;
+    size?: "sm" | "xs";
+  }) => (
+    <Select value={value} onValueChange={(v) => onChange(v as TaskStatus)}>
+      <SelectTrigger
+        className={cn(
+          "border-0 rounded-full font-medium",
+          size === "sm" ? "h-7 w-[110px] text-xs" : "h-6 w-[96px] text-[11px]",
+          statusPill[value],
+        )}
+      >
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
-        {STATUS_OPTIONS.map((o) => (
+        {TASK_STATUS.map((o) => (
           <SelectItem key={o.value} value={o.value} className="text-xs">
             {o.label}
           </SelectItem>
@@ -320,72 +314,150 @@ export const TasksPanel = ({ date, userId, onTasksChange }: Props) => {
     </Select>
   );
 
-  const renderSubsBlock = (t: Task) => {
+  const PriorityPill = ({
+    value,
+    onChange,
+  }: {
+    value: Priority;
+    onChange: (v: Priority) => void;
+  }) => (
+    <Select value={value} onValueChange={(v) => onChange(v as Priority)}>
+      <SelectTrigger
+        className={cn(
+          "h-7 w-[90px] text-xs border-0 rounded-full font-medium",
+          priorityPill[value],
+        )}
+      >
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {PRIORITIES.map((o) => (
+          <SelectItem key={o.value} value={o.value} className="text-xs">
+            {o.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+
+  const ProgressBadge = ({ t }: { t: Task }) => {
+    const subs = subtasks[t.id] ?? [];
+    if (!subs.length) return null;
+    const done = subs.filter((s) => s.done).length;
+    const pct = Math.round((done / subs.length) * 100);
+    return (
+      <div className="flex items-center gap-1.5">
+        <div className="h-1.5 w-16 rounded-full bg-muted overflow-hidden">
+          <div className="h-full bg-foreground/70 transition-all" style={{ width: `${pct}%` }} />
+        </div>
+        <span className="text-[11px] text-muted-foreground tabular-nums">
+          {done}/{subs.length}
+        </span>
+      </div>
+    );
+  };
+
+  const TaskTitle = ({ t }: { t: Task }) =>
+    editingId === t.id ? (
+      <div className="flex items-center gap-1 flex-1">
+        <Input
+          value={editingValue}
+          onChange={(e) => setEditingValue(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") saveEdit();
+            if (e.key === "Escape") setEditingId(null);
+          }}
+          autoFocus
+          maxLength={200}
+          className="h-8"
+        />
+        <button onClick={saveEdit} className="p-1 text-emerald-600" aria-label="Salvar">
+          <Check className="h-4 w-4" />
+        </button>
+        <button onClick={() => setEditingId(null)} className="p-1 text-muted-foreground" aria-label="Cancelar">
+          <X className="h-4 w-4" />
+        </button>
+      </div>
+    ) : (
+      <button
+        onDoubleClick={() => startEdit(t)}
+        className={cn(
+          "flex-1 text-left text-sm leading-snug truncate",
+          t.done && "line-through text-muted-foreground",
+        )}
+      >
+        {t.title}
+      </button>
+    );
+
+  const SubsBlock = ({ t }: { t: Task }) => {
     const subs = subtasks[t.id] ?? [];
     return (
-      <div className="space-y-2">
+      <div className="space-y-2 pl-7">
         <ul className="space-y-1">
           {subs.map((s) => {
-            const noteKey = `sub:${s.id}`;
-            const noteOpen = notesOpen[noteKey];
             const isEditing = editingSubId === s.id;
+            const noteOpen = notesOpen[`sub:${s.id}`];
             return (
               <li key={s.id} className="space-y-1">
-                <div className="flex items-center gap-2 group/sub">
-                  <Checkbox checked={s.done} onCheckedChange={() => toggleSub(s)} />
+                <div className="flex items-center gap-2 group/sub py-0.5">
+                  <Checkbox
+                    checked={s.done}
+                    onCheckedChange={() => toggleSub(s)}
+                    className="h-3.5 w-3.5"
+                  />
                   {isEditing ? (
                     <>
                       <Input
                         value={editingSubValue}
                         onChange={(e) => setEditingSubValue(e.target.value)}
-                        onKeyDown={(e) => { if (e.key === "Enter") saveEditSub(); if (e.key === "Escape") cancelEditSub(); }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") saveEditSub();
+                          if (e.key === "Escape") setEditingSubId(null);
+                        }}
                         autoFocus
                         maxLength={200}
                         className="h-7 text-sm flex-1"
                       />
-                      <button onClick={saveEditSub} className="text-emerald-600 p-1" aria-label="Salvar">
+                      <button onClick={saveEditSub} className="p-1 text-emerald-600">
                         <Check className="h-3.5 w-3.5" />
                       </button>
-                      <button onClick={cancelEditSub} className="text-muted-foreground p-1" aria-label="Cancelar">
+                      <button onClick={() => setEditingSubId(null)} className="p-1 text-muted-foreground">
                         <X className="h-3.5 w-3.5" />
                       </button>
                     </>
                   ) : (
                     <>
-                      <span className={`flex-1 text-sm ${s.done ? "line-through text-muted-foreground" : ""}`}>
-                        {s.title}
-                      </span>
-                      {subShowsStatus(s.id) && (
-                        <StatusBadge
-                          value={subStatus[s.id] ?? (s.done ? "feita" : "pendente")}
-                          onChange={(v) => updateSubStatus(s, v)}
-                        />
-                      )}
                       <button
-                        onClick={() => toggleNotes(noteKey)}
+                        onDoubleClick={() => startEditSub(s)}
                         className={cn(
-                          "transition",
-                          notes[noteKey]
-                            ? "text-primary"
+                          "flex-1 text-left text-[13px]",
+                          s.done && "line-through text-muted-foreground",
+                        )}
+                      >
+                        {s.title}
+                      </button>
+                      <button
+                        onClick={() => toggleNotes(`sub:${s.id}`)}
+                        className={cn(
+                          "transition p-1",
+                          s.notes
+                            ? "text-foreground"
                             : "text-muted-foreground opacity-0 group-hover/sub:opacity-100",
                         )}
-                        aria-label="Observação"
                         title="Observação"
                       >
                         <StickyNote className="h-3.5 w-3.5" />
                       </button>
                       <button
                         onClick={() => startEditSub(s)}
-                        className="opacity-0 group-hover/sub:opacity-100 text-muted-foreground hover:text-foreground transition"
-                        aria-label="Editar sub-tarefa"
-                        title="Editar"
+                        className="p-1 text-muted-foreground hover:text-foreground opacity-0 group-hover/sub:opacity-100"
                       >
                         <Pencil className="h-3.5 w-3.5" />
                       </button>
                       <button
                         onClick={() => removeSub(s)}
-                        className="opacity-0 group-hover/sub:opacity-100 text-muted-foreground hover:text-destructive transition"
-                        aria-label="Remover sub-tarefa"
+                        className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover/sub:opacity-100"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </button>
@@ -394,314 +466,317 @@ export const TasksPanel = ({ date, userId, onTasksChange }: Props) => {
                 </div>
                 {noteOpen && (
                   <Textarea
-                    value={notes[noteKey] ?? ""}
-                    onChange={(e) => persistNote(noteKey, e.target.value)}
-                    placeholder="Observação da sub-tarefa..."
-                    className="text-xs min-h-[60px] ml-6"
+                    value={s.notes}
+                    onChange={(e) => persistNote(s.id, e.target.value, "sub")}
+                    onBlur={(e) => flushNote(s.id, e.target.value, "sub")}
+                    placeholder="Observação..."
+                    className="text-xs min-h-[56px] ml-6"
                   />
                 )}
               </li>
             );
           })}
-          {subs.length === 0 && (
-            <li className="text-xs text-muted-foreground">Nenhuma sub-tarefa.</li>
-          )}
         </ul>
         <form
           onSubmit={(e) => {
             e.preventDefault();
             addSub(t.id);
           }}
-          className="flex gap-2"
+          className="flex items-center gap-2 pl-1"
         >
+          <Plus className="h-3 w-3 text-muted-foreground" />
           <Input
             value={subInput[t.id] ?? ""}
             onChange={(e) => setSubInput((p) => ({ ...p, [t.id]: e.target.value }))}
-            placeholder="Nova sub-tarefa..."
+            placeholder="Adicionar sub-tarefa"
             maxLength={200}
-            className="h-8 text-sm"
+            className="h-7 text-[13px] border-0 shadow-none focus-visible:ring-0 px-1 bg-transparent"
           />
-          <Button type="submit" size="icon" className="h-8 w-8" aria-label="Adicionar sub-tarefa">
-            <Plus className="h-3.5 w-3.5" />
-          </Button>
         </form>
       </div>
     );
   };
 
-  const renderControls = (t: Task) => {
-    const subs = subtasks[t.id] ?? [];
+  const RowActions = ({ t }: { t: Task }) => (
+    <DropdownMenu>
+      <DropdownMenuTrigger className="p-1 text-muted-foreground hover:text-foreground rounded">
+        <MoreHorizontal className="h-4 w-4" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-44">
+        <DropdownMenuItem onClick={() => startEdit(t)}>
+          <Pencil className="h-3.5 w-3.5 mr-2" /> Editar título
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => toggleNotes(`task:${t.id}`)}>
+          <StickyNote className="h-3.5 w-3.5 mr-2" /> Observação
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => toggleExpand(t.id)}>
+          <ChevronDown className="h-3.5 w-3.5 mr-2" /> Sub-tarefas
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => remove(t.id)} className="text-destructive">
+          <Trash2 className="h-3.5 w-3.5 mr-2" /> Remover
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+
+  const DueDate = ({ t }: { t: Task }) => (
+    <div className="relative">
+      <Input
+        type="date"
+        value={t.due_date ?? ""}
+        onChange={(e) => updateTask(t.id, { due_date: e.target.value || null })}
+        className="h-7 w-[140px] text-xs border-dashed bg-transparent"
+      />
+    </div>
+  );
+
+  // ─────────── views ───────────
+  const renderListRow = (t: Task) => {
     const noteKey = `task:${t.id}`;
+    const subs = subtasks[t.id] ?? [];
     return (
-      <div className="flex items-center gap-1.5">
-        {subs.length > 0 && (
-          <span className="text-xs text-muted-foreground">
-            {subs.filter((s) => s.done).length}/{subs.length}
-          </span>
-        )}
-        {taskShowsStatus(t.id) && (
-          <StatusBadge
-            value={t.status ?? (t.done ? "feita" : "pendente")}
-            onChange={(v) => updateTaskStatus(t, v)}
+      <div key={t.id} className="group rounded-md hover:bg-secondary/60 transition-colors">
+        <div className="flex items-center gap-2 px-2 py-1.5">
+          <button
+            onClick={() => toggleExpand(t.id)}
+            className={cn(
+              "p-0.5 text-muted-foreground hover:text-foreground transition",
+              !subs.length && "invisible",
+            )}
+          >
+            {expanded[t.id] ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+          </button>
+          <Checkbox
+            checked={t.done}
+            onCheckedChange={(v) => setStatus(t, v ? "feita" : "pendente")}
           />
+          <TaskTitle t={t} />
+          <ProgressBadge t={t} />
+          <PriorityPill value={t.priority ?? "media"} onChange={(v) => updateTask(t.id, { priority: v })} />
+          <StatusPill value={t.status ?? "pendente"} onChange={(v) => setStatus(t, v)} />
+          <DueDate t={t} />
+          <RowActions t={t} />
+        </div>
+        {notesOpen[noteKey] && (
+          <div className="px-10 pb-2">
+            <Textarea
+              value={t.notes}
+              onChange={(e) => persistNote(t.id, e.target.value, "task")}
+              onBlur={(e) => flushNote(t.id, e.target.value, "task")}
+              placeholder="Observação da tarefa..."
+              className="text-sm min-h-[60px]"
+            />
+          </div>
         )}
-        <button
-          onClick={() => toggleExpand(t.id)}
-          className="text-muted-foreground hover:text-foreground transition p-1"
-          aria-label="Sub-tarefas"
-          title="Sub-tarefas"
-        >
-          {expanded[t.id] ? <ChevronDown className="h-4 w-4" /> : <ListTree className="h-4 w-4" />}
-        </button>
-        <button
-          onClick={() => toggleNotes(noteKey)}
-          className={cn(
-            "transition p-1",
-            notes[noteKey] ? "text-primary" : "text-muted-foreground hover:text-foreground",
-          )}
-          aria-label="Observação"
-          title="Observação"
-        >
-          <StickyNote className="h-4 w-4" />
-        </button>
-        <button
-          onClick={() => startEdit(t)}
-          className="text-muted-foreground hover:text-foreground transition p-1"
-          aria-label="Editar"
-          title="Editar"
-        >
-          <Pencil className="h-4 w-4" />
-        </button>
-        <button
-          onClick={() => remove(t.id)}
-          className="text-muted-foreground hover:text-destructive transition p-1"
-          aria-label="Remover"
-        >
-          <Trash2 className="h-4 w-4" />
-        </button>
+        {expanded[t.id] && <div className="pb-3">{<SubsBlock t={t} />}</div>}
       </div>
     );
   };
 
-  const renderTaskTitle = (t: Task) => {
-    if (editingId === t.id) {
-      return (
-        <div className="flex items-center gap-1 flex-1">
-          <Input
-            value={editingValue}
-            onChange={(e) => setEditingValue(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter") saveEdit(); if (e.key === "Escape") cancelEdit(); }}
-            autoFocus
-            maxLength={200}
-            className="h-8 text-sm"
-          />
-          <button onClick={saveEdit} className="text-emerald-600 p-1" aria-label="Salvar">
-            <Check className="h-4 w-4" />
-          </button>
-          <button onClick={cancelEdit} className="text-muted-foreground p-1" aria-label="Cancelar">
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-      );
-    }
-    return (
-      <span className={`flex-1 text-sm ${t.done ? "line-through text-muted-foreground" : ""}`}>
-        {t.title}
-      </span>
-    );
-  };
-
   return (
-    <section className="space-y-4">
-      <header className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-semibold tracking-tight">Tarefas isoladas</h2>
-          <p className="text-sm text-muted-foreground">Checklist do dia.</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-2" title="Aplica às próximas tarefas criadas">
-            <Switch id="st-task" checked={statusOnTasks} onCheckedChange={setStatusOnTasks} />
-            <Label htmlFor="st-task" className="text-xs">Status em novas tarefas</Label>
+    <TooltipProvider delayDuration={200}>
+      <section className="space-y-5">
+        {/* Toolbar */}
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative flex-1 min-w-[220px]">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Buscar tarefa..."
+              className="h-9 pl-8"
+            />
           </div>
-          <div className="flex items-center gap-2" title="Aplica às próximas sub-tarefas criadas">
-            <Switch id="st-sub" checked={statusOnSubs} onCheckedChange={setStatusOnSubs} />
-            <Label htmlFor="st-sub" className="text-xs">Status em novas sub-tarefas</Label>
-          </div>
-          <div className="flex rounded-md border overflow-hidden">
+          <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as TaskStatus | "todos")}>
+            <SelectTrigger className="h-9 w-[140px] text-xs">
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todos">Todos os status</SelectItem>
+              {TASK_STATUS.map((o) => (
+                <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={priorityFilter} onValueChange={(v) => setPriorityFilter(v as Priority | "todos")}>
+            <SelectTrigger className="h-9 w-[140px] text-xs">
+              <SelectValue placeholder="Prioridade" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todos">Todas prioridades</SelectItem>
+              {PRIORITIES.map((o) => (
+                <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <div className="flex rounded-md border overflow-hidden bg-card">
             {([
-              ["list", List],
-              ["table", TableIcon],
-              ["cards", LayoutGrid],
-            ] as const).map(([m, Icon]) => (
-              <button
-                key={m}
-                onClick={() => setView(m)}
-                className={cn(
-                  "px-2 py-1.5 text-xs",
-                  view === m ? "bg-primary text-primary-foreground" : "hover:bg-secondary",
-                )}
-                aria-label={m}
-              >
-                <Icon className="h-3.5 w-3.5" />
-              </button>
+              ["list", List, "Lista"],
+              ["table", TableIcon, "Tabela"],
+              ["cards", LayoutGrid, "Cards"],
+            ] as const).map(([m, Icon, label]) => (
+              <Tooltip key={m}>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={() => setView(m)}
+                    className={cn(
+                      "px-2.5 py-2 text-xs transition",
+                      view === m
+                        ? "bg-secondary text-foreground"
+                        : "text-muted-foreground hover:bg-secondary/60",
+                    )}
+                  >
+                    <Icon className="h-3.5 w-3.5" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>{label}</TooltipContent>
+              </Tooltip>
             ))}
           </div>
         </div>
-      </header>
 
-      <form onSubmit={add} className="flex gap-2">
-        <Input
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          placeholder="Nova tarefa..."
-          maxLength={200}
-        />
-        <Button type="submit" size="icon" aria-label="Adicionar">
-          <Plus className="h-4 w-4" />
-        </Button>
-      </form>
+        {/* New task */}
+        <form onSubmit={add} className="flex items-center gap-2 rounded-lg border bg-card px-3 py-2">
+          <Plus className="h-4 w-4 text-muted-foreground" />
+          <Input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="Nova tarefa  (Enter para adicionar)"
+            maxLength={200}
+            className="border-0 shadow-none focus-visible:ring-0 px-0 h-8 text-sm"
+          />
+          {title && (
+            <Button type="submit" size="sm" className="h-7">
+              Adicionar
+            </Button>
+          )}
+        </form>
 
-      {tasks.length === 0 && (
-        <p className="text-sm text-muted-foreground py-4 text-center">Nenhuma tarefa ainda.</p>
-      )}
+        {filtered.length === 0 && (
+          <div className="rounded-lg border border-dashed bg-card/50 py-10 text-center">
+            <p className="text-sm text-muted-foreground">
+              {tasks.length === 0 ? "Nenhuma tarefa ainda." : "Nada combina com o filtro."}
+            </p>
+          </div>
+        )}
 
-      {view === "list" && (
-        <ul className="space-y-1">
-          {tasks.map((t) => {
-            const noteKey = `task:${t.id}`;
-            return (
-              <li key={t.id} className="rounded-md hover:bg-secondary/40">
-                <div className="flex items-center gap-2 px-3 py-2">
-                  <Checkbox checked={t.done} onCheckedChange={() => toggle(t)} />
-                  {renderTaskTitle(t)}
-                  {editingId !== t.id && renderControls(t)}
-                </div>
-                {notesOpen[noteKey] && (
-                  <div className="px-3 pb-3">
-                    <Textarea
-                      value={notes[noteKey] ?? ""}
-                      onChange={(e) => persistNote(noteKey, e.target.value)}
-                      placeholder="Observação da tarefa..."
-                      className="text-sm min-h-[70px]"
-                    />
-                  </div>
-                )}
-                {expanded[t.id] && <div className="pl-10 pr-3 pb-3">{renderSubsBlock(t)}</div>}
-              </li>
-            );
-          })}
-        </ul>
-      )}
+        {/* List view */}
+        {view === "list" && filtered.length > 0 && (
+          <div className="rounded-lg border bg-card divide-y">
+            {filtered.map(renderListRow)}
+          </div>
+        )}
 
-      {view === "table" && (
-        <div className="rounded-md border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-10"></TableHead>
-                <TableHead>Tarefa</TableHead>
-                <TableHead className="w-24">Sub</TableHead>
-                <TableHead className="w-32">Status</TableHead>
-                <TableHead className="w-40 text-right">Ações</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {tasks.map((t) => {
-                const subs = subtasks[t.id] ?? [];
-                const noteKey = `task:${t.id}`;
-                return (
-                  <Fragment key={t.id}>
-                    <TableRow key={t.id}>
-                      <TableCell>
-                        <Checkbox checked={t.done} onCheckedChange={() => toggle(t)} />
-                      </TableCell>
-                      <TableCell className={t.done ? "line-through text-muted-foreground" : ""}>
-                        {editingId === t.id ? renderTaskTitle(t) : t.title}
-                      </TableCell>
-                      <TableCell className="text-xs text-muted-foreground">
-                        {subs.length ? `${subs.filter((s) => s.done).length}/${subs.length}` : "—"}
-                      </TableCell>
-                      <TableCell>
-                        {taskShowsStatus(t.id) ? (
-                          <StatusBadge
-                            value={t.status ?? (t.done ? "feita" : "pendente")}
-                            onChange={(v) => updateTaskStatus(t, v)}
+        {/* Table view */}
+        {view === "table" && filtered.length > 0 && (
+          <div className="rounded-lg border bg-card overflow-hidden">
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead className="w-8"></TableHead>
+                  <TableHead>Tarefa</TableHead>
+                  <TableHead className="w-32">Progresso</TableHead>
+                  <TableHead className="w-28">Prioridade</TableHead>
+                  <TableHead className="w-32">Status</TableHead>
+                  <TableHead className="w-36">Prazo</TableHead>
+                  <TableHead className="w-10"></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filtered.map((t) => {
+                  const noteKey = `task:${t.id}`;
+                  return (
+                    <Fragment key={t.id}>
+                      <TableRow>
+                        <TableCell>
+                          <Checkbox
+                            checked={t.done}
+                            onCheckedChange={(v) => setStatus(t, v ? "feita" : "pendente")}
                           />
-                        ) : <span className="text-xs text-muted-foreground">—</span>}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="inline-flex">
-                          <button onClick={() => toggleExpand(t.id)} className="p-1 text-muted-foreground hover:text-foreground" aria-label="Sub">
-                            <ListTree className="h-4 w-4" />
-                          </button>
-                          <button onClick={() => toggleNotes(noteKey)} className={cn("p-1", notes[noteKey] ? "text-primary" : "text-muted-foreground hover:text-foreground")} aria-label="Notas">
-                            <StickyNote className="h-4 w-4" />
-                          </button>
-                          <button onClick={() => startEdit(t)} className="p-1 text-muted-foreground hover:text-foreground" aria-label="Editar">
-                            <Pencil className="h-4 w-4" />
-                          </button>
-                          <button onClick={() => remove(t.id)} className="p-1 text-muted-foreground hover:text-destructive" aria-label="Remover">
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                    {(notesOpen[noteKey] || expanded[t.id]) && (
-                      <TableRow key={t.id + "-x"}>
-                        <TableCell colSpan={5} className="bg-muted/30">
-                          {notesOpen[noteKey] && (
-                            <Textarea
-                              value={notes[noteKey] ?? ""}
-                              onChange={(e) => persistNote(noteKey, e.target.value)}
-                              placeholder="Observação da tarefa..."
-                              className="text-sm mb-2"
-                            />
-                          )}
-                          {expanded[t.id] && renderSubsBlock(t)}
+                        </TableCell>
+                        <TableCell>
+                          <TaskTitle t={t} />
+                        </TableCell>
+                        <TableCell>
+                          <ProgressBadge t={t} />
+                        </TableCell>
+                        <TableCell>
+                          <PriorityPill value={t.priority ?? "media"} onChange={(v) => updateTask(t.id, { priority: v })} />
+                        </TableCell>
+                        <TableCell>
+                          <StatusPill value={t.status ?? "pendente"} onChange={(v) => setStatus(t, v)} />
+                        </TableCell>
+                        <TableCell>
+                          <DueDate t={t} />
+                        </TableCell>
+                        <TableCell>
+                          <RowActions t={t} />
                         </TableCell>
                       </TableRow>
-                    )}
-                  </Fragment>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </div>
-      )}
+                      {(notesOpen[noteKey] || expanded[t.id]) && (
+                        <TableRow>
+                          <TableCell colSpan={7} className="bg-muted/30">
+                            {notesOpen[noteKey] && (
+                              <Textarea
+                                value={t.notes}
+                                onChange={(e) => persistNote(t.id, e.target.value, "task")}
+                                onBlur={(e) => flushNote(t.id, e.target.value, "task")}
+                                placeholder="Observação..."
+                                className="mb-2 text-sm"
+                              />
+                            )}
+                            {expanded[t.id] && <SubsBlock t={t} />}
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </Fragment>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+        )}
 
-      {view === "cards" && (
-        <div className="grid sm:grid-cols-2 gap-3">
-          {tasks.map((t) => {
-            const noteKey = `task:${t.id}`;
-            return (
-              <div key={t.id} className="rounded-lg border bg-card p-3 space-y-2">
-                <div className="flex items-start gap-2">
-                  <Checkbox checked={t.done} onCheckedChange={() => toggle(t)} className="mt-0.5" />
-                  {renderTaskTitle(t)}
-                </div>
-                <div className="flex items-center justify-between">
-                  {taskShowsStatus(t.id) ? (
-                    <StatusBadge
-                      value={t.status ?? (t.done ? "feita" : "pendente")}
-                      onChange={(v) => updateTaskStatus(t, v)}
+        {/* Cards view */}
+        {view === "cards" && filtered.length > 0 && (
+          <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-3">
+            {filtered.map((t) => {
+              const noteKey = `task:${t.id}`;
+              return (
+                <div key={t.id} className="rounded-lg border bg-card p-4 space-y-3 hover:shadow-sm transition">
+                  <div className="flex items-start gap-2">
+                    <Checkbox
+                      checked={t.done}
+                      onCheckedChange={(v) => setStatus(t, v ? "feita" : "pendente")}
+                      className="mt-1"
                     />
-                  ) : <span />}
-                  {editingId !== t.id && renderControls(t)}
+                    <TaskTitle t={t} />
+                    <RowActions t={t} />
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <PriorityPill value={t.priority ?? "media"} onChange={(v) => updateTask(t.id, { priority: v })} />
+                    <StatusPill value={t.status ?? "pendente"} onChange={(v) => setStatus(t, v)} />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <ProgressBadge t={t} />
+                    <DueDate t={t} />
+                  </div>
+                  {notesOpen[noteKey] && (
+                    <Textarea
+                      value={t.notes}
+                      onChange={(e) => persistNote(t.id, e.target.value, "task")}
+                      onBlur={(e) => flushNote(t.id, e.target.value, "task")}
+                      placeholder="Observação..."
+                      className="text-sm"
+                    />
+                  )}
+                  {expanded[t.id] && <SubsBlock t={t} />}
                 </div>
-                {notesOpen[noteKey] && (
-                  <Textarea
-                    value={notes[noteKey] ?? ""}
-                    onChange={(e) => persistNote(noteKey, e.target.value)}
-                    placeholder="Observação..."
-                    className="text-sm min-h-[60px]"
-                  />
-                )}
-                {expanded[t.id] && renderSubsBlock(t)}
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </section>
+              );
+            })}
+          </div>
+        )}
+      </section>
+    </TooltipProvider>
   );
 };
