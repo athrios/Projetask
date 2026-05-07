@@ -466,7 +466,7 @@ export const TasksPanel = ({ date, userId, onTasksChange }: Props) => {
                 const subs = subtasks[t.id] ?? [];
                 const noteKey = `task:${t.id}`;
                 return (
-                  <>
+                  <Fragment key={t.id}>
                     <TableRow key={t.id}>
                       <TableCell>
                         <Checkbox checked={t.done} onCheckedChange={() => toggle(t)} />
@@ -514,7 +514,7 @@ export const TasksPanel = ({ date, userId, onTasksChange }: Props) => {
                         </TableCell>
                       </TableRow>
                     )}
-                  </>
+                  </Fragment>
                 );
               })}
             </TableBody>
