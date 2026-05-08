@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { TasksPanel, type Task, type TasksFilter } from "@/components/TasksPanel";
 import { SchedulePanel } from "@/components/SchedulePanel";
 import { TodayPanel } from "@/components/TodayPanel";
+import { TaskDatePicker } from "@/components/TaskDatePicker";
 import {
   LogOut,
   CalendarClock,
@@ -149,12 +150,20 @@ const Index = () => {
                   {meta.subtitle}
                 </p>
               </div>
-              {section !== "settings" && section !== "done" && section !== "today" && (
+              {section === "schedule" && (
                 <Input
                   type="date"
                   value={date}
                   onChange={(e) => setDate(e.target.value)}
                   className="w-auto h-9"
+                />
+              )}
+              {section === "tasks" && (
+                <TaskDatePicker
+                  date={date}
+                  onChange={setDate}
+                  userId={user.id}
+                  refreshKey={tasks.length}
                 />
               )}
             </header>
