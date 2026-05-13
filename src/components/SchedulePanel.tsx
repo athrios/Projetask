@@ -25,7 +25,7 @@ interface ScheduleItem {
   duration_minutes: number;
   position: number;
   task_date: string;
-  status: "pendente" | "fazendo" | "feita" | "pulado";
+  status: "pendente" | "fazendo" | "aguardando" | "feita" | "cancelado" | "pulado";
   task_id: string | null;
 }
 
@@ -38,14 +38,18 @@ interface Props {
 const STATUS_OPTIONS: { value: ScheduleItem["status"]; label: string }[] = [
   { value: "pendente", label: "Pendente" },
   { value: "fazendo", label: "Fazendo" },
+  { value: "aguardando", label: "Aguardando" },
   { value: "feita", label: "Concluído" },
+  { value: "cancelado", label: "Cancelado" },
   { value: "pulado", label: "Pulado" },
 ];
 
 const statusColor: Record<ScheduleItem["status"], string> = {
   pendente: "bg-[hsl(var(--status-pendente-bg))] text-[hsl(var(--status-pendente))] hover:opacity-90",
   fazendo: "bg-[hsl(var(--status-fazendo-bg))] text-[hsl(var(--status-fazendo))] hover:opacity-90",
+  aguardando: "bg-[hsl(var(--status-aguardando-bg))] text-[hsl(var(--status-aguardando))] hover:opacity-90",
   feita: "bg-[hsl(var(--status-feita-bg))] text-[hsl(var(--status-feita))] hover:opacity-90",
+  cancelado: "bg-[hsl(var(--status-cancelado-bg))] text-[hsl(var(--status-cancelado))] hover:opacity-90",
   pulado: "bg-[hsl(var(--status-pulado-bg))] text-[hsl(var(--status-pulado))] hover:opacity-90",
 };
 

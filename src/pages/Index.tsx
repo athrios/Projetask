@@ -2,12 +2,14 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { TasksPanel, type Task, type TasksFilter } from "@/components/TasksPanel";
 import { SchedulePanel } from "@/components/SchedulePanel";
 import { TodayPanel } from "@/components/TodayPanel";
 import { TaskDatePicker } from "@/components/TaskDatePicker";
+import { ProcessesPanel } from "@/components/processes/ProcessesPanel";
+import { FormsPanel } from "@/components/forms/FormsPanel";
+import { RequestsPanel } from "@/components/requests/RequestsPanel";
 import {
   LogOut,
   CalendarClock,
@@ -15,42 +17,36 @@ import {
   Sun,
   CheckCircle2,
   Settings,
+  Workflow,
+  FileText,
+  Inbox,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const today = () => new Date().toISOString().slice(0, 10);
 
-type Section = "today" | "schedule" | "tasks" | "done" | "settings";
+type Section =
+  | "today"
+  | "schedule"
+  | "tasks"
+  | "processes"
+  | "forms"
+  | "requests"
+  | "done"
+  | "settings";
 
 const SECTION_META: Record<
   Section,
   { label: string; icon: typeof Sun; subtitle: string }
 > = {
-  today: {
-    label: "Hoje",
-    icon: Sun,
-    subtitle: "O que precisa acontecer hoje.",
-  },
-  schedule: {
-    label: "Cronograma",
-    icon: CalendarClock,
-    subtitle: "Sua agenda do dia, bloco a bloco.",
-  },
-  tasks: {
-    label: "Tarefas",
-    icon: ListChecks,
-    subtitle: "Tudo que você está cuidando.",
-  },
-  done: {
-    label: "Concluídas",
-    icon: CheckCircle2,
-    subtitle: "O que você já tirou da frente.",
-  },
-  settings: {
-    label: "Configurações",
-    icon: Settings,
-    subtitle: "Preferências do app.",
-  },
+  today: { label: "Hoje", icon: Sun, subtitle: "O que precisa acontecer hoje." },
+  schedule: { label: "Cronograma", icon: CalendarClock, subtitle: "Sua agenda do dia, bloco a bloco." },
+  tasks: { label: "Tarefas", icon: ListChecks, subtitle: "Tudo que você está cuidando." },
+  processes: { label: "Processos", icon: Workflow, subtitle: "Processos recorrentes em execução." },
+  forms: { label: "Formulários", icon: FileText, subtitle: "Formulários para receber solicitações." },
+  requests: { label: "Solicitações", icon: Inbox, subtitle: "Respostas recebidas dos formulários." },
+  done: { label: "Concluídas", icon: CheckCircle2, subtitle: "O que você já tirou da frente." },
+  settings: { label: "Configurações", icon: Settings, subtitle: "Preferências do app." },
 };
 
 const Index = () => {
@@ -83,7 +79,16 @@ const Index = () => {
 
   const meta = SECTION_META[section];
   const Icon = meta.icon;
-  const order: Section[] = ["today", "schedule", "tasks", "done", "settings"];
+  const order: Section[] = [
+    "today",
+    "schedule",
+    "tasks",
+    "processes",
+    "forms",
+    "requests",
+    "done",
+    "settings",
+  ];
 
   const tasksFilter: TasksFilter =
     section === "today" ? "today" : section === "done" ? "done" : "all";
@@ -182,6 +187,9 @@ const Index = () => {
                 onTasksChange={setTasks}
               />
             )}
+            {section === "processes" && <ProcessesPanel userId={user.id} />}
+            {section === "forms" && <FormsPanel userId={user.id} />}
+            {section === "requests" && <RequestsPanel userId={user.id} />}
             {section === "settings" && (
               <div className="rounded-lg border bg-card p-6 text-sm text-muted-foreground">
                 Configurações em breve.

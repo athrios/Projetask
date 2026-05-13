@@ -14,6 +14,280 @@ export type Database = {
   }
   public: {
     Tables: {
+      form_fields: {
+        Row: {
+          created_at: string
+          field_type: string
+          form_id: string
+          id: string
+          label: string
+          options: Json
+          position: number
+          required: boolean
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          field_type?: string
+          form_id: string
+          id?: string
+          label: string
+          options?: Json
+          position?: number
+          required?: boolean
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          field_type?: string
+          form_id?: string
+          id?: string
+          label?: string
+          options?: Json
+          position?: number
+          required?: boolean
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "form_fields_form_id_fkey"
+            columns: ["form_id"]
+            isOneToOne: false
+            referencedRelation: "forms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      form_responses: {
+        Row: {
+          converted_process_id: string | null
+          converted_task_id: string | null
+          created_at: string
+          data: Json
+          form_id: string
+          id: string
+          owner_id: string
+          status: string
+          submitter_name: string
+          updated_at: string
+        }
+        Insert: {
+          converted_process_id?: string | null
+          converted_task_id?: string | null
+          created_at?: string
+          data?: Json
+          form_id: string
+          id?: string
+          owner_id: string
+          status?: string
+          submitter_name?: string
+          updated_at?: string
+        }
+        Update: {
+          converted_process_id?: string | null
+          converted_task_id?: string | null
+          created_at?: string
+          data?: Json
+          form_id?: string
+          id?: string
+          owner_id?: string
+          status?: string
+          submitter_name?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "form_responses_form_id_fkey"
+            columns: ["form_id"]
+            isOneToOne: false
+            referencedRelation: "forms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      forms: {
+        Row: {
+          created_at: string
+          description: string
+          id: string
+          is_published: boolean
+          public_slug: string
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string
+          id?: string
+          is_published?: boolean
+          public_slug?: string
+          title: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          description?: string
+          id?: string
+          is_published?: boolean
+          public_slug?: string
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      process_steps: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          id: string
+          notes: string
+          position: number
+          process_id: string
+          status: string
+          title: string
+          user_id: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          notes?: string
+          position?: number
+          process_id: string
+          status?: string
+          title: string
+          user_id: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          notes?: string
+          position?: number
+          process_id?: string
+          status?: string
+          title?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "process_steps_process_id_fkey"
+            columns: ["process_id"]
+            isOneToOne: false
+            referencedRelation: "processes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      process_template_steps: {
+        Row: {
+          created_at: string
+          id: string
+          position: number
+          template_id: string
+          title: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          position?: number
+          template_id: string
+          title: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          position?: number
+          template_id?: string
+          title?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "process_template_steps_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "process_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      process_templates: {
+        Row: {
+          created_at: string
+          description: string
+          id: string
+          name: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string
+          id?: string
+          name: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          description?: string
+          id?: string
+          name?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      processes: {
+        Row: {
+          client_name: string
+          created_at: string
+          due_date: string | null
+          id: string
+          name: string
+          notes: string
+          status: string
+          template_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          client_name?: string
+          created_at?: string
+          due_date?: string | null
+          id?: string
+          name: string
+          notes?: string
+          status?: string
+          template_id?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          client_name?: string
+          created_at?: string
+          due_date?: string | null
+          id?: string
+          name?: string
+          notes?: string
+          status?: string
+          template_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "processes_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "process_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       schedule_items: {
         Row: {
           created_at: string
