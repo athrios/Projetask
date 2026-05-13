@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { SchedulePanel } from "./SchedulePanel";
 import { TasksPanel, type Task } from "./TasksPanel";
-import { EmptyState } from "@/components/shared/EmptyState";
 import {
   CalendarClock,
   ListChecks,
