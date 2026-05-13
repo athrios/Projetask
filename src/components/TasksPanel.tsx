@@ -352,6 +352,19 @@ export const TasksPanel = ({
     load();
   };
 
+  const moveSub = async (s: Subtask, direction: -1 | 1) => {
+    const list = (subtasks[s.task_id] ?? []).slice().sort((a, b) => a.position - b.position);
+    const idx = list.findIndex((x) => x.id === s.id);
+    const swapIdx = idx + direction;
+    if (idx < 0 || swapIdx < 0 || swapIdx >= list.length) return;
+    const a = list[idx], b = list[swapIdx];
+    await Promise.all([
+      supabase.from("subtasks").update({ position: b.position }).eq("id", a.id),
+      supabase.from("subtasks").update({ position: a.position }).eq("id", b.id),
+    ]);
+    load();
+  };
+
   const persistNote = (id: string, value: string, kind: "task" | "sub") => {
     if (kind === "task") {
       setTasks((p) => p.map((t) => (t.id === id ? { ...t, notes: value } : t)));
