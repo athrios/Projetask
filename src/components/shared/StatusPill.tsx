@@ -1,0 +1,90 @@
+import {
+  TASK_STATUS,
+  SCHEDULE_STATUS,
+  PROCESS_STATUS,
+  REQUEST_STATUS,
+  statusPill,
+  processStatusPill,
+  requestStatusPill,
+  type TaskStatus,
+  type ScheduleStatus,
+  type ProcessStatus,
+  type RequestStatus,
+} from "@/lib/taskTokens";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { cn } from "@/lib/utils";
+
+type Domain = "task" | "schedule" | "process" | "request";
+
+interface Props {
+  domain: Domain;
+  value: string;
+  onChange?: (v: string) => void;
+  size?: "sm" | "xs";
+  className?: string;
+}
+
+const optionsFor = (d: Domain) => {
+  if (d === "task") return TASK_STATUS;
+  if (d === "schedule") return SCHEDULE_STATUS;
+  if (d === "process") return PROCESS_STATUS;
+  return REQUEST_STATUS;
+};
+
+const colorFor = (d: Domain, v: string): string => {
+  if (d === "process") return processStatusPill[v as ProcessStatus] ?? "";
+  if (d === "request") return requestStatusPill[v as RequestStatus] ?? "";
+  return statusPill[v as ScheduleStatus] ?? "";
+};
+
+export const StatusPill = ({ domain, value, onChange, size = "sm", className }: Props) => {
+  const options = optionsFor(domain);
+  const color = colorFor(domain, value);
+  const label = options.find((o) => o.value === value)?.label ?? value;
+  const sizeCls =
+    size === "sm" ? "h-7 px-3 text-xs min-w-[110px]" : "h-6 px-2.5 text-[11px] min-w-[96px]";
+
+  if (!onChange) {
+    return (
+      <span
+        className={cn(
+          "inline-flex items-center justify-center rounded-full font-medium",
+          sizeCls,
+          color,
+          className,
+        )}
+      >
+        {label}
+      </span>
+    );
+  }
+  return (
+    <Select value={value} onValueChange={onChange}>
+      <SelectTrigger
+        className={cn(
+          "border-0 rounded-full font-medium justify-center",
+          sizeCls,
+          color,
+          className,
+        )}
+      >
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {options.map((o) => (
+          <SelectItem key={o.value} value={o.value as string} className="text-xs">
+            {o.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+};
+
+export type { TaskStatus, ScheduleStatus, ProcessStatus, RequestStatus };
