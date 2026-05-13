@@ -68,8 +68,12 @@ const PublicForm = () => {
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form) return;
+    if (!name.trim()) return toast.error("Informe seu nome");
+    if (name.length > 120) return toast.error("Nome muito longo");
     for (const f of fields) {
-      if (f.required && !values[f.label]) {
+      const v = values[f.label];
+      const empty = v === undefined || v === null || v === "" || (Array.isArray(v) && v.length === 0);
+      if (f.required && empty) {
         return toast.error(`Preencha "${f.label}"`);
       }
     }
@@ -77,12 +81,12 @@ const PublicForm = () => {
     const { error } = await supabase.from("form_responses").insert({
       form_id: form.id,
       owner_id: form.user_id,
-      submitter_name: name,
+      submitter_name: name.trim(),
       data: values as never,
       status: "recebida",
     });
     setSubmitting(false);
-    if (error) return toast.error(error.message);
+    if (error) return toast.error("Não foi possível enviar. O formulário pode ter sido despublicado.");
     setSubmitted(true);
   };
 

@@ -54,10 +54,13 @@ import {
   TASK_STATUS,
   PRIORITIES,
   statusPill,
-  priorityPill,
   type TaskStatus,
   type Priority,
 } from "@/lib/taskTokens";
+import { StatusPill as SharedStatusPill } from "@/components/shared/StatusPill";
+import { PriorityPill as SharedPriorityPill } from "@/components/shared/PriorityPill";
+import { EmptyState } from "@/components/shared/EmptyState";
+import { ListChecks } from "lucide-react";
 
 export interface Task {
   id: string;
@@ -306,24 +309,7 @@ export const TasksPanel = ({
     onChange: (v: TaskStatus) => void;
     size?: "sm" | "xs";
   }) => (
-    <Select value={value} onValueChange={(v) => onChange(v as TaskStatus)}>
-      <SelectTrigger
-        className={cn(
-          "border-0 rounded-full font-medium",
-          size === "sm" ? "h-7 w-[110px] text-xs" : "h-6 w-[96px] text-[11px]",
-          statusPill[value],
-        )}
-      >
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent>
-        {TASK_STATUS.map((o) => (
-          <SelectItem key={o.value} value={o.value} className="text-xs">
-            {o.label}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+    <SharedStatusPill domain="task" value={value} onChange={(v) => onChange(v as TaskStatus)} size={size} />
   );
 
   const PriorityPill = ({
@@ -333,23 +319,7 @@ export const TasksPanel = ({
     value: Priority;
     onChange: (v: Priority) => void;
   }) => (
-    <Select value={value} onValueChange={(v) => onChange(v as Priority)}>
-      <SelectTrigger
-        className={cn(
-          "h-7 w-[90px] text-xs border-0 rounded-full font-medium",
-          priorityPill[value],
-        )}
-      >
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent>
-        {PRIORITIES.map((o) => (
-          <SelectItem key={o.value} value={o.value} className="text-xs">
-            {o.label}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+    <SharedPriorityPill value={value} onChange={onChange} />
   );
 
   const ProgressBadge = ({ t }: { t: Task }) => {
@@ -666,11 +636,17 @@ export const TasksPanel = ({
         </form>
 
         {filtered.length === 0 && (
-          <div className="rounded-lg border border-dashed bg-card/50 py-10 text-center">
-            <p className="text-sm text-muted-foreground">
-              {tasks.length === 0 ? "Nenhuma tarefa ainda." : "Nada combina com o filtro."}
-            </p>
-          </div>
+          tasks.length === 0 ? (
+            <EmptyState
+              icon={ListChecks}
+              title="Nenhuma tarefa ainda"
+              description="Use o campo acima para adicionar uma nova tarefa."
+            />
+          ) : (
+            <div className="rounded-lg border border-dashed bg-card/50 py-10 text-center">
+              <p className="text-sm text-muted-foreground">Nada combina com o filtro.</p>
+            </div>
+          )
         )}
 
         {/* List view */}
@@ -792,57 +768,48 @@ export const TasksPanel = ({
 
         {/* Kanban view */}
         {view === "kanban" && filtered.length > 0 && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            {TASK_STATUS.map((col) => {
-              const colTasks = filtered.filter((t) => (t.status ?? "pendente") === col.value);
-              return (
-                <div key={col.value} className="rounded-lg border bg-card/60 flex flex-col min-h-[200px]">
-                  <div className="px-3 py-2 border-b flex items-center justify-between">
-                    <span className={cn("text-xs font-medium px-2 py-0.5 rounded-full", statusPill[col.value])}>
-                      {col.label}
-                    </span>
-                    <span className="text-[11px] text-muted-foreground tabular-nums">{colTasks.length}</span>
+          <div className="overflow-x-auto -mx-2 pb-2">
+            <div className="flex gap-3 px-2 min-w-max">
+              {TASK_STATUS.map((col) => {
+                const colTasks = filtered.filter((t) => (t.status ?? "pendente") === col.value);
+                return (
+                  <div key={col.value} className="w-72 shrink-0 rounded-lg border bg-card/60 flex flex-col min-h-[200px]">
+                    <div className="px-3 py-2 border-b flex items-center justify-between">
+                      <span className={cn("text-xs font-medium px-2 py-0.5 rounded-full", statusPill[col.value])}>
+                        {col.label}
+                      </span>
+                      <span className="text-[11px] text-muted-foreground tabular-nums">{colTasks.length}</span>
+                    </div>
+                    <div className="p-2 space-y-2 flex-1">
+                      {colTasks.map((t) => (
+                        <div key={t.id} className="rounded-md border bg-card p-2.5 space-y-2 group">
+                          <div className="flex items-start gap-2">
+                            <Checkbox
+                              checked={t.done}
+                              onCheckedChange={(v) => setStatus(t, v ? "feita" : "pendente")}
+                              className="mt-0.5"
+                            />
+                            <TaskTitle t={t} />
+                            <RowActions t={t} />
+                          </div>
+                          <div className="flex items-center justify-between gap-2">
+                            <PriorityPill value={t.priority ?? "media"} onChange={(v) => updateTask(t.id, { priority: v })} />
+                            <ProgressBadge t={t} />
+                          </div>
+                          <div className="flex items-center justify-between gap-2">
+                            <StatusPill value={t.status ?? "pendente"} onChange={(v) => setStatus(t, v)} size="xs" />
+                            <DueDate t={t} />
+                          </div>
+                        </div>
+                      ))}
+                      {colTasks.length === 0 && (
+                        <p className="text-[11px] text-muted-foreground text-center py-4">—</p>
+                      )}
+                    </div>
                   </div>
-                  <div className="p-2 space-y-2 flex-1">
-                    {colTasks.map((t) => (
-                      <div key={t.id} className="rounded-md border bg-card p-2.5 space-y-2 group">
-                        <div className="flex items-start gap-2">
-                          <Checkbox
-                            checked={t.done}
-                            onCheckedChange={(v) => setStatus(t, v ? "feita" : "pendente")}
-                            className="mt-0.5"
-                          />
-                          <TaskTitle t={t} />
-                          <RowActions t={t} />
-                        </div>
-                        <div className="flex items-center justify-between gap-2">
-                          <PriorityPill value={t.priority ?? "media"} onChange={(v) => updateTask(t.id, { priority: v })} />
-                          <ProgressBadge t={t} />
-                        </div>
-                        <div className="flex items-center justify-between gap-2">
-                          <Select value={t.status ?? "pendente"} onValueChange={(v) => setStatus(t, v as TaskStatus)}>
-                            <SelectTrigger className="h-7 w-[120px] text-[11px]">
-                              <SelectValue placeholder="Mover para..." />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {TASK_STATUS.map((o) => (
-                                <SelectItem key={o.value} value={o.value} className="text-xs">
-                                  Mover → {o.label}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <DueDate t={t} />
-                        </div>
-                      </div>
-                    ))}
-                    {colTasks.length === 0 && (
-                      <p className="text-[11px] text-muted-foreground text-center py-4">Vazio</p>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
         )}
       </section>

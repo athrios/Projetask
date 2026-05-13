@@ -132,12 +132,15 @@ export const ProcessesPanel = ({ userId }: Props) => {
   const updateProcess = async (id: string, patch: Partial<Process>) => {
     const { error } = await supabase.from("processes").update(patch).eq("id", id);
     if (error) return toast.error(error.message);
+    if (patch.status) toast.success("Status atualizado");
     load();
   };
 
   const removeProcess = async (id: string) => {
-    if (!confirm("Excluir processo?")) return;
-    await supabase.from("processes").delete().eq("id", id);
+    if (!confirm("Excluir processo e todas as etapas?")) return;
+    const { error } = await supabase.from("processes").delete().eq("id", id);
+    if (error) return toast.error(error.message);
+    toast.success("Processo excluído");
     load();
   };
 
@@ -418,13 +421,17 @@ const TemplateManager = ({
   const addTpl = async () => {
     const n = newTplName.trim();
     if (!n) return;
-    await supabase.from("process_templates").insert({ name: n, user_id: userId });
+    const { error } = await supabase.from("process_templates").insert({ name: n, user_id: userId });
+    if (error) return toast.error(error.message);
+    toast.success("Modelo criado");
     setNewTplName("");
     reload();
   };
   const removeTpl = async (id: string) => {
-    if (!confirm("Excluir modelo?")) return;
-    await supabase.from("process_templates").delete().eq("id", id);
+    if (!confirm("Excluir modelo e suas etapas?")) return;
+    const { error } = await supabase.from("process_templates").delete().eq("id", id);
+    if (error) return toast.error(error.message);
+    toast.success("Modelo excluído");
     reload();
   };
   const addStep = async (tplId: string) => {
@@ -537,9 +544,11 @@ const ProcessDetail = ({
   const [stepInput, setStepInput] = useState("");
 
   const save = async () => {
-    await supabase.from("processes").update({
+    const { error } = await supabase.from("processes").update({
       name, client_name: client, due_date: due || null, notes,
     }).eq("id", process.id);
+    if (error) return toast.error(error.message);
+    toast.success("Processo atualizado");
     onChanged(); onClose();
   };
 

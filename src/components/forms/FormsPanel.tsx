@@ -94,17 +94,23 @@ export const FormsPanel = ({ userId }: Props) => {
     if (error) return toast.error(error.message);
     setNewTitle("");
     setEditing(data as Form);
+    toast.success("Formulário criado");
     load();
   };
 
   const remove = async (id: string) => {
-    if (!confirm("Excluir formulário e respostas?")) return;
-    await supabase.from("forms").delete().eq("id", id);
+    if (!confirm("Excluir formulário e todas as respostas vinculadas?")) return;
+    const { error } = await supabase.from("forms").delete().eq("id", id);
+    if (error) return toast.error(error.message);
+    toast.success("Formulário excluído");
     load();
   };
 
   const togglePub = async (f: Form) => {
-    await supabase.from("forms").update({ is_published: !f.is_published }).eq("id", f.id);
+    const next = !f.is_published;
+    const { error } = await supabase.from("forms").update({ is_published: next }).eq("id", f.id);
+    if (error) return toast.error(error.message);
+    toast.success(next ? "Formulário publicado" : "Formulário despublicado");
     load();
   };
 

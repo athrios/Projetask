@@ -16,7 +16,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Inbox, ListChecks, Workflow } from "lucide-react";
+import { Inbox, ListChecks, Workflow, Trash2, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import { StatusPill } from "@/components/shared/StatusPill";
 import { ViewSwitcher, type ViewMode } from "@/components/shared/ViewSwitcher";
@@ -60,9 +60,17 @@ export const RequestsPanel = ({ userId }: Props) => {
     load();
   };
 
+  const formatData = (data: Record<string, unknown>) =>
+    Object.entries(data ?? {})
+      .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(", ") : String(v ?? "—")}`)
+      .join("\n");
+
   const convertToTask = async (r: Response) => {
+    if (r.converted_task_id) {
+      return toast.info("Esta solicitação já foi convertida em tarefa.");
+    }
     const title = r.submitter_name ? `${formTitle(r.form_id)} — ${r.submitter_name}` : formTitle(r.form_id);
-    const notes = JSON.stringify(r.data, null, 2);
+    const notes = `Origem: solicitação de ${formTitle(r.form_id)}\n\n${formatData(r.data)}`;
     const { data, error } = await supabase.from("tasks").insert({
       user_id: userId, title, notes,
       task_date: new Date().toISOString().slice(0, 10),
@@ -72,12 +80,16 @@ export const RequestsPanel = ({ userId }: Props) => {
       status: "convertida_tarefa", converted_task_id: data!.id,
     }).eq("id", r.id);
     toast.success("Convertida em tarefa");
+    setOpen(null);
     load();
   };
 
   const convertToProcess = async (r: Response) => {
+    if (r.converted_process_id) {
+      return toast.info("Esta solicitação já foi convertida em processo.");
+    }
     const name = r.submitter_name ? `${formTitle(r.form_id)} — ${r.submitter_name}` : formTitle(r.form_id);
-    const notes = JSON.stringify(r.data, null, 2);
+    const notes = `Origem: solicitação de ${formTitle(r.form_id)}\n\n${formatData(r.data)}`;
     const { data, error } = await supabase.from("processes").insert({
       user_id: userId, name, client_name: r.submitter_name, notes, status: "nao_iniciado",
     }).select().single();
@@ -86,6 +98,16 @@ export const RequestsPanel = ({ userId }: Props) => {
       status: "convertida_processo", converted_process_id: data!.id,
     }).eq("id", r.id);
     toast.success("Convertida em processo");
+    setOpen(null);
+    load();
+  };
+
+  const removeResponse = async (id: string) => {
+    if (!confirm("Excluir esta solicitação?")) return;
+    const { error } = await supabase.from("form_responses").delete().eq("id", id);
+    if (error) return toast.error(error.message);
+    toast.success("Solicitação excluída");
+    setOpen(null);
     load();
   };
 
@@ -197,6 +219,16 @@ export const RequestsPanel = ({ userId }: Props) => {
               <div className="text-xs text-muted-foreground">
                 Recebida em {new Date(open.created_at).toLocaleString("pt-BR")}
               </div>
+              {(open.converted_task_id || open.converted_process_id) && (
+                <div className="rounded-lg border border-[hsl(var(--status-aguardando))]/40 bg-[hsl(var(--status-aguardando-bg))]/40 p-3 text-xs">
+                  <p className="font-medium text-foreground">
+                    {open.converted_task_id ? "Já convertida em tarefa." : "Já convertida em processo."}
+                  </p>
+                  <p className="text-muted-foreground mt-0.5">
+                    A rastreabilidade fica registrada nesta solicitação. Excluir esta entrada não remove o item criado.
+                  </p>
+                </div>
+              )}
               <div className="rounded-lg border p-3 bg-muted/20 space-y-2">
                 {Object.entries(open.data ?? {}).map(([k, v]) => (
                   <div key={k}>
@@ -206,14 +238,38 @@ export const RequestsPanel = ({ userId }: Props) => {
                     </p>
                   </div>
                 ))}
+                {Object.keys(open.data ?? {}).length === 0 && (
+                  <p className="text-xs text-muted-foreground">Sem campos preenchidos.</p>
+                )}
               </div>
             </div>
             <DialogFooter className="flex-wrap gap-2">
-              <Button variant="outline" size="sm" onClick={() => convertToTask(open)}>
-                <ListChecks className="h-4 w-4" /> Converter em tarefa
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => removeResponse(open.id)}
+                className="text-destructive hover:text-destructive"
+              >
+                <Trash2 className="h-4 w-4" /> Excluir
               </Button>
-              <Button variant="outline" size="sm" onClick={() => convertToProcess(open)}>
-                <Workflow className="h-4 w-4" /> Converter em processo
+              <div className="flex-1" />
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => convertToTask(open)}
+                disabled={!!open.converted_task_id}
+              >
+                <ListChecks className="h-4 w-4" />
+                {open.converted_task_id ? "Já é tarefa" : "Converter em tarefa"}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => convertToProcess(open)}
+                disabled={!!open.converted_process_id}
+              >
+                <Workflow className="h-4 w-4" />
+                {open.converted_process_id ? "Já é processo" : "Converter em processo"}
               </Button>
               <Button onClick={() => setOpen(null)}>Fechar</Button>
             </DialogFooter>
@@ -226,20 +282,31 @@ export const RequestsPanel = ({ userId }: Props) => {
 
 const RequestCard = ({
   r, title, onOpen,
-}: { r: Response; title: string; onOpen: () => void }) => (
-  <button
-    onClick={onOpen}
-    className="text-left rounded-xl border bg-card p-4 hover:shadow-sm transition w-full"
-  >
-    <div className="flex items-start justify-between gap-2">
-      <h4 className="text-sm font-semibold truncate">{title}</h4>
-      <StatusPill domain="request" value={r.status} size="xs" />
-    </div>
-    <p className="text-xs text-muted-foreground mt-1 truncate">
-      {r.submitter_name || "Anônimo"}
-    </p>
-    <p className="text-[11px] text-muted-foreground mt-2">
-      {new Date(r.created_at).toLocaleString("pt-BR")}
-    </p>
-  </button>
-);
+}: { r: Response; title: string; onOpen: () => void }) => {
+  const converted = r.converted_task_id || r.converted_process_id;
+  return (
+    <button
+      onClick={onOpen}
+      className="text-left rounded-xl border bg-card p-4 hover:shadow-sm transition w-full"
+    >
+      <div className="flex items-start justify-between gap-2">
+        <h4 className="text-sm font-semibold truncate">{title}</h4>
+        <StatusPill domain="request" value={r.status} size="xs" />
+      </div>
+      <p className="text-xs text-muted-foreground mt-1 truncate">
+        {r.submitter_name || "Anônimo"}
+      </p>
+      <div className="flex items-center justify-between mt-2 gap-2">
+        <p className="text-[11px] text-muted-foreground">
+          {new Date(r.created_at).toLocaleString("pt-BR")}
+        </p>
+        {converted && (
+          <span className="inline-flex items-center gap-1 text-[11px] text-[hsl(var(--status-feita))]">
+            <CheckCircle2 className="h-3 w-3" />
+            {r.converted_task_id ? "tarefa" : "processo"}
+          </span>
+        )}
+      </div>
+    </button>
+  );
+};

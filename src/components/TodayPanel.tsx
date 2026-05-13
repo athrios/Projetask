@@ -9,6 +9,7 @@ import {
   Flame,
   AlertTriangle,
   Workflow,
+  Inbox,
 } from "lucide-react";
 
 interface Props {
@@ -16,11 +17,24 @@ interface Props {
   userId: string;
 }
 
+interface OverdueTask {
+  id: string;
+  title: string;
+  task_date: string;
+}
+
+interface PendingRequest {
+  id: string;
+  submitter_name: string;
+  created_at: string;
+}
+
 export const TodayPanel = ({ date, userId }: Props) => {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [scheduleCount, setScheduleCount] = useState(0);
-  const [overdueCount, setOverdueCount] = useState(0);
+  const [overdue, setOverdue] = useState<OverdueTask[]>([]);
   const [activeProcesses, setActiveProcesses] = useState(0);
+  const [pendingRequests, setPendingRequests] = useState<PendingRequest[]>([]);
 
   useEffect(() => {
     supabase
@@ -31,16 +45,26 @@ export const TodayPanel = ({ date, userId }: Props) => {
 
     supabase
       .from("tasks")
-      .select("id", { count: "exact", head: true })
+      .select("id,title,task_date")
       .lt("task_date", date)
       .not("status", "in", "(feita,cancelado)")
-      .then(({ count }) => setOverdueCount(count ?? 0));
+      .order("task_date", { ascending: true })
+      .limit(5)
+      .then(({ data }) => setOverdue((data ?? []) as OverdueTask[]));
 
     supabase
       .from("processes")
       .select("id", { count: "exact", head: true })
       .in("status", ["em_andamento", "aguardando_cliente", "aguardando_orgao", "em_exigencia"])
       .then(({ count }) => setActiveProcesses(count ?? 0));
+
+    supabase
+      .from("form_responses")
+      .select("id,submitter_name,created_at")
+      .in("status", ["recebida", "em_analise"])
+      .order("created_at", { ascending: false })
+      .limit(5)
+      .then(({ data }) => setPendingRequests((data ?? []) as PendingRequest[]));
   }, [date, tasks.length]);
 
   const total = tasks.length;
@@ -50,17 +74,56 @@ export const TodayPanel = ({ date, userId }: Props) => {
 
   return (
     <div className="space-y-6">
-      {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
         <Stat icon={ListChecks} label="Tarefas" value={total} />
         <Stat icon={Flame} label="Em andamento" value={doing} />
         <Stat icon={CheckCircle2} label="Concluídas" value={`${done}/${total}`} hint={`${pct}%`} />
-        <Stat icon={AlertTriangle} label="Atrasadas" value={overdueCount} accent={overdueCount > 0} />
+        <Stat icon={AlertTriangle} label="Atrasadas" value={overdue.length} accent={overdue.length > 0} />
         <Stat icon={Workflow} label="Processos ativos" value={activeProcesses} />
         <Stat icon={CalendarClock} label="Cronograma" value={scheduleCount} />
       </div>
 
-      {/* Two-column layout */}
+      {(overdue.length > 0 || pendingRequests.length > 0) && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {overdue.length > 0 && (
+            <div className="rounded-xl border border-[hsl(var(--prio-urgente))]/30 bg-card p-4">
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-[hsl(var(--prio-urgente))] flex items-center gap-1.5 mb-2">
+                <AlertTriangle className="h-3.5 w-3.5" />
+                Tarefas atrasadas
+              </h3>
+              <ul className="divide-y">
+                {overdue.map((t) => (
+                  <li key={t.id} className="py-1.5 flex items-center justify-between gap-2">
+                    <span className="text-sm truncate">{t.title}</span>
+                    <span className="text-[11px] text-muted-foreground tabular-nums shrink-0">
+                      {new Date(t.task_date).toLocaleDateString("pt-BR")}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {pendingRequests.length > 0 && (
+            <div className="rounded-xl border bg-card p-4">
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5 mb-2">
+                <Inbox className="h-3.5 w-3.5" />
+                Solicitações pendentes
+              </h3>
+              <ul className="divide-y">
+                {pendingRequests.map((r) => (
+                  <li key={r.id} className="py-1.5 flex items-center justify-between gap-2">
+                    <span className="text-sm truncate">{r.submitter_name || "Anônimo"}</span>
+                    <span className="text-[11px] text-muted-foreground tabular-nums shrink-0">
+                      {new Date(r.created_at).toLocaleDateString("pt-BR")}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="grid grid-cols-1 xl:grid-cols-[1fr_1fr] gap-6">
         <div className="space-y-3">
           <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
@@ -105,4 +168,3 @@ const Stat = ({
     </div>
   </div>
 );
-
