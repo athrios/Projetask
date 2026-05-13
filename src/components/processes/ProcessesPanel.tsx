@@ -356,11 +356,12 @@ const NewProcessButton = ({
   onCreate,
 }: {
   templates: Template[];
-  onCreate: (templateId: string | null, name: string) => void;
+  onCreate: (templateId: string | null, name: string, dueDate: string | null) => void;
 }) => {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [tpl, setTpl] = useState<string>("none");
+  const [due, setDue] = useState<string>("");
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
@@ -389,14 +390,21 @@ const NewProcessButton = ({
               </SelectContent>
             </Select>
           </div>
+          <div>
+            <label className="text-xs font-medium">Data inicial / prazo (opcional)</label>
+            <Input type="date" value={due} onChange={(e) => setDue(e.target.value)} />
+            <p className="text-[11px] text-muted-foreground mt-1">
+              Usada para calcular automaticamente os prazos das etapas do modelo.
+            </p>
+          </div>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
           <Button
             onClick={() => {
               if (!name.trim()) return toast.error("Nome obrigatório");
-              onCreate(tpl === "none" ? null : tpl, name.trim());
-              setOpen(false); setName(""); setTpl("none");
+              onCreate(tpl === "none" ? null : tpl, name.trim(), due || null);
+              setOpen(false); setName(""); setTpl("none"); setDue("");
             }}
           >Criar</Button>
         </DialogFooter>
