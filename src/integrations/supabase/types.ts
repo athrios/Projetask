@@ -14,6 +14,39 @@ export type Database = {
   }
   public: {
     Tables: {
+      activity_logs: {
+        Row: {
+          action: string
+          created_at: string
+          description: string
+          entity_id: string
+          entity_type: string
+          id: string
+          metadata: Json
+          user_id: string
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          description?: string
+          entity_id: string
+          entity_type: string
+          id?: string
+          metadata?: Json
+          user_id: string
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          description?: string
+          entity_id?: string
+          entity_type?: string
+          id?: string
+          metadata?: Json
+          user_id?: string
+        }
+        Relationships: []
+      }
       form_fields: {
         Row: {
           created_at: string
@@ -142,6 +175,7 @@ export type Database = {
         Row: {
           completed_at: string | null
           created_at: string
+          due_date: string | null
           id: string
           notes: string
           position: number
@@ -153,6 +187,7 @@ export type Database = {
         Insert: {
           completed_at?: string | null
           created_at?: string
+          due_date?: string | null
           id?: string
           notes?: string
           position?: number
@@ -164,6 +199,7 @@ export type Database = {
         Update: {
           completed_at?: string | null
           created_at?: string
+          due_date?: string | null
           id?: string
           notes?: string
           position?: number
@@ -185,6 +221,7 @@ export type Database = {
       process_template_steps: {
         Row: {
           created_at: string
+          due_offset_days: number
           id: string
           position: number
           template_id: string
@@ -193,6 +230,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          due_offset_days?: number
           id?: string
           position?: number
           template_id: string
@@ -201,6 +239,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          due_offset_days?: number
           id?: string
           position?: number
           template_id?: string
@@ -385,9 +424,16 @@ export type Database = {
           done: boolean
           due_date: string | null
           id: string
+          is_recurring: boolean
           notes: string
+          parent_recurring_task_id: string | null
           position: number
           priority: string
+          recurrence_end_date: string | null
+          recurrence_interval: number
+          recurrence_type: string | null
+          source_id: string | null
+          source_type: string
           status: string
           task_date: string
           title: string
@@ -398,9 +444,16 @@ export type Database = {
           done?: boolean
           due_date?: string | null
           id?: string
+          is_recurring?: boolean
           notes?: string
+          parent_recurring_task_id?: string | null
           position?: number
           priority?: string
+          recurrence_end_date?: string | null
+          recurrence_interval?: number
+          recurrence_type?: string | null
+          source_id?: string | null
+          source_type?: string
           status?: string
           task_date?: string
           title: string
@@ -411,9 +464,16 @@ export type Database = {
           done?: boolean
           due_date?: string | null
           id?: string
+          is_recurring?: boolean
           notes?: string
+          parent_recurring_task_id?: string | null
           position?: number
           priority?: string
+          recurrence_end_date?: string | null
+          recurrence_interval?: number
+          recurrence_type?: string | null
+          source_id?: string | null
+          source_type?: string
           status?: string
           task_date?: string
           title?: string
