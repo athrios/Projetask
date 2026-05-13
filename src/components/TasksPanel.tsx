@@ -309,24 +309,7 @@ export const TasksPanel = ({
     onChange: (v: TaskStatus) => void;
     size?: "sm" | "xs";
   }) => (
-    <Select value={value} onValueChange={(v) => onChange(v as TaskStatus)}>
-      <SelectTrigger
-        className={cn(
-          "border-0 rounded-full font-medium",
-          size === "sm" ? "h-7 w-[110px] text-xs" : "h-6 w-[96px] text-[11px]",
-          statusPill[value],
-        )}
-      >
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent>
-        {TASK_STATUS.map((o) => (
-          <SelectItem key={o.value} value={o.value} className="text-xs">
-            {o.label}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+    <SharedStatusPill domain="task" value={value} onChange={(v) => onChange(v as TaskStatus)} size={size} />
   );
 
   const PriorityPill = ({
@@ -336,23 +319,7 @@ export const TasksPanel = ({
     value: Priority;
     onChange: (v: Priority) => void;
   }) => (
-    <Select value={value} onValueChange={(v) => onChange(v as Priority)}>
-      <SelectTrigger
-        className={cn(
-          "h-7 w-[90px] text-xs border-0 rounded-full font-medium",
-          priorityPill[value],
-        )}
-      >
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent>
-        {PRIORITIES.map((o) => (
-          <SelectItem key={o.value} value={o.value} className="text-xs">
-            {o.label}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+    <SharedPriorityPill value={value} onChange={onChange} />
   );
 
   const ProgressBadge = ({ t }: { t: Task }) => {
