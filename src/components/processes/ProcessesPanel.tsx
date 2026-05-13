@@ -544,9 +544,11 @@ const ProcessDetail = ({
   const [stepInput, setStepInput] = useState("");
 
   const save = async () => {
-    await supabase.from("processes").update({
+    const { error } = await supabase.from("processes").update({
       name, client_name: client, due_date: due || null, notes,
     }).eq("id", process.id);
+    if (error) return toast.error(error.message);
+    toast.success("Processo atualizado");
     onChanged(); onClose();
   };
 
