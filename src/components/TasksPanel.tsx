@@ -60,7 +60,22 @@ import {
 import { StatusPill as SharedStatusPill } from "@/components/shared/StatusPill";
 import { PriorityPill as SharedPriorityPill } from "@/components/shared/PriorityPill";
 import { EmptyState } from "@/components/shared/EmptyState";
-import { ListChecks } from "lucide-react";
+import { ListChecks, Repeat, ArrowUp, ArrowDown, History } from "lucide-react";
+import { logActivity } from "@/lib/activityLog";
+import { nextOccurrenceDate, RECURRENCE_OPTIONS, type RecurrenceType } from "@/lib/recurrence";
+import { ActivityLogList } from "@/components/shared/ActivityLogList";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Switch } from "@/components/ui/switch";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 export interface Task {
   id: string;
@@ -72,6 +87,13 @@ export interface Task {
   due_date: string | null;
   notes: string;
   position: number;
+  is_recurring?: boolean;
+  recurrence_type?: RecurrenceType | null;
+  recurrence_interval?: number;
+  recurrence_end_date?: string | null;
+  parent_recurring_task_id?: string | null;
+  source_type?: "manual" | "request" | "process";
+  source_id?: string | null;
 }
 
 interface Subtask {
