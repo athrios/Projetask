@@ -25,37 +25,28 @@ import { cn } from "@/lib/utils";
 
 const today = () => new Date().toISOString().slice(0, 10);
 
-type Section = "today" | "schedule" | "tasks" | "done" | "settings";
+type Section =
+  | "today"
+  | "schedule"
+  | "tasks"
+  | "processes"
+  | "forms"
+  | "requests"
+  | "done"
+  | "settings";
 
 const SECTION_META: Record<
   Section,
   { label: string; icon: typeof Sun; subtitle: string }
 > = {
-  today: {
-    label: "Hoje",
-    icon: Sun,
-    subtitle: "O que precisa acontecer hoje.",
-  },
-  schedule: {
-    label: "Cronograma",
-    icon: CalendarClock,
-    subtitle: "Sua agenda do dia, bloco a bloco.",
-  },
-  tasks: {
-    label: "Tarefas",
-    icon: ListChecks,
-    subtitle: "Tudo que você está cuidando.",
-  },
-  done: {
-    label: "Concluídas",
-    icon: CheckCircle2,
-    subtitle: "O que você já tirou da frente.",
-  },
-  settings: {
-    label: "Configurações",
-    icon: Settings,
-    subtitle: "Preferências do app.",
-  },
+  today: { label: "Hoje", icon: Sun, subtitle: "O que precisa acontecer hoje." },
+  schedule: { label: "Cronograma", icon: CalendarClock, subtitle: "Sua agenda do dia, bloco a bloco." },
+  tasks: { label: "Tarefas", icon: ListChecks, subtitle: "Tudo que você está cuidando." },
+  processes: { label: "Processos", icon: Workflow, subtitle: "Processos recorrentes em execução." },
+  forms: { label: "Formulários", icon: FileText, subtitle: "Formulários para receber solicitações." },
+  requests: { label: "Solicitações", icon: Inbox, subtitle: "Respostas recebidas dos formulários." },
+  done: { label: "Concluídas", icon: CheckCircle2, subtitle: "O que você já tirou da frente." },
+  settings: { label: "Configurações", icon: Settings, subtitle: "Preferências do app." },
 };
 
 const Index = () => {
