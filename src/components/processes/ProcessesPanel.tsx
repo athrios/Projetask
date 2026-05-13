@@ -102,7 +102,7 @@ export const ProcessesPanel = ({ userId }: Props) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const createProcess = async (templateId: string | null, name: string) => {
+  const createProcess = async (templateId: string | null, name: string, dueDate: string | null) => {
     const tpl = templates.find((t) => t.id === templateId);
     const { data: proc, error } = await supabase
       .from("processes")
@@ -111,6 +111,7 @@ export const ProcessesPanel = ({ userId }: Props) => {
         name,
         template_id: templateId,
         status: "nao_iniciado",
+        due_date: dueDate,
       })
       .select()
       .single();
@@ -122,30 +123,42 @@ export const ProcessesPanel = ({ userId }: Props) => {
         .select("*")
         .eq("template_id", templateId)
         .order("position", { ascending: true });
-      const rows = (tmplSteps ?? []).map((s, i) => ({
-        process_id: proc.id,
-        user_id: userId,
-        position: i,
-        title: s.title,
-        status: "pendente" as const,
-      }));
-      if (rows.length) await supabase.from("process_steps").insert(rows);
+      const baseISO = (dueDate ?? proc.created_at?.slice(0, 10) ?? new Date().toISOString().slice(0, 10));
+      const rows = (tmplSteps ?? []).map((s, i) => {
+        const offset = (s as { due_offset_days?: number }).due_offset_days ?? 0;
+        return {
+          process_id: proc.id,
+          user_id: userId,
+          position: i,
+          title: s.title,
+          status: "pendente" as const,
+          due_date: offset > 0 ? addDaysISO(baseISO, offset) : null,
+        };
+      });
+      if (rows.length) await supabase.from("process_steps").insert(rows as never);
     }
+    await logActivity(userId, "process", proc.id, "created", `Processo criado: "${name}"`);
     toast.success(tpl ? `Processo criado a partir de ${tpl.name}` : "Processo criado");
     load();
   };
 
   const updateProcess = async (id: string, patch: Partial<Process>) => {
+    const proc = processes.find((p) => p.id === id);
     const { error } = await supabase.from("processes").update(patch).eq("id", id);
     if (error) return toast.error(error.message);
-    if (patch.status) toast.success("Status atualizado");
+    if (patch.status && proc) {
+      await logActivity(userId, "process", id, "status_changed", `Status: ${proc.status} → ${patch.status}`);
+      toast.success("Status atualizado");
+    }
     load();
   };
 
   const removeProcess = async (id: string) => {
     if (!confirm("Excluir processo e todas as etapas?")) return;
+    const proc = processes.find((p) => p.id === id);
     const { error } = await supabase.from("processes").delete().eq("id", id);
     if (error) return toast.error(error.message);
+    await logActivity(userId, "process", id, "deleted", `Processo excluído: "${proc?.name ?? ""}"`);
     toast.success("Processo excluído");
     load();
   };
