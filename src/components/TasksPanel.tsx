@@ -926,6 +926,81 @@ export const TasksPanel = ({
             </div>
           </div>
         )}
+        {/* Recurrence editor */}
+        {recurEditingId && (() => {
+          const t = tasks.find((x) => x.id === recurEditingId);
+          if (!t) return null;
+          return (
+            <Dialog open onOpenChange={(o) => !o && setRecurEditingId(null)}>
+              <DialogContent className="max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Recorrência da tarefa</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-3">
+                  <label className="flex items-center gap-2 text-sm">
+                    <Switch
+                      checked={!!t.is_recurring}
+                      onCheckedChange={(v) => updateTask(t.id, {
+                        is_recurring: v,
+                        recurrence_type: v ? (t.recurrence_type ?? "weekly") : null,
+                      } as Partial<Task>)}
+                    />
+                    Repetir esta tarefa
+                  </label>
+                  {t.is_recurring && (
+                    <>
+                      <div>
+                        <label className="text-xs font-medium">Frequência</label>
+                        <Select
+                          value={t.recurrence_type ?? "weekly"}
+                          onValueChange={(v) => updateTask(t.id, { recurrence_type: v as RecurrenceType } as Partial<Task>)}
+                        >
+                          <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {RECURRENCE_OPTIONS.map((o) => (
+                              <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <label className="text-xs font-medium">Intervalo (a cada quantos)</label>
+                        <Input
+                          type="number" min={1}
+                          value={t.recurrence_interval ?? 1}
+                          onChange={(e) => updateTask(t.id, { recurrence_interval: Math.max(1, Number(e.target.value) || 1) } as Partial<Task>)}
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs font-medium">Termina em (opcional)</label>
+                        <Input
+                          type="date"
+                          value={t.recurrence_end_date ?? ""}
+                          onChange={(e) => updateTask(t.id, { recurrence_end_date: e.target.value || null } as Partial<Task>)}
+                        />
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        A próxima ocorrência será criada automaticamente quando esta tarefa for marcada como concluída.
+                      </p>
+                    </>
+                  )}
+                </div>
+              </DialogContent>
+            </Dialog>
+          );
+        })()}
+
+        {/* History dialog */}
+        {historyId && (
+          <Dialog open onOpenChange={(o) => !o && setHistoryId(null)}>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle>Histórico da tarefa</DialogTitle>
+              </DialogHeader>
+              <ActivityLogList entityType="task" entityId={historyId} />
+            </DialogContent>
+          </Dialog>
+        )}
       </section>
     </TooltipProvider>
   );
