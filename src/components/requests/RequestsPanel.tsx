@@ -60,9 +60,17 @@ export const RequestsPanel = ({ userId }: Props) => {
     load();
   };
 
+  const formatData = (data: Record<string, unknown>) =>
+    Object.entries(data ?? {})
+      .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(", ") : String(v ?? "—")}`)
+      .join("\n");
+
   const convertToTask = async (r: Response) => {
+    if (r.converted_task_id) {
+      return toast.info("Esta solicitação já foi convertida em tarefa.");
+    }
     const title = r.submitter_name ? `${formTitle(r.form_id)} — ${r.submitter_name}` : formTitle(r.form_id);
-    const notes = JSON.stringify(r.data, null, 2);
+    const notes = `Origem: solicitação de ${formTitle(r.form_id)}\n\n${formatData(r.data)}`;
     const { data, error } = await supabase.from("tasks").insert({
       user_id: userId, title, notes,
       task_date: new Date().toISOString().slice(0, 10),
@@ -72,12 +80,16 @@ export const RequestsPanel = ({ userId }: Props) => {
       status: "convertida_tarefa", converted_task_id: data!.id,
     }).eq("id", r.id);
     toast.success("Convertida em tarefa");
+    setOpen(null);
     load();
   };
 
   const convertToProcess = async (r: Response) => {
+    if (r.converted_process_id) {
+      return toast.info("Esta solicitação já foi convertida em processo.");
+    }
     const name = r.submitter_name ? `${formTitle(r.form_id)} — ${r.submitter_name}` : formTitle(r.form_id);
-    const notes = JSON.stringify(r.data, null, 2);
+    const notes = `Origem: solicitação de ${formTitle(r.form_id)}\n\n${formatData(r.data)}`;
     const { data, error } = await supabase.from("processes").insert({
       user_id: userId, name, client_name: r.submitter_name, notes, status: "nao_iniciado",
     }).select().single();
@@ -86,6 +98,16 @@ export const RequestsPanel = ({ userId }: Props) => {
       status: "convertida_processo", converted_process_id: data!.id,
     }).eq("id", r.id);
     toast.success("Convertida em processo");
+    setOpen(null);
+    load();
+  };
+
+  const removeResponse = async (id: string) => {
+    if (!confirm("Excluir esta solicitação?")) return;
+    const { error } = await supabase.from("form_responses").delete().eq("id", id);
+    if (error) return toast.error(error.message);
+    toast.success("Solicitação excluída");
+    setOpen(null);
     load();
   };
 
