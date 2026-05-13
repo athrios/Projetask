@@ -18,13 +18,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Trash2, Settings2, Workflow, ChevronRight, Check } from "lucide-react";
+import { Plus, Trash2, Settings2, Workflow, ChevronRight, Check, History, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { StatusPill } from "@/components/shared/StatusPill";
 import { ViewSwitcher, type ViewMode } from "@/components/shared/ViewSwitcher";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { PROCESS_STATUS, type ProcessStatus } from "@/lib/taskTokens";
+import { logActivity } from "@/lib/activityLog";
+import { ActivityLogList } from "@/components/shared/ActivityLogList";
+import { addDaysISO } from "@/lib/recurrence";
 
 interface Template {
   id: string;
@@ -37,6 +40,7 @@ interface TmplStep {
   template_id: string;
   position: number;
   title: string;
+  due_offset_days?: number;
 }
 interface Process {
   id: string;
@@ -46,6 +50,7 @@ interface Process {
   status: ProcessStatus;
   due_date: string | null;
   notes: string;
+  created_at?: string;
 }
 interface Step {
   id: string;
@@ -54,6 +59,7 @@ interface Step {
   title: string;
   status: "pendente" | "fazendo" | "feita" | "pulado";
   notes: string;
+  due_date?: string | null;
 }
 
 interface Props {
