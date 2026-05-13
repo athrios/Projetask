@@ -54,10 +54,13 @@ import {
   TASK_STATUS,
   PRIORITIES,
   statusPill,
-  priorityPill,
   type TaskStatus,
   type Priority,
 } from "@/lib/taskTokens";
+import { StatusPill as SharedStatusPill } from "@/components/shared/StatusPill";
+import { PriorityPill as SharedPriorityPill } from "@/components/shared/PriorityPill";
+import { EmptyState } from "@/components/shared/EmptyState";
+import { ListChecks } from "lucide-react";
 
 export interface Task {
   id: string;
