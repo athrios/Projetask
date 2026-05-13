@@ -219,6 +219,16 @@ export const RequestsPanel = ({ userId }: Props) => {
               <div className="text-xs text-muted-foreground">
                 Recebida em {new Date(open.created_at).toLocaleString("pt-BR")}
               </div>
+              {(open.converted_task_id || open.converted_process_id) && (
+                <div className="rounded-lg border border-[hsl(var(--status-aguardando))]/40 bg-[hsl(var(--status-aguardando-bg))]/40 p-3 text-xs">
+                  <p className="font-medium text-foreground">
+                    {open.converted_task_id ? "Já convertida em tarefa." : "Já convertida em processo."}
+                  </p>
+                  <p className="text-muted-foreground mt-0.5">
+                    A rastreabilidade fica registrada nesta solicitação. Excluir esta entrada não remove o item criado.
+                  </p>
+                </div>
+              )}
               <div className="rounded-lg border p-3 bg-muted/20 space-y-2">
                 {Object.entries(open.data ?? {}).map(([k, v]) => (
                   <div key={k}>
@@ -228,14 +238,38 @@ export const RequestsPanel = ({ userId }: Props) => {
                     </p>
                   </div>
                 ))}
+                {Object.keys(open.data ?? {}).length === 0 && (
+                  <p className="text-xs text-muted-foreground">Sem campos preenchidos.</p>
+                )}
               </div>
             </div>
             <DialogFooter className="flex-wrap gap-2">
-              <Button variant="outline" size="sm" onClick={() => convertToTask(open)}>
-                <ListChecks className="h-4 w-4" /> Converter em tarefa
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => removeResponse(open.id)}
+                className="text-destructive hover:text-destructive"
+              >
+                <Trash2 className="h-4 w-4" /> Excluir
               </Button>
-              <Button variant="outline" size="sm" onClick={() => convertToProcess(open)}>
-                <Workflow className="h-4 w-4" /> Converter em processo
+              <div className="flex-1" />
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => convertToTask(open)}
+                disabled={!!open.converted_task_id}
+              >
+                <ListChecks className="h-4 w-4" />
+                {open.converted_task_id ? "Já é tarefa" : "Converter em tarefa"}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => convertToProcess(open)}
+                disabled={!!open.converted_process_id}
+              >
+                <Workflow className="h-4 w-4" />
+                {open.converted_process_id ? "Já é processo" : "Converter em processo"}
               </Button>
               <Button onClick={() => setOpen(null)}>Fechar</Button>
             </DialogFooter>
