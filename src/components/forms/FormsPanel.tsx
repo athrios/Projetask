@@ -22,6 +22,7 @@ import {
 import { Plus, Trash2, Link as LinkIcon, FileText, Copy } from "lucide-react";
 import { toast } from "sonner";
 import { EmptyState } from "@/components/shared/EmptyState";
+import { logActivity } from "@/lib/activityLog";
 
 type FieldType = "short_text" | "long_text" | "select" | "multi_select" | "date";
 

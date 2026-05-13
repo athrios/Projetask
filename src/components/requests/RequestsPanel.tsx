@@ -22,6 +22,7 @@ import { StatusPill } from "@/components/shared/StatusPill";
 import { ViewSwitcher, type ViewMode } from "@/components/shared/ViewSwitcher";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { REQUEST_STATUS, type RequestStatus } from "@/lib/taskTokens";
+import { logActivity } from "@/lib/activityLog";
 
 interface FormRow { id: string; title: string }
 interface Response {
