@@ -18,7 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Trash2, Settings2, Workflow, ChevronRight, Check, History, AlertCircle } from "lucide-react";
+import { Plus, Trash2, Settings2, Workflow, ChevronRight, Check, AlertCircle, Play, SkipForward, RotateCcw, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { StatusPill } from "@/components/shared/StatusPill";
@@ -565,6 +565,26 @@ const TemplateManager = ({
   );
 };
 
+/* ───────── Process detail (operational timeline) ───────── */
+
+type StepStatus = Step["status"];
+
+const stepStatusLabel: Record<StepStatus, string> = {
+  pendente: "Pendente",
+  fazendo: "Em andamento",
+  feita: "Concluída",
+  pulado: "Dispensada",
+};
+
+function computeProcessStatus(current: ProcessStatus, steps: Step[]): ProcessStatus {
+  if (current === "cancelado") return "cancelado";
+  if (steps.length === 0) return "nao_iniciado";
+  const allResolved = steps.every((s) => s.status === "feita" || s.status === "pulado");
+  if (allResolved) return "concluido";
+  const anyStarted = steps.some((s) => s.status !== "pendente");
+  return anyStarted ? "em_andamento" : "nao_iniciado";
+}
+
 const ProcessDetail = ({
   process,
   steps,
@@ -582,22 +602,98 @@ const ProcessDetail = ({
   const [client, setClient] = useState(process.client_name);
   const [due, setDue] = useState(process.due_date ?? "");
   const [notes, setNotes] = useState(process.notes);
+  const [showFuture, setShowFuture] = useState(false);
   const [stepInput, setStepInput] = useState("");
+  const [obsDraft, setObsDraft] = useState<Record<string, string>>({});
 
-  const save = async () => {
+  const resolved = steps.filter((s) => s.status === "feita" || s.status === "pulado");
+  const active = steps.find((s) => s.status === "fazendo");
+  const firstPending = steps.find((s) => s.status === "pendente");
+  const currentStep = active ?? firstPending ?? null;
+  const futureSteps = steps.filter(
+    (s) => s.status === "pendente" && s.id !== currentStep?.id,
+  );
+  const total = steps.length;
+  const doneCount = resolved.length;
+  const pct = total ? Math.round((doneCount / total) * 100) : 0;
+
+  const autoStatus = computeProcessStatus(process.status, steps);
+
+  const saveDetails = async () => {
     const { error } = await supabase.from("processes").update({
       name, client_name: client, due_date: due || null, notes,
     }).eq("id", process.id);
     if (error) return toast.error(error.message);
     toast.success("Processo atualizado");
-    onChanged(); onClose();
+    onChanged();
   };
 
-  const toggleStep = async (s: Step) => {
-    const next = s.status === "feita" ? "pendente" : "feita";
+  const recompute = async (after: Step[]) => {
+    const next = computeProcessStatus(process.status, after);
+    if (next !== process.status) {
+      await supabase.from("processes").update({ status: next }).eq("id", process.id);
+      if (next === "concluido") {
+        await logActivity(userId, "process", process.id, "completed", `Processo concluído: "${process.name}"`);
+        toast.success("Processo concluído");
+      }
+    }
+    onChanged();
+  };
+
+  const startProcess = async () => {
+    const first = steps.find((s) => s.status === "pendente");
+    if (!first) return;
     await supabase.from("process_steps").update({
-      status: next, completed_at: next === "feita" ? new Date().toISOString() : null,
+      status: "fazendo", started_at: new Date().toISOString(),
+    }).eq("id", first.id);
+    const after = steps.map((s) => (s.id === first.id ? { ...s, status: "fazendo" as const } : s));
+    toast.success("Processo iniciado");
+    await recompute(after);
+  };
+
+  const advanceNext = async (afterSteps: Step[]) => {
+    const nextPending = afterSteps.find((s) => s.status === "pendente");
+    if (nextPending) {
+      await supabase.from("process_steps").update({
+        status: "fazendo", started_at: new Date().toISOString(),
+      }).eq("id", nextPending.id);
+      return afterSteps.map((s) => (s.id === nextPending.id ? { ...s, status: "fazendo" as const } : s));
+    }
+    return afterSteps;
+  };
+
+  const completeStep = async (s: Step) => {
+    await supabase.from("process_steps").update({
+      status: "feita", completed_at: new Date().toISOString(),
     }).eq("id", s.id);
+    let after = steps.map((x) => (x.id === s.id ? { ...x, status: "feita" as const } : x));
+    after = await advanceNext(after);
+    toast.success("Etapa concluída");
+    await recompute(after);
+  };
+
+  const dismissStep = async (s: Step) => {
+    await supabase.from("process_steps").update({
+      status: "pulado", dismissed_at: new Date().toISOString(),
+    }).eq("id", s.id);
+    let after = steps.map((x) => (x.id === s.id ? { ...x, status: "pulado" as const } : x));
+    after = await advanceNext(after);
+    toast.success("Etapa dispensada");
+    await recompute(after);
+  };
+
+  const reopenStep = async (s: Step) => {
+    await supabase.from("process_steps").update({
+      status: "fazendo", completed_at: null, dismissed_at: null, started_at: new Date().toISOString(),
+    }).eq("id", s.id);
+    toast.success("Etapa reaberta");
+    onChanged();
+  };
+
+  const saveObservation = async (s: Step) => {
+    const v = obsDraft[s.id] ?? s.notes ?? "";
+    await supabase.from("process_steps").update({ notes: v }).eq("id", s.id);
+    toast.success("Observação salva");
     onChanged();
   };
 
@@ -612,98 +708,309 @@ const ProcessDetail = ({
   };
 
   const removeStep = async (id: string) => {
+    if (!confirm("Excluir esta etapa?")) return;
     await supabase.from("process_steps").delete().eq("id", id);
     onChanged();
   };
 
+  const cancelProcess = async () => {
+    if (!confirm("Cancelar este processo?")) return;
+    await supabase.from("processes").update({ status: "cancelado" }).eq("id", process.id);
+    await logActivity(userId, "process", process.id, "status_changed", `Processo cancelado: "${process.name}"`);
+    toast.success("Processo cancelado");
+    onChanged();
+  };
+
+  const reopenProcess = async () => {
+    await supabase.from("processes").update({ status: "em_andamento" }).eq("id", process.id);
+    toast.success("Processo reaberto");
+    onChanged();
+  };
+
+  const canStart = autoStatus === "nao_iniciado" && total > 0 && process.status !== "cancelado";
+  const isCancelled = process.status === "cancelado";
+
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+      <DialogContent className="max-w-2xl max-h-[88vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{process.name}</DialogTitle>
+          <DialogTitle className="text-base">{process.name}</DialogTitle>
+          {process.client_name && (
+            <p className="text-xs text-muted-foreground">{process.client_name}</p>
+          )}
         </DialogHeader>
-        <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs font-medium">Nome</label>
-              <Input value={name} onChange={(e) => setName(e.target.value)} />
-            </div>
-            <div>
-              <label className="text-xs font-medium">Cliente</label>
-              <Input value={client} onChange={(e) => setClient(e.target.value)} />
-            </div>
-            <div>
-              <label className="text-xs font-medium">Prazo</label>
-              <Input type="date" value={due} onChange={(e) => setDue(e.target.value)} />
+
+        {/* Header summary */}
+        <div className="space-y-3 -mt-1">
+          <div className="flex items-center gap-3 flex-wrap">
+            <StatusPill domain="process" value={autoStatus} size="sm" />
+            <span className="text-xs text-muted-foreground tabular-nums">
+              {doneCount}/{total} etapas
+            </span>
+            <div className="h-1.5 flex-1 min-w-[120px] rounded-full bg-muted overflow-hidden">
+              <div className="h-full bg-foreground/70 transition-all" style={{ width: `${pct}%` }} />
             </div>
           </div>
-          <div>
-            <label className="text-xs font-medium">Observações</label>
-            <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} className="min-h-[80px]" />
-          </div>
-          <div>
-            <h4 className="text-sm font-semibold mb-2">Etapas</h4>
-            <ol className="space-y-1.5">
-              {steps.map((s, i) => {
-                const today = new Date().toISOString().slice(0, 10);
-                const overdue = s.due_date && s.due_date < today && s.status !== "feita";
-                const soon = s.due_date && !overdue && s.due_date <= addDaysISO(today, 3) && s.status !== "feita";
-                return (
-                <li key={s.id} className="flex items-center gap-2 group rounded px-2 py-1 hover:bg-muted/40">
-                  <button
-                    onClick={() => toggleStep(s)}
-                    className={cn(
-                      "h-5 w-5 rounded border flex items-center justify-center shrink-0",
-                      s.status === "feita" ? "bg-foreground border-foreground text-background" : "border-input",
-                    )}
-                  >
-                    {s.status === "feita" && <Check className="h-3 w-3" />}
-                  </button>
-                  <span className="text-xs text-muted-foreground w-5">{i + 1}.</span>
-                  <span className={cn("text-sm flex-1", s.status === "feita" && "line-through text-muted-foreground")}>
-                    {s.title}
-                  </span>
-                  {s.due_date && (
-                    <span className={cn(
-                      "text-[11px] tabular-nums px-1.5 py-0.5 rounded inline-flex items-center gap-1",
-                      overdue ? "bg-destructive/10 text-destructive" :
-                      soon ? "bg-[hsl(var(--prio-alta-bg))] text-[hsl(var(--prio-alta))]" :
-                      "text-muted-foreground",
-                    )}>
-                      {overdue && <AlertCircle className="h-3 w-3" />}
-                      {s.due_date}
-                    </span>
-                  )}
-                  <button
-                    onClick={() => removeStep(s.id)}
-                    className="text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
-                </li>
-              );})}
-            </ol>
-            <form
-              className="flex gap-2 mt-2"
-              onSubmit={(e) => { e.preventDefault(); addStep(); }}
-            >
-              <Input
-                value={stepInput}
-                onChange={(e) => setStepInput(e.target.value)}
-                placeholder="Nova etapa…"
-                className="h-8 text-sm"
-              />
-              <Button type="submit" size="sm" variant="outline">
-                <Plus className="h-3.5 w-3.5" />
+          <div className="flex items-center gap-2 flex-wrap">
+            {canStart && (
+              <Button size="sm" onClick={startProcess}>
+                <Play className="h-3.5 w-3.5" /> Iniciar processo
               </Button>
-            </form>
+            )}
+            {!isCancelled && autoStatus !== "concluido" && (
+              <Button size="sm" variant="outline" onClick={cancelProcess}>
+                Cancelar processo
+              </Button>
+            )}
+            {isCancelled && (
+              <Button size="sm" variant="outline" onClick={reopenProcess}>
+                <RotateCcw className="h-3.5 w-3.5" /> Reabrir
+              </Button>
+            )}
           </div>
         </div>
-        <DialogFooter>
+
+        {/* Timeline */}
+        <div className="mt-4 space-y-2">
+          {/* Resolved (compact) */}
+          {resolved.map((s) => (
+            <ResolvedStepRow
+              key={s.id}
+              s={s}
+              index={steps.findIndex((x) => x.id === s.id)}
+              onReopen={() => reopenStep(s)}
+              onRemove={() => removeStep(s.id)}
+            />
+          ))}
+
+          {/* Current (expanded) */}
+          {currentStep && (
+            <CurrentStepCard
+              s={currentStep}
+              index={steps.findIndex((x) => x.id === currentStep.id)}
+              draft={obsDraft[currentStep.id] ?? currentStep.notes ?? ""}
+              onDraftChange={(v) => setObsDraft((p) => ({ ...p, [currentStep.id]: v }))}
+              onSaveObservation={() => saveObservation(currentStep)}
+              onComplete={() => completeStep(currentStep)}
+              onDismiss={() => dismissStep(currentStep)}
+              onRemove={() => removeStep(currentStep.id)}
+              disabled={isCancelled || currentStep.status === "pendente"}
+              showStartHint={currentStep.status === "pendente"}
+            />
+          )}
+
+          {/* Future (collapsed) */}
+          {futureSteps.length > 0 && (
+            <div>
+              <button
+                onClick={() => setShowFuture((v) => !v)}
+                className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1 px-2 py-1"
+              >
+                <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", showFuture && "rotate-180")} />
+                {showFuture ? "Ocultar próximas etapas" : `Exibir próximas etapas (${futureSteps.length})`}
+              </button>
+              {showFuture && (
+                <ul className="mt-1 space-y-1">
+                  {futureSteps.map((s) => (
+                    <li
+                      key={s.id}
+                      className="flex items-center gap-2 px-3 py-2 rounded-md border border-dashed text-xs text-muted-foreground group"
+                    >
+                      <span className="w-5 tabular-nums">{steps.findIndex((x) => x.id === s.id) + 1}.</span>
+                      <span className="flex-1 truncate">{s.title}</span>
+                      {s.due_date && <span className="tabular-nums">{s.due_date}</span>}
+                      <button
+                        onClick={() => removeStep(s.id)}
+                        className="opacity-0 group-hover:opacity-100 hover:text-destructive"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+
+          {/* Add step */}
+          <form
+            className="flex gap-2 pt-2"
+            onSubmit={(e) => { e.preventDefault(); addStep(); }}
+          >
+            <Input
+              value={stepInput}
+              onChange={(e) => setStepInput(e.target.value)}
+              placeholder="Nova etapa…"
+              className="h-8 text-sm"
+            />
+            <Button type="submit" size="sm" variant="outline">
+              <Plus className="h-3.5 w-3.5" />
+            </Button>
+          </form>
+        </div>
+
+        {/* Details (editable) */}
+        <details className="mt-4 group">
+          <summary className="text-xs font-medium text-muted-foreground cursor-pointer hover:text-foreground">
+            Editar detalhes do processo
+          </summary>
+          <div className="mt-3 space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-medium">Nome</label>
+                <Input value={name} onChange={(e) => setName(e.target.value)} />
+              </div>
+              <div>
+                <label className="text-xs font-medium">Cliente</label>
+                <Input value={client} onChange={(e) => setClient(e.target.value)} />
+              </div>
+              <div>
+                <label className="text-xs font-medium">Prazo</label>
+                <Input type="date" value={due} onChange={(e) => setDue(e.target.value)} />
+              </div>
+            </div>
+            <div>
+              <label className="text-xs font-medium">Observações gerais</label>
+              <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} className="min-h-[70px]" />
+            </div>
+            <Button size="sm" onClick={saveDetails}>Salvar detalhes</Button>
+          </div>
+        </details>
+
+        <DialogFooter className="mt-4">
           <Button variant="outline" onClick={onClose}>Fechar</Button>
-          <Button onClick={save}>Salvar</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   );
 };
+
+const ResolvedStepRow = ({
+  s, index, onReopen, onRemove,
+}: { s: Step; index: number; onReopen: () => void; onRemove: () => void }) => {
+  const isDismissed = s.status === "pulado";
+  return (
+    <div
+      className={cn(
+        "flex items-start gap-2 px-3 py-2 rounded-md border group",
+        isDismissed ? "bg-muted/30 border-dashed" : "bg-muted/20",
+      )}
+    >
+      <div
+        className={cn(
+          "h-5 w-5 rounded-full flex items-center justify-center shrink-0 mt-0.5",
+          isDismissed ? "bg-muted text-muted-foreground" : "bg-foreground text-background",
+        )}
+      >
+        {isDismissed ? <SkipForward className="h-3 w-3" /> : <Check className="h-3 w-3" />}
+      </div>
+      <span className="text-xs text-muted-foreground tabular-nums mt-0.5">{index + 1}.</span>
+      <div className="flex-1 min-w-0">
+        <p
+          className={cn(
+            "text-sm truncate",
+            isDismissed ? "text-muted-foreground italic" : "text-muted-foreground line-through",
+          )}
+        >
+          {s.title}
+        </p>
+        {s.notes && (
+          <p className="text-[11px] text-muted-foreground mt-0.5 whitespace-pre-wrap">{s.notes}</p>
+        )}
+      </div>
+      <StatusPill domain="process_step" value={s.status} size="xs" />
+      <button
+        onClick={onReopen}
+        className="text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100"
+        title="Reabrir etapa"
+      >
+        <RotateCcw className="h-3.5 w-3.5" />
+      </button>
+      <button
+        onClick={onRemove}
+        className="text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100"
+      >
+        <Trash2 className="h-3.5 w-3.5" />
+      </button>
+    </div>
+  );
+};
+
+const CurrentStepCard = ({
+  s, index, draft, onDraftChange, onSaveObservation, onComplete, onDismiss, onRemove, disabled, showStartHint,
+}: {
+  s: Step;
+  index: number;
+  draft: string;
+  onDraftChange: (v: string) => void;
+  onSaveObservation: () => void;
+  onComplete: () => void;
+  onDismiss: () => void;
+  onRemove: () => void;
+  disabled: boolean;
+  showStartHint: boolean;
+}) => {
+  const today = new Date().toISOString().slice(0, 10);
+  const overdue = s.due_date && s.due_date < today;
+  return (
+    <div className="rounded-lg border-2 border-foreground/20 bg-card p-4 space-y-3 shadow-sm">
+      <div className="flex items-start gap-2">
+        <span className="text-xs text-muted-foreground tabular-nums mt-1">{index + 1}.</span>
+        <div className="flex-1 min-w-0">
+          <h4 className="text-sm font-semibold">{s.title}</h4>
+          <div className="flex items-center gap-2 mt-1 flex-wrap">
+            <StatusPill domain="process_step" value={s.status} size="xs" />
+            {s.due_date && (
+              <span
+                className={cn(
+                  "text-[11px] tabular-nums px-1.5 py-0.5 rounded inline-flex items-center gap-1",
+                  overdue ? "bg-destructive/10 text-destructive" : "text-muted-foreground",
+                )}
+              >
+                {overdue && <AlertCircle className="h-3 w-3" />}
+                Prazo: {s.due_date}
+              </span>
+            )}
+            {showStartHint && (
+              <span className="text-[11px] text-muted-foreground">
+                Clique em “Iniciar processo” para começar.
+              </span>
+            )}
+          </div>
+        </div>
+        <button
+          onClick={onRemove}
+          className="text-muted-foreground hover:text-destructive"
+          title="Excluir etapa"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </button>
+      </div>
+
+      <div>
+        <label className="text-xs font-medium">Observação</label>
+        <Textarea
+          value={draft}
+          onChange={(e) => onDraftChange(e.target.value)}
+          placeholder="Anotações desta etapa…"
+          className="min-h-[70px] mt-1"
+        />
+        <div className="flex justify-end mt-1">
+          <Button size="sm" variant="ghost" onClick={onSaveObservation}>
+            Salvar observação
+          </Button>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap gap-2 pt-1 border-t">
+        <Button size="sm" onClick={onComplete} disabled={disabled}>
+          <Check className="h-3.5 w-3.5" /> Marcar como concluída
+        </Button>
+        <Button size="sm" variant="outline" onClick={onDismiss} disabled={disabled}>
+          <SkipForward className="h-3.5 w-3.5" /> Dispensar etapa
+        </Button>
+      </div>
+    </div>
+  );
+};
+

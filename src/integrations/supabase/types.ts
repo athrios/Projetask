@@ -175,11 +175,13 @@ export type Database = {
         Row: {
           completed_at: string | null
           created_at: string
+          dismissed_at: string | null
           due_date: string | null
           id: string
           notes: string
           position: number
           process_id: string
+          started_at: string | null
           status: string
           title: string
           user_id: string
@@ -187,11 +189,13 @@ export type Database = {
         Insert: {
           completed_at?: string | null
           created_at?: string
+          dismissed_at?: string | null
           due_date?: string | null
           id?: string
           notes?: string
           position?: number
           process_id: string
+          started_at?: string | null
           status?: string
           title: string
           user_id: string
@@ -199,11 +203,13 @@ export type Database = {
         Update: {
           completed_at?: string | null
           created_at?: string
+          dismissed_at?: string | null
           due_date?: string | null
           id?: string
           notes?: string
           position?: number
           process_id?: string
+          started_at?: string | null
           status?: string
           title?: string
           user_id?: string
