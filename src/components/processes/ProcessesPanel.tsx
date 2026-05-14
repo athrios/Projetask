@@ -244,17 +244,15 @@ const ProcessCard = ({
   p,
   steps,
   onOpen,
-  onStatus,
 }: {
   p: Process;
   steps: Step[];
   onOpen: () => void;
-  onStatus: (s: ProcessStatus) => void;
 }) => {
-  const done = steps.filter((s) => s.status === "feita").length;
+  const done = steps.filter((s) => s.status === "feita" || s.status === "pulado").length;
   const total = steps.length;
   const pct = total ? Math.round((done / total) * 100) : 0;
-  const current = steps.find((s) => s.status !== "feita" && s.status !== "pulado");
+  const current = steps.find((s) => s.status === "fazendo") ?? steps.find((s) => s.status === "pendente");
   return (
     <div className="rounded-xl border bg-card p-4 hover:shadow-sm transition group">
       <div className="flex items-start justify-between gap-2">
@@ -264,7 +262,7 @@ const ProcessCard = ({
             <p className="text-xs text-muted-foreground truncate">{p.client_name}</p>
           )}
         </button>
-        <StatusPill domain="process" value={p.status} onChange={(v) => onStatus(v as ProcessStatus)} size="xs" />
+        <StatusPill domain="process" value={p.status} size="xs" />
       </div>
       <div className="mt-3 space-y-2">
         <div className="flex items-center gap-2">
@@ -278,9 +276,13 @@ const ProcessCard = ({
         {current && (
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <ChevronRight className="h-3 w-3" />
+            <span className="shrink-0">Etapa atual:</span>
             <span className="truncate">{current.title}</span>
           </div>
         )}
+        <Button size="sm" variant="outline" className="h-8 w-full mt-2" onClick={onOpen}>
+          Abrir detalhes
+        </Button>
         {p.due_date && (
           <p className="text-[11px] text-muted-foreground">Prazo: {p.due_date}</p>
         )}
