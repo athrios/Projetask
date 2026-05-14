@@ -733,12 +733,6 @@ const ProcessDetail = ({
     onChanged();
   };
 
-  const reopenProcess = async () => {
-    await supabase.from("processes").update({ status: "em_andamento" }).eq("id", process.id);
-    toast.success("Processo reaberto");
-    onChanged();
-  };
-
   const canStart = autoStatus === "nao_iniciado" && total > 0 && process.status !== "cancelado";
   const isCancelled = process.status === "cancelado";
 
@@ -774,11 +768,7 @@ const ProcessDetail = ({
                 Cancelar processo
               </Button>
             )}
-            {isCancelled && (
-              <Button size="sm" variant="outline" onClick={reopenProcess}>
-                <RotateCcw className="h-3.5 w-3.5" /> Reabrir
-              </Button>
-            )}
+            {isCancelled && <span className="text-xs text-muted-foreground">Processo cancelado manualmente.</span>}
           </div>
         </div>
 
@@ -790,7 +780,6 @@ const ProcessDetail = ({
               key={s.id}
               s={s}
               index={steps.findIndex((x) => x.id === s.id)}
-              onReopen={() => reopenStep(s)}
               onRemove={() => removeStep(s.id)}
             />
           ))}
