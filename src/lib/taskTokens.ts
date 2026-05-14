@@ -10,11 +10,10 @@ export type Priority = "baixa" | "media" | "alta" | "urgente";
 export type ProcessStatus =
   | "nao_iniciado"
   | "em_andamento"
-  | "aguardando_cliente"
-  | "aguardando_orgao"
-  | "em_exigencia"
   | "concluido"
   | "cancelado";
+
+export type ProcessStepStatus = "pendente" | "fazendo" | "feita" | "pulado";
 
 export type RequestStatus =
   | "recebida"
