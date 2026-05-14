@@ -726,7 +726,7 @@ const ProcessDetail = ({
   const cancelProcess = async () => {
     if (!confirm("Cancelar este processo?")) return;
     await supabase.from("processes").update({ status: "cancelado" }).eq("id", process.id);
-    await logActivity(userId, "process", process.id, "cancelled", `Processo cancelado: "${process.name}"`);
+    await logActivity(userId, "process", process.id, "status_changed", `Processo cancelado: "${process.name}"`);
     toast.success("Processo cancelado");
     onChanged();
   };
