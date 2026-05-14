@@ -135,11 +135,12 @@ export const ProcessesPanel = ({ userId }: Props) => {
     if (error || !proc) return toast.error(error?.message ?? "Erro");
 
     if (templateId) {
-      const { data: tmplSteps } = await supabase
+      const { data: tmplSteps, error: stepsError } = await supabase
         .from("process_template_steps")
         .select("*")
         .eq("template_id", templateId)
         .order("position", { ascending: true });
+      if (stepsError) return toast.error(stepsError.message);
       const baseISO = (dueDate ?? proc.created_at?.slice(0, 10) ?? new Date().toISOString().slice(0, 10));
       const rows = (tmplSteps ?? []).map((s, i) => {
         const offset = (s as { due_offset_days?: number }).due_offset_days ?? 0;
@@ -152,7 +153,10 @@ export const ProcessesPanel = ({ userId }: Props) => {
           due_date: offset > 0 ? addDaysISO(baseISO, offset) : null,
         };
       });
-      if (rows.length) await supabase.from("process_steps").insert(rows as never);
+      if (rows.length) {
+        const { error: insertStepsError } = await supabase.from("process_steps").insert(rows as never);
+        if (insertStepsError) return toast.error(insertStepsError.message);
+      }
     }
     await logActivity(userId, "process", proc.id, "created", `Processo criado: "${name}"`);
     toast.success(tpl ? `Processo criado a partir de ${tpl.name}` : "Processo criado");
