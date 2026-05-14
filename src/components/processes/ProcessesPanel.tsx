@@ -784,7 +784,9 @@ const ProcessDetail = ({
               key={s.id}
               s={s}
               index={steps.findIndex((x) => x.id === s.id)}
-              onRemove={() => removeStep(s.id)}
+              draft={obsDraft[s.id] ?? s.notes ?? ""}
+              onDraftChange={(v) => setObsDraft((p) => ({ ...p, [s.id]: v }))}
+              onSaveObservation={() => saveObservation(s)}
             />
           ))}
 
@@ -824,12 +826,7 @@ const ProcessDetail = ({
                       <span className="w-5 tabular-nums">{steps.findIndex((x) => x.id === s.id) + 1}.</span>
                       <span className="flex-1 truncate">{s.title}</span>
                       {s.due_date && <span className="tabular-nums">{s.due_date}</span>}
-                      <button
-                        onClick={() => removeStep(s.id)}
-                        className="opacity-0 group-hover:opacity-100 hover:text-destructive"
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </button>
+                      <StatusPill domain="process_step" value={s.status} size="xs" />
                     </li>
                   ))}
                 </ul>
