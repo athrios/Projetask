@@ -46,12 +46,23 @@ export const PRIORITIES: { value: Priority; label: string }[] = [
 export const PROCESS_STATUS: { value: ProcessStatus; label: string }[] = [
   { value: "nao_iniciado", label: "Não iniciado" },
   { value: "em_andamento", label: "Em andamento" },
-  { value: "aguardando_cliente", label: "Aguardando cliente" },
-  { value: "aguardando_orgao", label: "Aguardando órgão" },
-  { value: "em_exigencia", label: "Em exigência" },
   { value: "concluido", label: "Concluído" },
   { value: "cancelado", label: "Cancelado" },
 ];
+
+export const PROCESS_STEP_STATUS: { value: ProcessStepStatus; label: string }[] = [
+  { value: "pendente", label: "Pendente" },
+  { value: "fazendo", label: "Em andamento" },
+  { value: "feita", label: "Concluída" },
+  { value: "pulado", label: "Dispensada" },
+];
+
+export const processStepStatusPill: Record<ProcessStepStatus, string> = {
+  pendente: "bg-[hsl(var(--status-pendente-bg))] text-[hsl(var(--status-pendente))]",
+  fazendo: "bg-[hsl(var(--status-fazendo-bg))] text-[hsl(var(--status-fazendo))]",
+  feita: "bg-[hsl(var(--status-feita-bg))] text-[hsl(var(--status-feita))]",
+  pulado: "bg-[hsl(var(--status-pulado-bg))] text-[hsl(var(--status-pulado))]",
+};
 
 export const REQUEST_STATUS: { value: RequestStatus; label: string }[] = [
   { value: "recebida", label: "Recebida" },
