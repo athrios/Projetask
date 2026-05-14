@@ -2,13 +2,16 @@ import {
   TASK_STATUS,
   SCHEDULE_STATUS,
   PROCESS_STATUS,
+  PROCESS_STEP_STATUS,
   REQUEST_STATUS,
   statusPill,
   processStatusPill,
+  processStepStatusPill,
   requestStatusPill,
   type TaskStatus,
   type ScheduleStatus,
   type ProcessStatus,
+  type ProcessStepStatus,
   type RequestStatus,
 } from "@/lib/taskTokens";
 import {
@@ -20,7 +23,7 @@ import {
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
-type Domain = "task" | "schedule" | "process" | "request";
+type Domain = "task" | "schedule" | "process" | "process_step" | "request";
 
 interface Props {
   domain: Domain;
@@ -34,11 +37,13 @@ const optionsFor = (d: Domain) => {
   if (d === "task") return TASK_STATUS;
   if (d === "schedule") return SCHEDULE_STATUS;
   if (d === "process") return PROCESS_STATUS;
+  if (d === "process_step") return PROCESS_STEP_STATUS;
   return REQUEST_STATUS;
 };
 
 const colorFor = (d: Domain, v: string): string => {
   if (d === "process") return processStatusPill[v as ProcessStatus] ?? "";
+  if (d === "process_step") return processStepStatusPill[v as ProcessStepStatus] ?? "";
   if (d === "request") return requestStatusPill[v as RequestStatus] ?? "";
   return statusPill[v as ScheduleStatus] ?? "";
 };
