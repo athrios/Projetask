@@ -669,7 +669,7 @@ const ProcessDetail = ({
       }).eq("id", nextPending.id);
       if (error) {
         toast.error(error.message);
-        return afterSteps;
+        return null;
       }
       return afterSteps.map((s) => (s.id === nextPending.id ? { ...s, status: "fazendo" as const } : s));
     }
@@ -685,6 +685,7 @@ const ProcessDetail = ({
     if (error) return toast.error(error.message);
     let after = steps.map((x) => (x.id === s.id ? { ...x, status: "feita" as const, completed_at: completedAt, notes: notesValue } : x));
     after = await advanceNext(after);
+    if (!after) return;
     const ok = await persistProcessStatus(after);
     if (!ok) return;
     toast.success("Etapa concluída");
@@ -700,6 +701,7 @@ const ProcessDetail = ({
     if (error) return toast.error(error.message);
     let after = steps.map((x) => (x.id === s.id ? { ...x, status: "pulado" as const, dismissed_at: dismissedAt, notes: notesValue } : x));
     after = await advanceNext(after);
+    if (!after) return;
     const ok = await persistProcessStatus(after);
     if (!ok) return;
     toast.success("Etapa dispensada");
