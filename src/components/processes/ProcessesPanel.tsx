@@ -888,8 +888,14 @@ const ProcessDetail = ({
 };
 
 const ResolvedStepRow = ({
-  s, index, onRemove,
-}: { s: Step; index: number; onRemove: () => void }) => {
+  s, index, draft, onDraftChange, onSaveObservation,
+}: {
+  s: Step;
+  index: number;
+  draft: string;
+  onDraftChange: (v: string) => void;
+  onSaveObservation: () => void;
+}) => {
   const isDismissed = s.status === "pulado";
   return (
     <div
@@ -919,14 +925,24 @@ const ResolvedStepRow = ({
         {s.notes && (
           <p className="text-[11px] text-muted-foreground mt-0.5 whitespace-pre-wrap">{s.notes}</p>
         )}
+        <details className="mt-1">
+          <summary className="text-[11px] text-muted-foreground cursor-pointer hover:text-foreground">
+            Editar observação
+          </summary>
+          <div className="mt-2 space-y-1">
+            <Textarea
+              value={draft}
+              onChange={(e) => onDraftChange(e.target.value)}
+              className="min-h-[56px] text-xs"
+              placeholder="Observação desta etapa…"
+            />
+            <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={onSaveObservation}>
+              Salvar observação
+            </Button>
+          </div>
+        </details>
       </div>
       <StatusPill domain="process_step" value={s.status} size="xs" />
-      <button
-        onClick={onRemove}
-        className="text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100"
-      >
-        <Trash2 className="h-3.5 w-3.5" />
-      </button>
     </div>
   );
 };
