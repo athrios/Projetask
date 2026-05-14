@@ -295,28 +295,27 @@ const ListView = ({
   processes,
   stepsByProc,
   onOpen,
-  onStatus,
   onRemove,
 }: {
   processes: Process[];
   stepsByProc: Record<string, Step[]>;
   onOpen: (p: Process) => void;
-  onStatus: (p: Process, s: ProcessStatus) => void;
   onRemove: (id: string) => void;
 }) => (
   <div className="rounded-xl border bg-card divide-y">
     {processes.map((p) => {
       const steps = stepsByProc[p.id] ?? [];
-      const done = steps.filter((s) => s.status === "feita").length;
+      const done = steps.filter((s) => s.status === "feita" || s.status === "pulado").length;
+      const current = steps.find((s) => s.status === "fazendo") ?? steps.find((s) => s.status === "pendente");
       return (
         <div key={p.id} className="px-4 py-3 flex items-center gap-3 group hover:bg-muted/30">
           <button onClick={() => onOpen(p)} className="flex-1 min-w-0 text-left">
             <p className="text-sm font-medium truncate">{p.name}</p>
             <p className="text-xs text-muted-foreground truncate">
-              {p.client_name || "—"} · {done}/{steps.length} etapas
+              {p.client_name || "—"} · {done}/{steps.length} etapas{current ? ` · ${current.title}` : ""}
             </p>
           </button>
-          <StatusPill domain="process" value={p.status} onChange={(v) => onStatus(p, v as ProcessStatus)} size="xs" />
+          <StatusPill domain="process" value={p.status} size="xs" />
           <button
             onClick={() => onRemove(p.id)}
             className="p-1.5 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100"
