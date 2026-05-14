@@ -60,6 +60,9 @@ interface Step {
   status: "pendente" | "fazendo" | "feita" | "pulado";
   notes: string;
   due_date?: string | null;
+  started_at?: string | null;
+  completed_at?: string | null;
+  dismissed_at?: string | null;
 }
 
 interface Props {
@@ -82,19 +85,34 @@ export const ProcessesPanel = ({ userId }: Props) => {
     if (p.error) return toast.error(p.error.message);
     setTemplates((t.data ?? []) as Template[]);
     const procs = (p.data ?? []) as Process[];
-    setProcesses(procs);
+    let grouped: Record<string, Step[]> = {};
     if (procs.length) {
       const { data: s } = await supabase
         .from("process_steps")
         .select("*")
         .in("process_id", procs.map((x) => x.id))
         .order("position", { ascending: true });
-      const grouped: Record<string, Step[]> = {};
       (s ?? []).forEach((row) => {
         (grouped[row.process_id] ||= []).push(row as unknown as Step);
       });
       setStepsByProc(grouped);
     } else setStepsByProc({});
+
+    const normalized = procs.map((proc) => ({
+      ...proc,
+      status: computeProcessStatus(proc.status, grouped[proc.id] ?? []),
+    }));
+    setProcesses(normalized);
+    if (openProc) {
+      const updatedOpen = normalized.find((proc) => proc.id === openProc.id);
+      if (updatedOpen) setOpenProc(updatedOpen);
+    }
+
+    await Promise.all(
+      normalized
+        .filter((proc, index) => proc.status !== procs[index].status)
+        .map((proc) => supabase.from("processes").update({ status: proc.status }).eq("id", proc.id)),
+    );
   };
 
   useEffect(() => {
