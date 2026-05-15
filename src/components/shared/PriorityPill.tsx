@@ -33,7 +33,7 @@ export const PriorityPill = ({ value, onChange, className }: Props) => {
     <Select value={value} onValueChange={(v) => onChange(v as Priority)}>
       <SelectTrigger
         className={cn(
-          "h-7 w-[100px] text-xs border-0 rounded-full font-medium justify-center",
+          "h-7 w-auto px-2.5 gap-1 text-xs border-0 rounded-full font-medium justify-center",
           priorityPill[value],
           className,
         )}

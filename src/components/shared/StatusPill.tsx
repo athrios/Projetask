@@ -53,7 +53,7 @@ export const StatusPill = ({ domain, value, onChange, size = "sm", className }: 
   const color = colorFor(domain, value);
   const label = options.find((o) => o.value === value)?.label ?? value;
   const sizeCls =
-    size === "sm" ? "h-7 px-3 text-xs min-w-[110px]" : "h-6 px-2.5 text-[11px] min-w-[96px]";
+    size === "sm" ? "h-7 px-2.5 text-xs w-auto" : "h-6 px-2 text-[11px] w-auto";
 
   if (!onChange) {
     return (
