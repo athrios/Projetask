@@ -529,7 +529,7 @@ const NewProcessButton = ({
           </div>
           <div>
             <label className="text-xs font-medium">Data inicial / prazo (opcional)</label>
-            <Input type="date" value={due} onChange={(e) => setDue(e.target.value)} />
+            <DateField value={due} onChange={setDue} />
             <p className="text-[11px] text-muted-foreground mt-1">
               Usada para calcular automaticamente os prazos das etapas do modelo.
             </p>
