@@ -701,7 +701,7 @@ export const TasksPanel = ({
             />
           </div>
         )}
-        {expanded[t.id] && <div className="pb-3">{{SubsBlock({ t })}}</div>}
+        {expanded[t.id] && <div className="pb-3">{SubsBlock({ t })}</div>}
       </div>
     );
   };
@@ -917,7 +917,7 @@ export const TasksPanel = ({
                                 />
                               </div>
                             )}
-                            {expanded[t.id] && {SubsBlock({ t })}}
+                            {expanded[t.id] && SubsBlock({ t })}}
                           </TableCell>
                         </TableRow>
                       )}
@@ -961,7 +961,7 @@ export const TasksPanel = ({
                       className="text-sm"
                     />
                   )}
-                  {expanded[t.id] && {SubsBlock({ t })}}
+                  {expanded[t.id] && SubsBlock({ t })}}
                 </div>
               );
             })}
