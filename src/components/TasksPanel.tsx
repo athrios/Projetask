@@ -579,13 +579,15 @@ export const TasksPanel = ({
                   )}
                 </div>
                 {noteOpen && (
-                  <Textarea
-                    value={s.notes}
-                    onChange={(e) => persistNote(s.id, e.target.value, "sub")}
-                    onBlur={(e) => flushNote(s.id, e.target.value, "sub")}
-                    placeholder="Observação..."
-                    className="text-xs min-h-[56px] ml-6"
-                  />
+                  <div className="ml-6">
+                    <NoteField
+                      value={s.notes}
+                      onSave={(v) => saveNote(s.id, v, "sub")}
+                      placeholder="Observação..."
+                      className="text-xs min-h-[56px]"
+                      rows={2}
+                    />
+                  </div>
                 )}
               </li>
             );
