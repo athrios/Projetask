@@ -906,13 +906,14 @@ export const TasksPanel = ({
                         <TableRow>
                           <TableCell colSpan={7} className="bg-muted/30">
                             {notesOpen[noteKey] && (
-                              <Textarea
-                                value={t.notes}
-                                onChange={(e) => persistNote(t.id, e.target.value, "task")}
-                                onBlur={(e) => flushNote(t.id, e.target.value, "task")}
-                                placeholder="Observação..."
-                                className="mb-2 text-sm"
-                              />
+                              <div className="mb-2">
+                                <NoteField
+                                  value={t.notes}
+                                  onSave={(v) => saveNote(t.id, v, "task")}
+                                  placeholder="Observação..."
+                                  className="text-sm"
+                                />
+                              </div>
                             )}
                             {expanded[t.id] && <SubsBlock t={t} />}
                           </TableCell>
