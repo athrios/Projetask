@@ -659,7 +659,7 @@ export const TasksPanel = ({
         type="date"
         value={t.due_date ?? ""}
         onChange={(e) => updateTask(t.id, { due_date: e.target.value || null })}
-        className="h-7 w-[124px] text-xs border-dashed bg-transparent px-2"
+        className="h-7 w-[150px] text-xs border-dashed bg-transparent pl-2 pr-1.5 [&::-webkit-calendar-picker-indicator]:ml-1 [&::-webkit-calendar-picker-indicator]:p-0 [&::-webkit-calendar-picker-indicator]:opacity-70 [&::-webkit-calendar-picker-indicator]:cursor-pointer"
       />
     </div>
   );
