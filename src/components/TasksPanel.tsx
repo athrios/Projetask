@@ -648,12 +648,12 @@ export const TasksPanel = ({
   );
 
   const DueDate = ({ t }: { t: Task }) => (
-    <div className="relative">
+    <div className="relative shrink-0">
       <Input
         type="date"
         value={t.due_date ?? ""}
         onChange={(e) => updateTask(t.id, { due_date: e.target.value || null })}
-        className="h-7 w-[140px] text-xs border-dashed bg-transparent"
+        className="h-7 w-[124px] text-xs border-dashed bg-transparent px-2"
       />
     </div>
   );
