@@ -18,7 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Trash2, Settings2, Workflow, ChevronRight, Check, AlertCircle, Play, SkipForward, ChevronDown } from "lucide-react";
+import { Plus, Trash2, Settings2, Workflow, ChevronRight, Check, AlertCircle, Play, SkipForward, ChevronDown, CalendarIcon } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { StatusPill } from "@/components/shared/StatusPill";
@@ -27,11 +27,23 @@ import { EmptyState } from "@/components/shared/EmptyState";
 import { PROCESS_STATUS, type ProcessStatus } from "@/lib/taskTokens";
 import { logActivity } from "@/lib/activityLog";
 import { addDaysISO } from "@/lib/recurrence";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { format, parseISO } from "date-fns";
+import { ptBR } from "date-fns/locale";
+import {
+  TEMPLATE_COLORS,
+  asColor,
+  colorPill,
+  colorLeftBorder,
+  type TemplateColor,
+} from "./templateColors";
 
 interface Template {
   id: string;
   name: string;
   description: string;
+  color?: string;
   steps?: TmplStep[];
 }
 interface TmplStep {
