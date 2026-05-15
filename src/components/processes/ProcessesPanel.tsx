@@ -193,6 +193,7 @@ export const ProcessesPanel = ({ userId }: Props) => {
         <KanbanView
           processes={processes}
           stepsByProc={stepsByProc}
+          templates={templates}
           onOpen={setOpenProc}
         />
       ) : view === "list" ? (
@@ -209,6 +210,7 @@ export const ProcessesPanel = ({ userId }: Props) => {
               key={p.id}
               p={p}
               steps={stepsByProc[p.id] ?? []}
+              templateName={templates.find((t) => t.id === p.template_id)?.name ?? null}
               onOpen={() => setOpenProc(p)}
             />
           ))}
@@ -235,25 +237,42 @@ export const ProcessesPanel = ({ userId }: Props) => {
 const ProcessCard = ({
   p,
   steps,
+  templateName,
   onOpen,
 }: {
   p: Process;
   steps: Step[];
+  templateName?: string | null;
   onOpen: () => void;
 }) => {
   const done = steps.filter((s) => s.status === "feita" || s.status === "pulado").length;
   const total = steps.length;
   const pct = total ? Math.round((done / total) * 100) : 0;
   const current = steps.find((s) => s.status === "fazendo") ?? steps.find((s) => s.status === "pendente");
+  const currentNote = current?.notes?.trim() ?? "";
   return (
-    <div className="rounded-xl border bg-card p-4 hover:shadow-sm transition group">
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onOpen}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onOpen();
+        }
+      }}
+      className="rounded-xl border bg-card p-4 hover:shadow-sm transition group cursor-pointer text-left"
+    >
       <div className="flex items-start justify-between gap-2">
-        <button onClick={onOpen} className="text-left flex-1 min-w-0">
+        <div className="flex-1 min-w-0">
           <h4 className="text-sm font-semibold truncate">{p.name}</h4>
+          <p className="text-[11px] text-muted-foreground truncate mt-0.5">
+            {templateName ? `Modelo: ${templateName}` : "Processo avulso"}
+          </p>
           {p.client_name && (
-            <p className="text-xs text-muted-foreground truncate">{p.client_name}</p>
+            <p className="text-xs text-muted-foreground truncate mt-0.5">{p.client_name}</p>
           )}
-        </button>
+        </div>
         <StatusPill domain="process" value={p.status} size="xs" />
       </div>
       <div className="mt-3 space-y-2">
@@ -272,9 +291,12 @@ const ProcessCard = ({
             <span className="truncate">{current.title}</span>
           </div>
         )}
-        <Button size="sm" variant="outline" className="h-8 w-full mt-2" onClick={onOpen}>
-          Abrir detalhes
-        </Button>
+        {currentNote && (
+          <div className="rounded-md bg-muted/40 px-2 py-1.5">
+            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Observação</p>
+            <p className="text-xs text-foreground/80 line-clamp-2 break-words">{currentNote}</p>
+          </div>
+        )}
         {p.due_date && (
           <p className="text-[11px] text-muted-foreground">Prazo: {p.due_date}</p>
         )}
@@ -323,10 +345,12 @@ const ListView = ({
 const KanbanView = ({
   processes,
   stepsByProc,
+  templates,
   onOpen,
 }: {
   processes: Process[];
   stepsByProc: Record<string, Step[]>;
+  templates: Template[];
   onOpen: (p: Process) => void;
 }) => (
   <div className="overflow-x-auto -mx-2 pb-2">
@@ -345,6 +369,7 @@ const KanbanView = ({
                   key={p.id}
                   p={p}
                   steps={stepsByProc[p.id] ?? []}
+                  templateName={templates.find((t) => t.id === p.template_id)?.name ?? null}
                   onOpen={() => onOpen(p)}
                 />
               ))}
