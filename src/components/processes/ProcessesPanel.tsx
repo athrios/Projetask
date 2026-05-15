@@ -217,15 +217,19 @@ export const ProcessesPanel = ({ userId }: Props) => {
         />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-          {processes.map((p) => (
-            <ProcessCard
-              key={p.id}
-              p={p}
-              steps={stepsByProc[p.id] ?? []}
-              templateName={templates.find((t) => t.id === p.template_id)?.name ?? null}
-              onOpen={() => setOpenProc(p)}
-            />
-          ))}
+          {processes.map((p) => {
+            const tpl = templates.find((t) => t.id === p.template_id);
+            return (
+              <ProcessCard
+                key={p.id}
+                p={p}
+                steps={stepsByProc[p.id] ?? []}
+                templateName={tpl?.name ?? null}
+                templateColor={asColor(tpl?.color)}
+                onOpen={() => setOpenProc(p)}
+              />
+            );
+          })}
         </div>
       )}
 
