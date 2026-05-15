@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Textarea } from "@/components/ui/textarea";
 import { Check, Loader2, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -13,6 +13,7 @@ interface NoteFieldProps {
   className?: string;
   rows?: number;
   autoFocus?: boolean;
+  autoResize?: boolean;
 }
 
 export function NoteField({
@@ -23,10 +24,12 @@ export function NoteField({
   className,
   rows = 3,
   autoFocus,
+  autoResize = false,
 }: NoteFieldProps) {
   const [local, setLocal] = useState(value ?? "");
   const [status, setStatus] = useState<SaveStatus>("idle");
   const [error, setError] = useState<string | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const focusedRef = useRef(false);
   const savedRef = useRef(value ?? "");
 
@@ -37,6 +40,12 @@ export function NoteField({
       savedRef.current = value ?? "";
     }
   }, [value]);
+
+  useLayoutEffect(() => {
+    if (!autoResize || !textareaRef.current) return;
+    textareaRef.current.style.height = "auto";
+    textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+  }, [autoResize, local]);
 
   const handleBlur = async () => {
     focusedRef.current = false;
@@ -57,6 +66,7 @@ export function NoteField({
   return (
     <div className="space-y-1">
       <Textarea
+        ref={textareaRef}
         value={local}
         onChange={(e) => {
           setLocal(e.target.value);
@@ -70,7 +80,11 @@ export function NoteField({
         placeholder={placeholder}
         rows={rows}
         autoFocus={autoFocus}
-        className={cn("resize-y", className)}
+        className={cn(
+          autoResize ? "resize-none overflow-y-auto" : "resize-y",
+          "whitespace-pre-wrap break-words [overflow-wrap:anywhere]",
+          className,
+        )}
       />
       <div className="flex items-center justify-end gap-1.5 text-[11px] text-muted-foreground h-4">
         {status === "saving" && (
