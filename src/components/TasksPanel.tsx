@@ -580,13 +580,14 @@ export const TasksPanel = ({
                   )}
                 </div>
                 {noteOpen && (
-                  <div className="ml-6">
+                  <div className="ml-6 max-w-full min-w-0 pr-2">
                     <NoteField
                       value={s.notes}
                       onSave={(v) => saveNote(s.id, v, "sub")}
                       placeholder="Observação..."
-                      className="text-xs min-h-[56px]"
-                      rows={2}
+                      className="min-h-8 py-1.5 text-xs leading-5"
+                      rows={1}
+                      autoResize
                     />
                   </div>
                 )}
