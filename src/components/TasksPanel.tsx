@@ -831,10 +831,24 @@ export const TasksPanel = ({
           )
         )}
 
-        {/* List view */}
+        {/* List view — grouped by date */}
         {view === "list" && filtered.length > 0 && (
-          <div className="rounded-lg border bg-card divide-y">
-            {filtered.map(renderListRow)}
+          <div className="space-y-5">
+            {groupedByDate.map(([key, items]) => (
+              <div key={key} className="space-y-2">
+                <div className="flex items-baseline gap-2 px-1">
+                  <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    {formatGroupDate(key)}
+                  </h3>
+                  <span className="text-[11px] text-muted-foreground tabular-nums">
+                    {items.length}
+                  </span>
+                </div>
+                <div className="rounded-lg border bg-card divide-y">
+                  {items.map(renderListRow)}
+                </div>
+              </div>
+            ))}
           </div>
         )}
 
