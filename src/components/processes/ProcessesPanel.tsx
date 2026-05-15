@@ -1002,7 +1002,7 @@ const ProcessDetail = ({
               </div>
               <div>
                 <label className="text-xs font-medium">Prazo</label>
-                <Input type="date" value={due} onChange={(e) => setDue(e.target.value)} />
+                <DateField value={due} onChange={setDue} />
               </div>
             </div>
             <div>
