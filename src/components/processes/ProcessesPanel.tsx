@@ -345,10 +345,12 @@ const ListView = ({
 const KanbanView = ({
   processes,
   stepsByProc,
+  templates,
   onOpen,
 }: {
   processes: Process[];
   stepsByProc: Record<string, Step[]>;
+  templates: Template[];
   onOpen: (p: Process) => void;
 }) => (
   <div className="overflow-x-auto -mx-2 pb-2">
@@ -367,6 +369,7 @@ const KanbanView = ({
                   key={p.id}
                   p={p}
                   steps={stepsByProc[p.id] ?? []}
+                  templateName={templates.find((t) => t.id === p.template_id)?.name ?? null}
                   onOpen={() => onOpen(p)}
                 />
               ))}
