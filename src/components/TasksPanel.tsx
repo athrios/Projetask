@@ -679,11 +679,11 @@ export const TasksPanel = ({
             onCheckedChange={(v) => setStatus(t, v ? "feita" : "pendente")}
           />
           <TaskTitle t={t} />
-          <ProgressBadge t={t} />
-          <PriorityPill value={t.priority ?? "media"} onChange={(v) => updateTask(t.id, { priority: v })} />
-          <StatusPill value={t.status ?? "pendente"} onChange={(v) => setStatus(t, v)} />
+          <div className="shrink-0"><ProgressBadge t={t} /></div>
+          <div className="shrink-0"><PriorityPill value={t.priority ?? "media"} onChange={(v) => updateTask(t.id, { priority: v })} /></div>
+          <div className="shrink-0"><StatusPill value={t.status ?? "pendente"} onChange={(v) => setStatus(t, v)} /></div>
           <DueDate t={t} />
-          <RowActions t={t} />
+          <div className="shrink-0"><RowActions t={t} /></div>
         </div>
         {notesOpen[noteKey] && (
           <div className="px-10 pb-2">
