@@ -705,7 +705,7 @@ export const TasksPanel = ({
       <section className="space-y-5">
         {/* Toolbar */}
         <div className="flex flex-wrap items-center gap-2">
-          <div className="relative flex-1 min-w-[220px]">
+          <div className="relative w-[220px]">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
             <Input
               value={search}
@@ -714,6 +714,28 @@ export const TasksPanel = ({
               className="h-9 pl-8"
             />
           </div>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                className={cn("h-9 gap-1.5", dateFilter && "border-foreground/40")}
+              >
+                <CalendarIcon className="h-3.5 w-3.5" />
+                {dateFilter
+                  ? new Date(dateFilter + "T00:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "short" })
+                  : "Data"}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <Calendar
+                mode="single"
+                selected={dateFilter ? new Date(dateFilter + "T00:00:00") : undefined}
+                onSelect={(d) => setDateFilter(d ? d.toISOString().slice(0, 10) : null)}
+                className={cn("p-3 pointer-events-auto")}
+              />
+            </PopoverContent>
+          </Popover>
           <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as TaskStatus | "todos")}>
             <SelectTrigger className="h-9 w-[140px] text-xs">
               <SelectValue placeholder="Status" />
@@ -762,6 +784,21 @@ export const TasksPanel = ({
             ))}
           </div>
         </div>
+
+        {dateFilter && (
+          <div className="flex items-center gap-2 text-xs">
+            <span className="inline-flex items-center gap-1.5 rounded-full border bg-secondary/60 px-2.5 py-1">
+              <CalendarIcon className="h-3 w-3" />
+              Filtrando: {new Date(dateFilter + "T00:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" })}
+            </span>
+            <button
+              onClick={() => setDateFilter(null)}
+              className="text-muted-foreground hover:text-foreground underline-offset-2 hover:underline"
+            >
+              Limpar filtro
+            </button>
+          </div>
+        )}
 
         {/* New task */}
         <form onSubmit={add} className="flex items-center gap-2 rounded-lg border bg-card px-3 py-2">
