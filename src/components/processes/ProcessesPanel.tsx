@@ -18,7 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Trash2, Settings2, Workflow, ChevronRight, Check, AlertCircle, Play, SkipForward, ChevronDown } from "lucide-react";
+import { Plus, Trash2, Settings2, Workflow, ChevronRight, Check, AlertCircle, Play, SkipForward, ChevronDown, CalendarIcon } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { StatusPill } from "@/components/shared/StatusPill";
@@ -27,11 +27,23 @@ import { EmptyState } from "@/components/shared/EmptyState";
 import { PROCESS_STATUS, type ProcessStatus } from "@/lib/taskTokens";
 import { logActivity } from "@/lib/activityLog";
 import { addDaysISO } from "@/lib/recurrence";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { format, parseISO } from "date-fns";
+import { ptBR } from "date-fns/locale";
+import {
+  TEMPLATE_COLORS,
+  asColor,
+  colorPill,
+  colorLeftBorder,
+  type TemplateColor,
+} from "./templateColors";
 
 interface Template {
   id: string;
   name: string;
   description: string;
+  color?: string;
   steps?: TmplStep[];
 }
 interface TmplStep {
@@ -205,15 +217,19 @@ export const ProcessesPanel = ({ userId }: Props) => {
         />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-          {processes.map((p) => (
-            <ProcessCard
-              key={p.id}
-              p={p}
-              steps={stepsByProc[p.id] ?? []}
-              templateName={templates.find((t) => t.id === p.template_id)?.name ?? null}
-              onOpen={() => setOpenProc(p)}
-            />
-          ))}
+          {processes.map((p) => {
+            const tpl = templates.find((t) => t.id === p.template_id);
+            return (
+              <ProcessCard
+                key={p.id}
+                p={p}
+                steps={stepsByProc[p.id] ?? []}
+                templateName={tpl?.name ?? null}
+                templateColor={asColor(tpl?.color)}
+                onOpen={() => setOpenProc(p)}
+              />
+            );
+          })}
         </div>
       )}
 
@@ -232,17 +248,123 @@ export const ProcessesPanel = ({ userId }: Props) => {
   );
 };
 
+/* ───────── Date picker (popover) ───────── */
+
+const toLocalISO = (d: Date) => {
+  const tz = d.getTimezoneOffset() * 60000;
+  return new Date(d.getTime() - tz).toISOString().slice(0, 10);
+};
+
+const DateField = ({
+  value,
+  onChange,
+  placeholder = "Selecionar data",
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+}) => {
+  const [open, setOpen] = useState(false);
+  const selected = value
+    ? (() => {
+        const [y, m, d] = value.split("-").map(Number);
+        return new Date(y, m - 1, d);
+      })()
+    : undefined;
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          className={cn(
+            "w-full justify-start font-normal gap-2 h-9",
+            !selected && "text-muted-foreground",
+          )}
+        >
+          <CalendarIcon className="h-4 w-4 opacity-70 shrink-0" />
+          <span className="truncate">
+            {selected ? format(selected, "PPP", { locale: ptBR }) : placeholder}
+          </span>
+          {value && (
+            <span
+              role="button"
+              tabIndex={0}
+              onClick={(e) => {
+                e.stopPropagation();
+                onChange("");
+              }}
+              className="ml-auto text-xs text-muted-foreground hover:text-foreground"
+            >
+              limpar
+            </span>
+          )}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent
+        className="w-auto p-0 max-w-[calc(100vw-2rem)]"
+        align="start"
+        collisionPadding={12}
+      >
+        <Calendar
+          mode="single"
+          selected={selected}
+          onSelect={(d) => {
+            if (d) {
+              onChange(toLocalISO(d));
+              setOpen(false);
+            }
+          }}
+          locale={ptBR}
+          initialFocus
+          className="p-3 pointer-events-auto"
+        />
+      </PopoverContent>
+    </Popover>
+  );
+};
+
+const ColorSwatchPicker = ({
+  value,
+  onChange,
+}: {
+  value: TemplateColor;
+  onChange: (c: TemplateColor) => void;
+}) => (
+  <div className="flex items-center gap-1.5 flex-wrap">
+    {TEMPLATE_COLORS.map((c) => (
+      <button
+        key={c.key}
+        type="button"
+        onClick={() => onChange(c.key)}
+        title={c.label}
+        aria-label={c.label}
+        className={cn(
+          "h-5 w-5 rounded-full border transition",
+          c.swatch,
+          value === c.key
+            ? "ring-2 ring-offset-2 ring-foreground/60 ring-offset-background"
+            : "opacity-80 hover:opacity-100",
+        )}
+      />
+    ))}
+  </div>
+);
+
+
 /* ───────── Sub-components ───────── */
 
 const ProcessCard = ({
   p,
   steps,
   templateName,
+  templateColor = "gray",
   onOpen,
 }: {
   p: Process;
   steps: Step[];
   templateName?: string | null;
+  templateColor?: TemplateColor;
   onOpen: () => void;
 }) => {
   const done = steps.filter((s) => s.status === "feita" || s.status === "pulado").length;
@@ -261,16 +383,24 @@ const ProcessCard = ({
           onOpen();
         }
       }}
-      className="rounded-xl border bg-card p-4 hover:shadow-sm transition group cursor-pointer text-left"
+      className={cn(
+        "rounded-xl border bg-card p-4 hover:shadow-sm transition group cursor-pointer text-left border-l-4",
+        colorLeftBorder[templateColor],
+      )}
     >
       <div className="flex items-start justify-between gap-2">
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0 space-y-1.5">
+          <span
+            className={cn(
+              "inline-flex items-center max-w-full truncate rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide",
+              colorPill[templateColor],
+            )}
+          >
+            {templateName ?? "Processo avulso"}
+          </span>
           <h4 className="text-sm font-semibold truncate">{p.name}</h4>
-          <p className="text-[11px] text-muted-foreground truncate mt-0.5">
-            {templateName ? `Modelo: ${templateName}` : "Processo avulso"}
-          </p>
           {p.client_name && (
-            <p className="text-xs text-muted-foreground truncate mt-0.5">{p.client_name}</p>
+            <p className="text-xs text-muted-foreground truncate">{p.client_name}</p>
           )}
         </div>
         <StatusPill domain="process" value={p.status} size="xs" />
@@ -364,15 +494,19 @@ const KanbanView = ({
               <span className="tabular-nums">{items.length}</span>
             </div>
             <div className="space-y-2">
-              {items.map((p) => (
-                <ProcessCard
-                  key={p.id}
-                  p={p}
-                  steps={stepsByProc[p.id] ?? []}
-                  templateName={templates.find((t) => t.id === p.template_id)?.name ?? null}
-                  onOpen={() => onOpen(p)}
-                />
-              ))}
+              {items.map((p) => {
+                const tpl = templates.find((t) => t.id === p.template_id);
+                return (
+                  <ProcessCard
+                    key={p.id}
+                    p={p}
+                    steps={stepsByProc[p.id] ?? []}
+                    templateName={tpl?.name ?? null}
+                    templateColor={asColor(tpl?.color)}
+                    onOpen={() => onOpen(p)}
+                  />
+                );
+              })}
             </div>
           </div>
         );
@@ -422,7 +556,7 @@ const NewProcessButton = ({
           </div>
           <div>
             <label className="text-xs font-medium">Data inicial / prazo (opcional)</label>
-            <Input type="date" value={due} onChange={(e) => setDue(e.target.value)} />
+            <DateField value={due} onChange={setDue} />
             <p className="text-[11px] text-muted-foreground mt-1">
               Usada para calcular automaticamente os prazos das etapas do modelo.
             </p>
@@ -455,6 +589,7 @@ const TemplateManager = ({
   const [open, setOpen] = useState(false);
   const [stepsByTpl, setStepsByTpl] = useState<Record<string, TmplStep[]>>({});
   const [newTplName, setNewTplName] = useState("");
+  const [newTplColor, setNewTplColor] = useState<TemplateColor>("gray");
   const [stepInput, setStepInput] = useState<Record<string, string>>({});
 
   const loadSteps = async () => {
@@ -478,10 +613,21 @@ const TemplateManager = ({
   const addTpl = async () => {
     const n = newTplName.trim();
     if (!n) return;
-    const { error } = await supabase.from("process_templates").insert({ name: n, user_id: userId });
+    const { error } = await supabase
+      .from("process_templates")
+      .insert({ name: n, user_id: userId, color: newTplColor } as never);
     if (error) return toast.error(error.message);
     toast.success("Modelo criado");
     setNewTplName("");
+    setNewTplColor("gray");
+    reload();
+  };
+  const updateTplColor = async (id: string, color: TemplateColor) => {
+    const { error } = await supabase
+      .from("process_templates")
+      .update({ color } as never)
+      .eq("id", id);
+    if (error) return toast.error(error.message);
     reload();
   };
   const removeTpl = async (id: string) => {
@@ -519,27 +665,42 @@ const TemplateManager = ({
         </DialogHeader>
         <div className="space-y-4">
           <form
-            className="flex gap-2"
+            className="space-y-2"
             onSubmit={(e) => { e.preventDefault(); addTpl(); }}
           >
-            <Input
-              value={newTplName}
-              onChange={(e) => setNewTplName(e.target.value)}
-              placeholder="Novo modelo (ex.: Alteração Contratual)"
-            />
-            <Button type="submit" size="sm">Adicionar</Button>
+            <div className="flex gap-2">
+              <Input
+                value={newTplName}
+                onChange={(e) => setNewTplName(e.target.value)}
+                placeholder="Novo modelo (ex.: Alteração Contratual)"
+              />
+              <Button type="submit" size="sm">Adicionar</Button>
+            </div>
+            <ColorSwatchPicker value={newTplColor} onChange={setNewTplColor} />
           </form>
           <div className="space-y-3">
             {templates.map((t) => {
               const steps = stepsByTpl[t.id] ?? [];
+              const tplColor = asColor(t.color);
               return (
-                <div key={t.id} className="rounded-lg border p-3 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <h4 className="text-sm font-semibold">{t.name}</h4>
+                <div key={t.id} className={cn("rounded-lg border p-3 space-y-2 border-l-4", colorLeftBorder[tplColor])}>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span
+                        className={cn(
+                          "inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide",
+                          colorPill[tplColor],
+                        )}
+                      >
+                        {t.name}
+                      </span>
+                    </div>
                     <button onClick={() => removeTpl(t.id)} className="text-muted-foreground hover:text-destructive">
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
                   </div>
+                  <ColorSwatchPicker value={tplColor} onChange={(c) => updateTplColor(t.id, c)} />
+
                   <ol className="space-y-1 text-sm">
                     {steps.map((s, i) => (
                       <li key={s.id} className="flex items-center gap-2 group">
@@ -895,7 +1056,7 @@ const ProcessDetail = ({
               </div>
               <div>
                 <label className="text-xs font-medium">Prazo</label>
-                <Input type="date" value={due} onChange={(e) => setDue(e.target.value)} />
+                <DateField value={due} onChange={setDue} />
               </div>
             </div>
             <div>

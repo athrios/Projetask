@@ -1,0 +1,1 @@
+ALTER TABLE public.process_templates ADD COLUMN IF NOT EXISTS color text NOT NULL DEFAULT 'gray';
