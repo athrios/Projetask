@@ -248,6 +248,83 @@ export const ProcessesPanel = ({ userId }: Props) => {
   );
 };
 
+/* ───────── Date picker (popover) ───────── */
+
+const toLocalISO = (d: Date) => {
+  const tz = d.getTimezoneOffset() * 60000;
+  return new Date(d.getTime() - tz).toISOString().slice(0, 10);
+};
+
+const DateField = ({
+  value,
+  onChange,
+  placeholder = "Selecionar data",
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+}) => {
+  const [open, setOpen] = useState(false);
+  const selected = value
+    ? (() => {
+        const [y, m, d] = value.split("-").map(Number);
+        return new Date(y, m - 1, d);
+      })()
+    : undefined;
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          className={cn(
+            "w-full justify-start font-normal gap-2 h-9",
+            !selected && "text-muted-foreground",
+          )}
+        >
+          <CalendarIcon className="h-4 w-4 opacity-70 shrink-0" />
+          <span className="truncate">
+            {selected ? format(selected, "PPP", { locale: ptBR }) : placeholder}
+          </span>
+          {value && (
+            <span
+              role="button"
+              tabIndex={0}
+              onClick={(e) => {
+                e.stopPropagation();
+                onChange("");
+              }}
+              className="ml-auto text-xs text-muted-foreground hover:text-foreground"
+            >
+              limpar
+            </span>
+          )}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent
+        className="w-auto p-0 max-w-[calc(100vw-2rem)]"
+        align="start"
+        collisionPadding={12}
+      >
+        <Calendar
+          mode="single"
+          selected={selected}
+          onSelect={(d) => {
+            if (d) {
+              onChange(toLocalISO(d));
+              setOpen(false);
+            }
+          }}
+          locale={ptBR}
+          initialFocus
+          className="p-3 pointer-events-auto"
+        />
+      </PopoverContent>
+    </Popover>
+  );
+};
+
+
 /* ───────── Sub-components ───────── */
 
 const ProcessCard = ({
