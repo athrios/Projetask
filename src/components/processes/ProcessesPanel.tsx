@@ -390,15 +390,19 @@ const KanbanView = ({
               <span className="tabular-nums">{items.length}</span>
             </div>
             <div className="space-y-2">
-              {items.map((p) => (
-                <ProcessCard
-                  key={p.id}
-                  p={p}
-                  steps={stepsByProc[p.id] ?? []}
-                  templateName={templates.find((t) => t.id === p.template_id)?.name ?? null}
-                  onOpen={() => onOpen(p)}
-                />
-              ))}
+              {items.map((p) => {
+                const tpl = templates.find((t) => t.id === p.template_id);
+                return (
+                  <ProcessCard
+                    key={p.id}
+                    p={p}
+                    steps={stepsByProc[p.id] ?? []}
+                    templateName={tpl?.name ?? null}
+                    templateColor={asColor(tpl?.color)}
+                    onOpen={() => onOpen(p)}
+                  />
+                );
+              })}
             </div>
           </div>
         );
