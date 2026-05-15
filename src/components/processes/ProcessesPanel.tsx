@@ -209,6 +209,7 @@ export const ProcessesPanel = ({ userId }: Props) => {
               key={p.id}
               p={p}
               steps={stepsByProc[p.id] ?? []}
+              templateName={templates.find((t) => t.id === p.template_id)?.name ?? null}
               onOpen={() => setOpenProc(p)}
             />
           ))}
