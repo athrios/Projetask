@@ -126,7 +126,7 @@ export const SchedulePanel = ({ date, userId, tasks }: Props) => {
       const it = next[i];
       if (i > 0 && it.start_time.slice(0, 8) !== expected) {
         updates.push(
-          supabase.from("schedule_items").update({ start_time: expected }).eq("id", it.id),
+          Promise.resolve(supabase.from("schedule_items").update({ start_time: expected }).eq("id", it.id)),
         );
         synced.push({ ...it, start_time: expected });
       } else {
