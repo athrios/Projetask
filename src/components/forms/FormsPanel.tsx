@@ -214,6 +214,7 @@ const FormBuilder = ({
 }) => {
   const [title, setTitle] = useState(form.title);
   const [desc, setDesc] = useState(form.description);
+  const [color, setColor] = useState(asColor(form.color));
   const [fields, setFields] = useState<Field[]>([]);
 
   const load = async () => {
