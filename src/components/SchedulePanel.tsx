@@ -260,6 +260,7 @@ interface RowProps {
   onImport: (task: Task) => void;
   onUnlink: () => void;
   onRemove: () => void;
+  isFirst: boolean;
 }
 
 const ScheduleRow = ({
@@ -269,6 +270,7 @@ const ScheduleRow = ({
   status,
   tasks,
   linkedTaskId,
+  isFirst,
   onChangeStart,
   onChangeTitle,
   onChangeDuration,
@@ -279,16 +281,21 @@ const ScheduleRow = ({
 }: RowProps) => {
   const [localTitle, setLocalTitle] = useState(title);
   useEffect(() => setLocalTitle(title), [title]);
-  const end = fromMin(toMin(start) + duration);
 
   return (
     <li className="flex flex-wrap items-center gap-2 px-3 py-2 group">
-      <Input
-        type="time"
-        value={start}
-        onChange={(e) => onChangeStart(e.target.value)}
-        className="h-8 text-xs w-[100px]"
-      />
+      {isFirst ? (
+        <Input
+          type="time"
+          value={start}
+          onChange={(e) => onChangeStart(e.target.value)}
+          className="h-8 text-xs w-[100px]"
+        />
+      ) : (
+        <div className="h-8 w-[100px] text-xs flex items-center px-2 text-muted-foreground tabular-nums">
+          {start}
+        </div>
+      )}
       <ImportButton tasks={tasks} onPick={onImport} />
       <div className="flex-1 min-w-[160px] flex items-center gap-1">
         {linkedTaskId && (
@@ -320,7 +327,7 @@ const ScheduleRow = ({
           ))}
         </SelectContent>
       </Select>
-      <span className="text-xs text-muted-foreground hidden md:inline">→ {end}</span>
+
       <Select value={status} onValueChange={(v) => onChangeStatus(v as ScheduleItem["status"])}>
         <SelectTrigger
           className={`h-7 w-[110px] text-xs border-0 rounded-full ${statusColor[status]}`}
