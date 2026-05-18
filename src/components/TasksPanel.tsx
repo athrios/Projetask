@@ -48,6 +48,7 @@ import {
   Search,
   MoreHorizontal,
   Calendar as CalendarIcon,
+  EyeOff,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -146,9 +147,16 @@ export const TasksPanel = ({
   const [statusFilter, setStatusFilter] = useState<TaskStatus | "todos">("todos");
   const [priorityFilter, setPriorityFilter] = useState<Priority | "todos">("todos");
   const [dateFilter, setDateFilter] = useState<string | null>(null);
+  const [hiddenStatuses, setHiddenStatuses] = useState<TaskStatus[]>(
+    () => lsGet<TaskStatus[]>("tasksHiddenStatuses", []),
+  );
   const [view, setView] = useState<ViewMode>(
     () => (lsGet<ViewMode>("tasksView", "list")),
   );
+
+  useEffect(() => {
+    localStorage.setItem("tasksHiddenStatuses", JSON.stringify(hiddenStatuses));
+  }, [hiddenStatuses]);
 
   useEffect(() => {
     localStorage.setItem("tasksView", JSON.stringify(view));
@@ -192,13 +200,15 @@ export const TasksPanel = ({
 
   const filtered = useMemo(() => {
     return tasks.filter((t) => {
+      const s = (t.status ?? "pendente") as TaskStatus;
       if (search && !t.title.toLowerCase().includes(search.toLowerCase())) return false;
-      if (statusFilter !== "todos" && (t.status ?? "pendente") !== statusFilter) return false;
+      if (statusFilter !== "todos" && s !== statusFilter) return false;
+      if (hiddenStatuses.includes(s)) return false;
       if (priorityFilter !== "todos" && (t.priority ?? "media") !== priorityFilter) return false;
       if (dateFilter && t.task_date !== dateFilter) return false;
       return true;
     });
-  }, [tasks, search, statusFilter, priorityFilter, dateFilter]);
+  }, [tasks, search, statusFilter, hiddenStatuses, priorityFilter, dateFilter]);
 
   // Group tasks by task_date for the list view
   const groupedByDate = useMemo(() => {
@@ -753,6 +763,61 @@ export const TasksPanel = ({
               ))}
             </SelectContent>
           </Select>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                className={cn("h-9 gap-1.5", hiddenStatuses.length > 0 && "border-foreground/40")}
+              >
+                <EyeOff className="h-3.5 w-3.5" />
+                Ocultar status
+                {hiddenStatuses.length > 0 && (
+                  <span className="rounded-full bg-foreground text-background text-[10px] h-4 min-w-4 px-1 inline-flex items-center justify-center tabular-nums">
+                    {hiddenStatuses.length}
+                  </span>
+                )}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-56 space-y-2">
+              <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                Ocultar status
+              </p>
+              <div className="space-y-1">
+                {TASK_STATUS.map((o) => {
+                  const checked = hiddenStatuses.includes(o.value);
+                  return (
+                    <label key={o.value} className="flex items-center gap-2 text-xs cursor-pointer py-1">
+                      <Checkbox
+                        checked={checked}
+                        onCheckedChange={() =>
+                          setHiddenStatuses((cur) =>
+                            cur.includes(o.value)
+                              ? cur.filter((x) => x !== o.value)
+                              : [...cur, o.value],
+                          )
+                        }
+                        className="h-3.5 w-3.5"
+                      />
+                      <span className={cn("px-1.5 py-0.5 rounded-full text-[11px]", statusPill[o.value])}>
+                        {o.label}
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+              {hiddenStatuses.length > 0 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="w-full h-8 text-xs"
+                  onClick={() => setHiddenStatuses([])}
+                >
+                  <X className="h-3 w-3" /> Mostrar todos
+                </Button>
+              )}
+            </PopoverContent>
+          </Popover>
           <Select value={priorityFilter} onValueChange={(v) => setPriorityFilter(v as Priority | "todos")}>
             <SelectTrigger className="h-9 w-[140px] text-xs">
               <SelectValue placeholder="Prioridade" />
