@@ -377,7 +377,7 @@ export const TasksPanel = ({
     const subs = subtasks[taskId] ?? [];
     const { error } = await supabase
       .from("subtasks")
-      .insert({ task_id: taskId, user_id: userId, title: t, position: subs.length });
+      .insert({ task_id: taskId, user_id: userId, title: t, position: subs.length, workspace_id: workspaceId ?? undefined } as never);
     if (error) return toast.error(error.message);
     setSubInput((p) => ({ ...p, [taskId]: "" }));
     await maybeAutoComplete(taskId);
