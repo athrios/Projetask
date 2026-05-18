@@ -23,6 +23,7 @@ import { ViewSwitcher, type ViewMode } from "@/components/shared/ViewSwitcher";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { REQUEST_STATUS, type RequestStatus } from "@/lib/taskTokens";
 import { logActivity } from "@/lib/activityLog";
+import { useWorkspace } from "@/hooks/useWorkspace";
 import { colorPill, asColor, type TemplateColor } from "@/components/processes/templateColors";
 import { cn } from "@/lib/utils";
 
@@ -41,20 +42,22 @@ interface Response {
 interface Props { userId: string }
 
 export const RequestsPanel = ({ userId }: Props) => {
+  const { workspaceId } = useWorkspace();
   const [forms, setForms] = useState<FormRow[]>([]);
   const [responses, setResponses] = useState<Response[]>([]);
   const [view, setView] = useState<ViewMode>("table");
   const [open, setOpen] = useState<Response | null>(null);
 
   const load = async () => {
+    if (!workspaceId) return;
     const [f, r] = await Promise.all([
-      supabase.from("forms").select("id,title,color"),
-      supabase.from("form_responses").select("*").order("created_at", { ascending: false }),
+      supabase.from("forms").select("id,title,color").eq("workspace_id", workspaceId),
+      supabase.from("form_responses").select("*").eq("workspace_id", workspaceId).order("created_at", { ascending: false }),
     ]);
     setForms((f.data ?? []) as FormRow[]);
     setResponses((r.data ?? []) as unknown as Response[]);
   };
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, [workspaceId]);
 
   const formTitle = (id: string) => forms.find((f) => f.id === id)?.title ?? "—";
   const formColor = (id: string): TemplateColor => asColor(forms.find((f) => f.id === id)?.color);
@@ -75,13 +78,14 @@ export const RequestsPanel = ({ userId }: Props) => {
       .join("\n");
 
   const convertToTask = async (r: Response) => {
+    if (!workspaceId) return;
     if (r.converted_task_id) {
       return toast.info("Esta solicitação já foi convertida em tarefa.");
     }
     const title = r.submitter_name ? `${formTitle(r.form_id)} — ${r.submitter_name}` : formTitle(r.form_id);
     const notes = `Origem: solicitação de ${formTitle(r.form_id)}\n\n${formatData(r.data)}`;
     const { data, error } = await supabase.from("tasks").insert({
-      user_id: userId, title, notes,
+      user_id: userId, workspace_id: workspaceId, title, notes,
       task_date: new Date().toISOString().slice(0, 10),
       source_type: "request", source_id: r.id,
     } as never).select().single();
@@ -96,13 +100,14 @@ export const RequestsPanel = ({ userId }: Props) => {
   };
 
   const convertToProcess = async (r: Response) => {
+    if (!workspaceId) return;
     if (r.converted_process_id) {
       return toast.info("Esta solicitação já foi convertida em processo.");
     }
     const name = r.submitter_name ? `${formTitle(r.form_id)} — ${r.submitter_name}` : formTitle(r.form_id);
     const notes = `Origem: solicitação de ${formTitle(r.form_id)}\n\n${formatData(r.data)}`;
     const { data, error } = await supabase.from("processes").insert({
-      user_id: userId, name, client_name: r.submitter_name, notes, status: "nao_iniciado",
+      user_id: userId, workspace_id: workspaceId, name, client_name: r.submitter_name, notes, status: "nao_iniciado",
     }).select().single();
     if (error) return toast.error(error.message);
     await logActivity(userId, "request", r.id, "converted", `Convertida em processo: "${name}"`);

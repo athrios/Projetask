@@ -23,6 +23,7 @@ import { Plus, Trash2, Link as LinkIcon, FileText, Copy } from "lucide-react";
 import { toast } from "sonner";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { logActivity } from "@/lib/activityLog";
+import { useWorkspace } from "@/hooks/useWorkspace";
 import { TEMPLATE_COLORS, colorPill, colorLeftBorder, asColor } from "@/components/processes/templateColors";
 import { cn } from "@/lib/utils";
 
@@ -58,15 +59,18 @@ const FIELD_TYPES: { value: FieldType; label: string }[] = [
 interface Props { userId: string }
 
 export const FormsPanel = ({ userId }: Props) => {
+  const { workspaceId } = useWorkspace();
   const [forms, setForms] = useState<Form[]>([]);
   const [responseCounts, setResponseCounts] = useState<Record<string, number>>({});
   const [editing, setEditing] = useState<Form | null>(null);
   const [newTitle, setNewTitle] = useState("");
 
   const load = async () => {
+    if (!workspaceId) return;
     const { data, error } = await supabase
       .from("forms")
       .select("*")
+      .eq("workspace_id", workspaceId)
       .order("created_at", { ascending: false });
     if (error) return toast.error(error.message);
     const list = (data ?? []) as Form[];
@@ -78,6 +82,7 @@ export const FormsPanel = ({ userId }: Props) => {
           const { count } = await supabase
             .from("form_responses")
             .select("id", { count: "exact", head: true })
+            .eq("workspace_id", workspaceId)
             .eq("form_id", f.id);
           counts[f.id] = count ?? 0;
         }),
@@ -86,14 +91,14 @@ export const FormsPanel = ({ userId }: Props) => {
     }
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, [workspaceId]);
 
   const create = async () => {
     const t = newTitle.trim();
-    if (!t) return;
+    if (!t || !workspaceId) return;
     const { data, error } = await supabase
       .from("forms")
-      .insert({ title: t, user_id: userId })
+      .insert({ title: t, user_id: userId, workspace_id: workspaceId })
       .select()
       .single();
     if (error) return toast.error(error.message);
@@ -212,6 +217,7 @@ const FormBuilder = ({
   userId: string;
   onClose: () => void;
 }) => {
+  const { workspaceId } = useWorkspace();
   const [title, setTitle] = useState(form.title);
   const [desc, setDesc] = useState(form.description);
   const [color, setColor] = useState(asColor(form.color));
@@ -237,12 +243,14 @@ const FormBuilder = ({
   };
 
   const addField = async (type: FieldType) => {
+    if (!workspaceId) return;
     await supabase.from("form_fields").insert({
-      form_id: form.id, user_id: userId, label: "Novo campo",
+      form_id: form.id, user_id: userId, workspace_id: workspaceId, label: "Novo campo",
       field_type: type, required: false, position: fields.length, options: [],
     });
     load();
   };
+
 
   const updateField = async (id: string, patch: Partial<Field>) => {
     await supabase.from("form_fields").update(patch as never).eq("id", id);

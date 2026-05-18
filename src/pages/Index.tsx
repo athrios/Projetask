@@ -245,6 +245,7 @@ const Index = () => {
         open={searchOpen}
         onOpenChange={setSearchOpen}
         onNavigate={(s) => setSection(s)}
+        workspaceId={workspaceId}
       />
     </main>
   );

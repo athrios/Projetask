@@ -29,6 +29,7 @@ interface Props {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   onNavigate: (section: "tasks" | "processes" | "requests" | "forms") => void;
+  workspaceId?: string | null;
 }
 
 const ICON: Record<ResultType, React.ComponentType<{ className?: string }>> = {
@@ -45,14 +46,14 @@ const LABEL: Record<ResultType, string> = {
   form: "Formulário",
 };
 
-export const GlobalSearch = ({ open, onOpenChange, onNavigate }: Props) => {
+export const GlobalSearch = ({ open, onOpenChange, onNavigate, workspaceId }: Props) => {
   const [q, setQ] = useState("");
   const [results, setResults] = useState<Result[]>([]);
 
   useEffect(() => {
     if (!open) return;
     const term = q.trim();
-    if (!term) {
+    if (!term || !workspaceId) {
       setResults([]);
       return;
     }
@@ -60,10 +61,10 @@ export const GlobalSearch = ({ open, onOpenChange, onNavigate }: Props) => {
     const run = async () => {
       const like = `%${term}%`;
       const [t, p, r, f] = await Promise.all([
-        supabase.from("tasks").select("id,title,status").ilike("title", like).limit(8),
-        supabase.from("processes").select("id,name,status,client_name").ilike("name", like).limit(8),
-        supabase.from("form_responses").select("id,submitter_name,status,form_id").ilike("submitter_name", like).limit(8),
-        supabase.from("forms").select("id,title,is_published").ilike("title", like).limit(8),
+        supabase.from("tasks").select("id,title,status").eq("workspace_id", workspaceId).ilike("title", like).limit(8),
+        supabase.from("processes").select("id,name,status,client_name").eq("workspace_id", workspaceId).ilike("name", like).limit(8),
+        supabase.from("form_responses").select("id,submitter_name,status,form_id").eq("workspace_id", workspaceId).ilike("submitter_name", like).limit(8),
+        supabase.from("forms").select("id,title,is_published").eq("workspace_id", workspaceId).ilike("title", like).limit(8),
       ]);
       if (cancelled) return;
       const rs: Result[] = [];
@@ -75,7 +76,7 @@ export const GlobalSearch = ({ open, onOpenChange, onNavigate }: Props) => {
     };
     const id = setTimeout(run, 200);
     return () => { cancelled = true; clearTimeout(id); };
-  }, [q, open]);
+  }, [q, open, workspaceId]);
 
   const grouped = results.reduce<Record<ResultType, Result[]>>(
     (acc, r) => { (acc[r.type] ||= []).push(r); return acc; },

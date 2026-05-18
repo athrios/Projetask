@@ -20,6 +20,7 @@ type FieldType = "short_text" | "long_text" | "select" | "multi_select" | "date"
 interface Form {
   id: string;
   user_id: string;
+  workspace_id: string | null;
   title: string;
   description: string;
   is_published: boolean;
@@ -49,7 +50,7 @@ const PublicForm = () => {
     (async () => {
       const { data } = await supabase
         .from("forms")
-        .select("id,user_id,title,description,is_published")
+        .select("id,user_id,workspace_id,title,description,is_published")
         .eq("public_slug", slug)
         .eq("is_published", true)
         .maybeSingle();
@@ -81,6 +82,7 @@ const PublicForm = () => {
     const { error } = await supabase.from("form_responses").insert({
       form_id: form.id,
       owner_id: form.user_id,
+      workspace_id: form.workspace_id,
       submitter_name: name.trim(),
       data: values as never,
       status: "recebida",
