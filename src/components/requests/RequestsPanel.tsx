@@ -150,7 +150,7 @@ export const RequestsPanel = ({ userId }: Props) => {
             <TableBody>
               {responses.map((r) => (
                 <TableRow key={r.id} className="cursor-pointer" onClick={() => setOpen(r)}>
-                  <TableCell className="font-medium">{formTitle(r.form_id)}</TableCell>
+                  <TableCell><FormPill formId={r.form_id} /></TableCell>
                   <TableCell>{r.submitter_name || "—"}</TableCell>
                   <TableCell className="text-xs text-muted-foreground">
                     {new Date(r.created_at).toLocaleDateString("pt-BR")}
