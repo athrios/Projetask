@@ -59,15 +59,18 @@ const FIELD_TYPES: { value: FieldType; label: string }[] = [
 interface Props { userId: string }
 
 export const FormsPanel = ({ userId }: Props) => {
+  const { workspaceId } = useWorkspace();
   const [forms, setForms] = useState<Form[]>([]);
   const [responseCounts, setResponseCounts] = useState<Record<string, number>>({});
   const [editing, setEditing] = useState<Form | null>(null);
   const [newTitle, setNewTitle] = useState("");
 
   const load = async () => {
+    if (!workspaceId) return;
     const { data, error } = await supabase
       .from("forms")
       .select("*")
+      .eq("workspace_id", workspaceId)
       .order("created_at", { ascending: false });
     if (error) return toast.error(error.message);
     const list = (data ?? []) as Form[];
@@ -79,6 +82,7 @@ export const FormsPanel = ({ userId }: Props) => {
           const { count } = await supabase
             .from("form_responses")
             .select("id", { count: "exact", head: true })
+            .eq("workspace_id", workspaceId)
             .eq("form_id", f.id);
           counts[f.id] = count ?? 0;
         }),
@@ -87,14 +91,14 @@ export const FormsPanel = ({ userId }: Props) => {
     }
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, [workspaceId]);
 
   const create = async () => {
     const t = newTitle.trim();
-    if (!t) return;
+    if (!t || !workspaceId) return;
     const { data, error } = await supabase
       .from("forms")
-      .insert({ title: t, user_id: userId })
+      .insert({ title: t, user_id: userId, workspace_id: workspaceId })
       .select()
       .single();
     if (error) return toast.error(error.message);
