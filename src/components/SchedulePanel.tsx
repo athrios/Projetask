@@ -160,7 +160,8 @@ export const SchedulePanel = ({ date, userId, tasks }: Props) => {
       duration_minutes: duration,
       position: items.length,
       task_id: taskId,
-    });
+      workspace_id: workspaceId ?? undefined,
+    } as never);
     if (error) return toast.error(error.message);
     await load();
   };
