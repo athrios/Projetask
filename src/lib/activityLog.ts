@@ -33,6 +33,7 @@ export const logActivity = async (
   metadata: Record<string, unknown> = {},
 ) => {
   try {
+    const workspaceId = localStorage.getItem("activeWorkspaceId");
     await supabase.from("activity_logs").insert({
       user_id: userId,
       entity_type: entityType,
@@ -40,6 +41,7 @@ export const logActivity = async (
       action,
       description,
       metadata: metadata as never,
+      ...(workspaceId ? { workspace_id: workspaceId } : {}),
     });
   } catch {
     /* ignore */
