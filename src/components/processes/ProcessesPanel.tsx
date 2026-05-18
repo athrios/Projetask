@@ -587,10 +587,12 @@ const NewProcessButton = ({
 
 const TemplateManager = ({
   userId,
+  workspaceId,
   templates,
   reload,
 }: {
   userId: string;
+  workspaceId: string | null;
   templates: Template[];
   reload: () => void;
 }) => {
@@ -601,10 +603,11 @@ const TemplateManager = ({
   const [stepInput, setStepInput] = useState<Record<string, string>>({});
 
   const loadSteps = async () => {
-    if (!templates.length) return;
+    if (!templates.length || !workspaceId) return;
     const { data } = await supabase
       .from("process_template_steps")
       .select("*")
+      .eq("workspace_id", workspaceId)
       .order("position", { ascending: true });
     const grouped: Record<string, TmplStep[]> = {};
     (data ?? []).forEach((s) => {
@@ -616,20 +619,21 @@ const TemplateManager = ({
   useEffect(() => {
     if (open) loadSteps();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, templates.length]);
+  }, [open, templates.length, workspaceId]);
 
   const addTpl = async () => {
     const n = newTplName.trim();
-    if (!n) return;
+    if (!n || !workspaceId) return;
     const { error } = await supabase
       .from("process_templates")
-      .insert({ name: n, user_id: userId, color: newTplColor } as never);
+      .insert({ name: n, user_id: userId, workspace_id: workspaceId, color: newTplColor } as never);
     if (error) return toast.error(error.message);
     toast.success("Modelo criado");
     setNewTplName("");
     setNewTplColor("gray");
     reload();
   };
+
   const updateTplColor = async (id: string, color: TemplateColor) => {
     const { error } = await supabase
       .from("process_templates")
