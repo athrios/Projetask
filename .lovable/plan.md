@@ -1,163 +1,93 @@
-# Plano — Ambientes de Trabalho (Workspaces) com Membros e Permissões
 
-## Visão geral
+# Ambientes de Trabalho na Sidebar + Isolamento Ativo
 
-Introduzir o conceito de **Workspace (Ambiente de Trabalho)** como unidade de isolamento de dados. Todos os módulos existentes (Tarefas, Cronograma, Processos, Modelos, Formulários, Respostas, Concluídas, Hoje, Agenda) passam a operar dentro de um workspace ativo. O usuário **master** (dono da conta) cria workspaces, convida membros e define permissões por módulo. **Configurações** continua exclusiva do master.
+Vou ajustar a sidebar atual **sem recriar** e ligar de fato o `workspace_id` ativo em todos os módulos. Mantém o visual leve, fundo claro, mesma tipografia e espaçamento.
 
-Implementação incremental, sem refatoração total e sem quebrar o fluxo público `/f/:slug`.
+## 1. Sidebar (src/pages/Index.tsx)
 
----
+Inserir entre o bloco do e-mail e o campo de busca:
 
-## 1. Modelo de dados (migração SQL)
+```
+Ambiente atual
+[● Athrios Contabilidade        ▾]
+```
 
-### Novas tabelas
+- Componente novo `WorkspaceSwitcher` em `src/components/workspace/WorkspaceSwitcher.tsx`.
+- Usa `DropdownMenu` (shadcn). Trigger = pill com bolinha colorida (`templateColors` reaproveitado) + nome + chevron.
+- Lista todos os workspaces do `useWorkspace()`. Item ativo recebe check + fundo `sidebar-accent`.
+- Rodapé do dropdown:
+  - `+ Novo ambiente` — só aparece para usuários que são **owner de pelo menos um workspace** (`isOwnerOfAny`) ou sempre (qualquer usuário autenticado pode criar o seu — alinhado à RLS `auth.uid()=owner_id`). Vou exibir sempre, pois qualquer usuário master do próprio ambiente deve poder criar mais.
+  - `Gerenciar ambientes` (abre seção `settings` → aba Ambientes).
+- Modal "Novo ambiente" (`CreateWorkspaceDialog`): nome, cor (paleta do `templateColors`), descrição opcional → INSERT em `workspaces`; trigger do banco já adiciona o owner como member. Pergunta "Entrar agora?" via toast action.
 
-**`workspaces`**
-- `id`, `owner_id` (auth.users), `name`, `color` (default `gray`), `archived_at`, `created_at`, `updated_at`
+## 2. Filtro de menu por permissão
 
-**`workspace_members`**
-- `id`, `workspace_id`, `user_id`, `role` (`owner` | `member`), `created_at`
-- unique (`workspace_id`, `user_id`)
-- O owner é inserido automaticamente como membro com role `owner` via trigger `AFTER INSERT ON workspaces`.
+Em `Index.tsx`:
 
-**`workspace_permissions`**
-- `id`, `workspace_id`, `user_id`, `module` (`hoje`|`cronograma`|`tarefas`|`processos`|`formularios`|`solicitacoes`|`concluidas`)
-- `can_view`, `can_create`, `can_edit`, `can_delete` (boolean, default false)
-- unique (`workspace_id`, `user_id`, `module`)
-- Owner ignora esta tabela (sempre tem tudo).
+- Usar `useWorkspace()` → `canViewModule`, `isOwner`.
+- Mapear seções para `ModuleKey`:
+  `today→hoje, agenda→hoje, schedule→cronograma, tasks→tarefas, processes→processos, forms→formularios, requests→solicitacoes, done→tarefas`.
+- `order` filtrado: oculta itens sem `canViewModule`.
+- `settings` só aparece quando `isOwnerOfAny` (master). Conteúdo passa a renderizar `WorkspacesPanel`.
+- Se `section` atual ficar indisponível ao trocar de workspace → redireciona para `today` (ou primeira permitida).
 
-### Funções SECURITY DEFINER (evitar recursão em RLS)
+## 3. Isolamento por workspace ativo no frontend
 
-- `is_workspace_member(_ws uuid, _uid uuid) returns boolean`
-- `is_workspace_owner(_ws uuid, _uid uuid) returns boolean`
-- `has_workspace_permission(_ws uuid, _uid uuid, _module text, _action text) returns boolean` — owner sempre true; senão lê `workspace_permissions`.
+Adicionar `.eq("workspace_id", workspaceId)` em todas as queries e `workspace_id: workspaceId` em todos os `insert`. Arquivos:
 
-### Alterações nas tabelas existentes
+- `src/components/TasksPanel.tsx` — tasks + subtasks
+- `src/components/SchedulePanel.tsx` — schedule_items
+- `src/components/TodayPanel.tsx` — tasks, schedule_items, process_steps
+- `src/components/agenda/AgendaPanel.tsx` — tasks, process_steps
+- `src/components/processes/ProcessesPanel.tsx` — processes, process_steps, process_templates, process_template_steps
+- `src/components/forms/FormsPanel.tsx` — forms, form_fields
+- `src/components/requests/RequestsPanel.tsx` — form_responses (+ conversões: passar `workspace_id` ao criar tarefa/processo)
+- `src/components/shared/GlobalSearch.tsx` — todas as buscas
+- `src/lib/activityLog.ts` — `activity_logs` insert recebe `workspace_id`
+- `src/pages/Index.tsx` — preload de tasks (linha 75)
+- `src/pages/PublicForm.tsx` — INSERT em `form_responses` passa `workspace_id` derivado do form carregado (mantém policy pública intacta)
 
-Adicionar `workspace_id uuid` (NOT NULL após backfill) nas tabelas:
-- `tasks`, `subtasks`, `schedule_items`
-- `processes`, `process_steps`, `process_templates`, `process_template_steps`
-- `forms`, `form_fields`, `form_responses`
-- `activity_logs`
+Padrão de hook nos panels:
+```ts
+const { workspaceId } = useWorkspace();
+useEffect(() => { if (!workspaceId) return; load(); }, [workspaceId, ...]);
+```
 
-Índices em `(workspace_id)` em todas elas.
+Reload automático ao trocar de ambiente: cada panel já depende de `workspaceId` no `useEffect`.
 
-### Backfill (ambiente padrão)
+## 4. Tela "Gerenciar ambientes" (master)
 
-Para cada `user_id` distinto presente em qualquer tabela acima:
-1. Criar 1 workspace `"Meu ambiente"` com `owner_id = user_id`.
-2. UPDATE em cada tabela definindo `workspace_id = <workspace do owner>` onde `user_id = owner`.
-3. Tornar `workspace_id` NOT NULL.
+Novo `src/components/workspace/WorkspacesPanel.tsx` renderizado quando `section==='settings'`:
 
-Nenhum dado é apagado.
+- Lista de workspaces que o usuário é owner.
+- Para cada um: editar nome/cor, arquivar (`archived_at`), excluir.
+- Aba **Membros**: lista `workspace_members` + permissões por módulo (matriz 7×4 checkboxes) lendo/gravando `workspace_permissions`.
+- Aba **Convites**: input de email + matriz de permissões → INSERT em `workspace_invitations` (token gerado client-side via `crypto.randomUUID`). MVP: copia link `/invite/:token`; envio real de email fica fora de escopo (será edge function depois).
 
-### RLS — substituir policies "own X" por workspace-aware
+Isto é uma versão enxuta — só CRUD básico de workspaces e gestão de membros existentes. Botão de "convidar membro" cria registro em `workspace_invitations`; aceitar convites pode ficar para próxima iteração caso queira simplificar.
 
-Padrão para cada tabela de dados (ex.: `tasks`):
-- SELECT: `is_workspace_member(workspace_id, auth.uid()) AND has_workspace_permission(workspace_id, auth.uid(), '<modulo>', 'view')`
-- INSERT: `... 'create'` + `user_id = auth.uid()`
-- UPDATE: `... 'edit'`
-- DELETE: `... 'delete'`
+## 5. Busca dentro do ambiente
 
-Casos especiais:
-- `forms` / `form_fields` mantêm policy adicional `public published … read` (slug público continua funcionando).
-- `form_responses` INSERT público: passa a validar `forms.workspace_id` em vez de owner — mantém `owner_id = forms.user_id` para compatibilidade, mas adiciona `workspace_id` derivado.
+`GlobalSearch` recebe `workspaceId` do contexto e adiciona `.eq("workspace_id", workspaceId)` em todas as queries (tasks, processes, forms, responses, schedule).
 
-### Configurações
+## 6. Critérios de aceite cobertos
 
-Não é uma tabela; é só uma rota. Garantido no frontend: só master (owner de pelo menos um workspace, ou role-based) acessa.
+- Visual da sidebar preservado (só inserção do switcher entre email e busca).
+- Switcher com pill colorido + dropdown com check no ativo.
+- "Novo ambiente" + "Gerenciar ambientes" dentro do dropdown.
+- Configurações oculto para não-owners.
+- Itens de menu ocultos quando `can_view=false`.
+- Troca de ambiente recarrega dados (via dependência `workspaceId` nos effects).
+- Busca limitada ao ambiente ativo.
+- PublicForm continua funcionando (policy pública preservada).
 
----
+## Fora de escopo nesta iteração
 
-## 2. Frontend
+- Envio real de email de convite (precisa edge function `invite-member` + SMTP — posso adicionar depois).
+- Fluxo de aceitar convite via link `/invite/:token`.
+- Transferência de ownership.
+- Auditoria de mudanças de permissão.
 
-### Contexto global `WorkspaceProvider`
+## Pergunta única
 
-Novo hook `useWorkspace()` em `src/hooks/useWorkspace.tsx`:
-- Carrega workspaces do usuário (via `workspace_members`).
-- Mantém `activeWorkspaceId` em `localStorage`.
-- Expõe `permissions` (mapa módulo→ações) do workspace ativo.
-- Expõe `isOwner`, `canView(module)`, `canCreate(module)`, etc.
-
-Montado em `App.tsx` dentro de `AuthProvider`.
-
-### Seletor de ambiente (sidebar)
-
-Novo componente `WorkspaceSwitcher` no topo da sidebar em `Index.tsx`:
-- Dropdown com workspaces; pill colorida usando `templateColors`.
-- Botão "Novo ambiente" se `isOwner` em qualquer workspace (ou sempre — qualquer um pode criar o seu).
-- Item "Gerenciar ambientes" → abre nova seção/dialog.
-
-### Filtros nos panels
-
-Cada panel existente passa a:
-- Receber `workspaceId` via contexto (não por prop).
-- Adicionar `.eq("workspace_id", workspaceId)` em todos os `select`.
-- Adicionar `workspace_id: workspaceId` em todos os `insert`.
-
-Panels afetados: `TasksPanel`, `SchedulePanel`, `TodayPanel`, `AgendaPanel`, `ProcessesPanel`, `FormsPanel`, `RequestsPanel`, `GlobalSearch`.
-
-### Sidebar dinâmica
-
-`Index.tsx` filtra `order` por `canView(module)`. Item **Configurações** só aparece se `isOwner`.
-
-### Nova seção "Ambientes" (visível só ao owner)
-
-Tela `WorkspacesPanel`:
-- Lista de workspaces que o usuário possui.
-- CRUD de workspace (nome, cor).
-- Para cada workspace: lista de membros + matriz de permissões (módulo × ação) com checkboxes.
-- Adicionar membro: input de e-mail. Fluxo abaixo.
-
-### Adicionar membro (sem senha em texto puro)
-
-Opções (decidir conforme suporte do Cloud):
-- **Preferida:** edge function `invite-member` que usa `service_role` → `supabase.auth.admin.inviteUserByEmail()`. Quando o convidado define a senha, é adicionado a `workspace_members` via tabela `workspace_invitations` (pending) consumida no primeiro login.
-- Alternativa simples: master informa e-mail já cadastrado → busca em `auth.users` via edge function e insere em `workspace_members`.
-
-Tabela auxiliar `workspace_invitations` (email, workspace_id, permissions jsonb, token, expires_at) resolve o caso "usuário ainda não tem conta".
-
-### Formulário público
-
-`PublicForm.tsx` continua lendo `forms` por `public_slug` (policy pública). Ao inserir `form_responses`, passa `workspace_id` derivado do form. Sem login do respondente — inalterado.
-
----
-
-## 3. Ordem de execução
-
-1. **Migração 1 — schema:** criar `workspaces`, `workspace_members`, `workspace_permissions`, `workspace_invitations`, funções `is_workspace_*` / `has_workspace_permission`, trigger de auto-add owner.
-2. **Migração 2 — backfill:** adicionar `workspace_id` nas 11 tabelas (nullable), criar "Meu ambiente" por usuário, preencher, tornar NOT NULL, indexar.
-3. **Migração 3 — RLS:** dropar policies "own X" e recriar workspace-aware; manter policies públicas de forms.
-4. **Edge function** `invite-member` (deploy automático).
-5. **Frontend:** `WorkspaceProvider`, `WorkspaceSwitcher`, filtros em todos os panels, sidebar dinâmica, `WorkspacesPanel`, guard de Configurações.
-6. **Verificação:** rodar critérios de aceite (criar 2 workspaces, isolar tarefas, adicionar membro com permissão restrita).
-
----
-
-## 4. Detalhes técnicos importantes
-
-- **Sem recursão em RLS:** todas as checagens cross-table passam por funções `SECURITY DEFINER` com `search_path=public`.
-- **Permissões padrão ao adicionar membro:** todos os módulos com `can_view=true`, demais `false`. Master ajusta na UI.
-- **Owner** sempre tem todas as ações em todos os módulos (curto-circuito em `has_workspace_permission`).
-- **Configurações:** rota frontend; ocultar no sidebar quando `!isOwner` e bloquear na rota.
-- **GlobalSearch (`⌘K`):** filtrar todas as queries por `workspace_id` ativo.
-- **Activity logs:** ganham `workspace_id` para auditoria por ambiente.
-- **Migração de dados:** idempotente — usa `ON CONFLICT DO NOTHING` no insert de workspaces padrão se já existir um chamado "Meu ambiente" para o owner.
-- **Senhas:** nunca armazenadas em tabelas — só Supabase Auth (`auth.users`).
-
----
-
-## 5. Riscos / pontos de atenção
-
-- `forms.user_id` é o owner do form e dirige a policy pública de upload. Mantemos `user_id` e adicionamos `workspace_id`; policies públicas continuam baseadas em `is_published` + `user_id` para não quebrar `/f/:slug`.
-- Tipos do Supabase (`types.ts`) serão regenerados após migrações; código que faz `.from('tasks').insert({...})` precisa incluir `workspace_id` para compilar.
-- A primeira renderização precisa esperar workspaces carregarem antes de chamar panels (loading state no `Index`).
-
----
-
-## 6. Fora de escopo (não será feito agora)
-
-- Notificações por e-mail customizadas além do convite padrão do Supabase Auth.
-- Transferência de propriedade de workspace.
-- Histórico de auditoria de permissões alteradas.
-- Limites de membros / billing por workspace.
+Confirma que posso usar essa versão enxuta de gestão de membros (convites criados como registro, sem envio de email ainda)? Se preferir, já incluo a edge function de envio nesta mesma iteração.
