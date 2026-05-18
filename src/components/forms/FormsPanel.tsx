@@ -32,6 +32,7 @@ interface Form {
   description: string;
   public_slug: string;
   is_published: boolean;
+  color: string;
 }
 interface Field {
   id: string;
