@@ -801,6 +801,7 @@ const ProcessDetail = ({
   onClose: () => void;
   onChanged: () => void;
 }) => {
+  const { workspaceId } = useWorkspace();
   const [name, setName] = useState(process.name);
   const [client, setClient] = useState(process.client_name);
   const [due, setDue] = useState(process.due_date ?? "");
