@@ -72,13 +72,16 @@ const fromMin = (n: number) => {
 const fmt = (t: string) => t.slice(0, 5);
 
 export const SchedulePanel = ({ date, userId, tasks }: Props) => {
+  const { workspaceId } = useWorkspace();
   const [items, setItems] = useState<ScheduleItem[]>([]);
 
   const load = async () => {
+    if (!workspaceId) { setItems([]); return; }
     const { data, error } = await supabase
       .from("schedule_items")
       .select("*")
       .eq("task_date", date)
+      .eq("workspace_id", workspaceId)
       .order("position", { ascending: true })
       .order("start_time", { ascending: true });
     if (error) return toast.error(error.message);
@@ -88,7 +91,7 @@ export const SchedulePanel = ({ date, userId, tasks }: Props) => {
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [date]);
+  }, [date, workspaceId]);
 
   // Cascade: each row's start = base (first row) + sum of previous durations
   const computedStarts = useMemo(() => {
