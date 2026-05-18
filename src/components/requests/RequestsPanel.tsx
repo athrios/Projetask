@@ -293,8 +293,8 @@ export const RequestsPanel = ({ userId }: Props) => {
 };
 
 const RequestCard = ({
-  r, title, onOpen,
-}: { r: Response; title: string; onOpen: () => void }) => {
+  r, title, color, onOpen,
+}: { r: Response; title: string; color: TemplateColor; onOpen: () => void }) => {
   const converted = r.converted_task_id || r.converted_process_id;
   return (
     <button
@@ -302,7 +302,9 @@ const RequestCard = ({
       className="text-left rounded-xl border bg-card p-4 hover:shadow-sm transition w-full"
     >
       <div className="flex items-start justify-between gap-2">
-        <h4 className="text-sm font-semibold truncate">{title}</h4>
+        <span className={cn("inline-block text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full border", colorPill[color])}>
+          {title}
+        </span>
         <StatusPill domain="request" value={r.status} size="xs" />
       </div>
       <p className="text-xs text-muted-foreground mt-1 truncate">
