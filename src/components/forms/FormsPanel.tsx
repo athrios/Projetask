@@ -270,6 +270,24 @@ const FormBuilder = ({
             <Textarea value={desc} onChange={(e) => setDesc(e.target.value)} onBlur={saveMeta} className="min-h-[60px]" />
           </div>
           <div>
+            <label className="text-xs font-medium block mb-1.5">Cor</label>
+            <div className="flex flex-wrap gap-1.5">
+              {TEMPLATE_COLORS.map((c) => (
+                <button
+                  key={c.key}
+                  type="button"
+                  onClick={() => updateColor(c.key)}
+                  className={cn(
+                    "h-6 w-6 rounded-full border-2 transition",
+                    c.swatch,
+                    color === c.key ? "border-foreground scale-110" : "border-transparent hover:scale-105",
+                  )}
+                  title={c.label}
+                />
+              ))}
+            </div>
+          </div>
+          <div>
             <h4 className="text-sm font-semibold mb-2">Campos</h4>
             <div className="space-y-2">
               {fields.map((f) => (
