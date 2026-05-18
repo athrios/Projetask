@@ -82,6 +82,7 @@ const PublicForm = () => {
     const { error } = await supabase.from("form_responses").insert({
       form_id: form.id,
       owner_id: form.user_id,
+      workspace_id: form.workspace_id,
       submitter_name: name.trim(),
       data: values as never,
       status: "recebida",
