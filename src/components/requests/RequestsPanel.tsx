@@ -247,9 +247,13 @@ export const RequestsPanel = ({ userId }: Props) => {
                 {Object.entries(open.data ?? {}).map(([k, v]) => (
                   <div key={k}>
                     <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{k}</p>
-                    <p className="text-sm whitespace-pre-wrap">
-                      {Array.isArray(v) ? v.join(", ") : String(v ?? "—")}
-                    </p>
+                    {v && typeof v === "object" && !Array.isArray(v) && "path" in (v as object) ? (
+                      <FileLink file={v as { path: string; name: string }} />
+                    ) : (
+                      <p className="text-sm whitespace-pre-wrap">
+                        {Array.isArray(v) ? v.join(", ") : String(v ?? "—")}
+                      </p>
+                    )}
                   </div>
                 ))}
                 {Object.keys(open.data ?? {}).length === 0 && (
