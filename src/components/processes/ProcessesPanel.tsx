@@ -198,7 +198,7 @@ export const ProcessesPanel = ({ userId }: Props) => {
       <div className="flex items-center justify-between gap-3">
         <ViewSwitcher value={view} onChange={setView} views={["cards", "list", "kanban"]} />
         <div className="flex items-center gap-2">
-          <TemplateManager userId={userId} templates={templates} reload={load} />
+          <TemplateManager userId={userId} workspaceId={workspaceId} templates={templates} reload={load} />
           <NewProcessButton templates={templates} onCreate={createProcess} />
         </div>
       </div>
