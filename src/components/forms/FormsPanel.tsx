@@ -187,7 +187,8 @@ export const FormsPanel = ({ userId }: Props) => {
                 </button>
               )}
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
