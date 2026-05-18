@@ -188,7 +188,7 @@ export const RequestsPanel = ({ userId }: Props) => {
       ) : view === "cards" ? (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
           {responses.map((r) => (
-            <RequestCard key={r.id} r={r} title={formTitle(r.form_id)} onOpen={() => setOpen(r)} />
+            <RequestCard key={r.id} r={r} title={formTitle(r.form_id)} color={formColor(r.form_id)} onOpen={() => setOpen(r)} />
           ))}
         </div>
       ) : (
