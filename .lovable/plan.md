@@ -1,93 +1,37 @@
+## Diagnóstico
 
-# Ambientes de Trabalho na Sidebar + Isolamento Ativo
+A política de criação de `workspaces` já está correta:
 
-Vou ajustar a sidebar atual **sem recriar** e ligar de fato o `workspace_id` ativo em todos os módulos. Mantém o visual leve, fundo claro, mesma tipografia e espaçamento.
-
-## 1. Sidebar (src/pages/Index.tsx)
-
-Inserir entre o bloco do e-mail e o campo de busca:
-
-```
-Ambiente atual
-[● Athrios Contabilidade        ▾]
+```text
+Criar ambiente: usuário autenticado pode criar quando owner_id = usuário logado
 ```
 
-- Componente novo `WorkspaceSwitcher` em `src/components/workspace/WorkspaceSwitcher.tsx`.
-- Usa `DropdownMenu` (shadcn). Trigger = pill com bolinha colorida (`templateColors` reaproveitado) + nome + chevron.
-- Lista todos os workspaces do `useWorkspace()`. Item ativo recebe check + fundo `sidebar-accent`.
-- Rodapé do dropdown:
-  - `+ Novo ambiente` — só aparece para usuários que são **owner de pelo menos um workspace** (`isOwnerOfAny`) ou sempre (qualquer usuário autenticado pode criar o seu — alinhado à RLS `auth.uid()=owner_id`). Vou exibir sempre, pois qualquer usuário master do próprio ambiente deve poder criar mais.
-  - `Gerenciar ambientes` (abre seção `settings` → aba Ambientes).
-- Modal "Novo ambiente" (`CreateWorkspaceDialog`): nome, cor (paleta do `templateColors`), descrição opcional → INSERT em `workspaces`; trigger do banco já adiciona o owner como member. Pergunta "Entrar agora?" via toast action.
+O problema mais provável está no retorno do `insert().select().single()` usado ao criar o ambiente. Depois de inserir, o app pede o registro criado de volta. Para isso, a política de leitura também precisa permitir que o dono veja o próprio workspace imediatamente.
 
-## 2. Filtro de menu por permissão
+Hoje a leitura de `workspaces` depende apenas de `is_workspace_member(id, auth.uid())`. Como o membro owner é criado por trigger após a criação do workspace, pode haver falha no retorno da linha recém-criada, aparecendo como erro de RLS na criação.
 
-Em `Index.tsx`:
+## Plano de correção
 
-- Usar `useWorkspace()` → `canViewModule`, `isOwner`.
-- Mapear seções para `ModuleKey`:
-  `today→hoje, agenda→hoje, schedule→cronograma, tasks→tarefas, processes→processos, forms→formularios, requests→solicitacoes, done→tarefas`.
-- `order` filtrado: oculta itens sem `canViewModule`.
-- `settings` só aparece quando `isOwnerOfAny` (master). Conteúdo passa a renderizar `WorkspacesPanel`.
-- Se `section` atual ficar indisponível ao trocar de workspace → redireciona para `today` (ou primeira permitida).
+1. Ajustar a política de leitura de `workspaces`
+   - Manter membros podendo ver ambientes dos quais fazem parte.
+   - Adicionar permissão explícita para o dono ver o próprio workspace:
 
-## 3. Isolamento por workspace ativo no frontend
-
-Adicionar `.eq("workspace_id", workspaceId)` em todas as queries e `workspace_id: workspaceId` em todos os `insert`. Arquivos:
-
-- `src/components/TasksPanel.tsx` — tasks + subtasks
-- `src/components/SchedulePanel.tsx` — schedule_items
-- `src/components/TodayPanel.tsx` — tasks, schedule_items, process_steps
-- `src/components/agenda/AgendaPanel.tsx` — tasks, process_steps
-- `src/components/processes/ProcessesPanel.tsx` — processes, process_steps, process_templates, process_template_steps
-- `src/components/forms/FormsPanel.tsx` — forms, form_fields
-- `src/components/requests/RequestsPanel.tsx` — form_responses (+ conversões: passar `workspace_id` ao criar tarefa/processo)
-- `src/components/shared/GlobalSearch.tsx` — todas as buscas
-- `src/lib/activityLog.ts` — `activity_logs` insert recebe `workspace_id`
-- `src/pages/Index.tsx` — preload de tasks (linha 75)
-- `src/pages/PublicForm.tsx` — INSERT em `form_responses` passa `workspace_id` derivado do form carregado (mantém policy pública intacta)
-
-Padrão de hook nos panels:
-```ts
-const { workspaceId } = useWorkspace();
-useEffect(() => { if (!workspaceId) return; load(); }, [workspaceId, ...]);
+```sql
+auth.uid() = owner_id OR is_workspace_member(id, auth.uid())
 ```
 
-Reload automático ao trocar de ambiente: cada panel já depende de `workspaceId` no `useEffect`.
+2. Recriar a política de leitura com escopo autenticado
+   - Remover a policy atual `ws members can view`.
+   - Criar uma policy nova para usuários autenticados.
+   - Isso evita depender exclusivamente do registro em `workspace_members` no momento exato do `insert().select()`.
 
-## 4. Tela "Gerenciar ambientes" (master)
+3. Ajustar o frontend para ser mais resiliente
+   - Em `CreateWorkspaceDialog.tsx`, manter `owner_id: user.id`.
+   - Se necessário, trocar o fluxo para criar o workspace sem depender de `select()` imediato e recarregar a lista depois.
+   - Aplicar o mesmo padrão ao auto-create em `useWorkspace.tsx`, porque ele também usa `insert().select()`.
 
-Novo `src/components/workspace/WorkspacesPanel.tsx` renderizado quando `section==='settings'`:
-
-- Lista de workspaces que o usuário é owner.
-- Para cada um: editar nome/cor, arquivar (`archived_at`), excluir.
-- Aba **Membros**: lista `workspace_members` + permissões por módulo (matriz 7×4 checkboxes) lendo/gravando `workspace_permissions`.
-- Aba **Convites**: input de email + matriz de permissões → INSERT em `workspace_invitations` (token gerado client-side via `crypto.randomUUID`). MVP: copia link `/invite/:token`; envio real de email fica fora de escopo (será edge function depois).
-
-Isto é uma versão enxuta — só CRUD básico de workspaces e gestão de membros existentes. Botão de "convidar membro" cria registro em `workspace_invitations`; aceitar convites pode ficar para próxima iteração caso queira simplificar.
-
-## 5. Busca dentro do ambiente
-
-`GlobalSearch` recebe `workspaceId` do contexto e adiciona `.eq("workspace_id", workspaceId)` em todas as queries (tasks, processes, forms, responses, schedule).
-
-## 6. Critérios de aceite cobertos
-
-- Visual da sidebar preservado (só inserção do switcher entre email e busca).
-- Switcher com pill colorido + dropdown com check no ativo.
-- "Novo ambiente" + "Gerenciar ambientes" dentro do dropdown.
-- Configurações oculto para não-owners.
-- Itens de menu ocultos quando `can_view=false`.
-- Troca de ambiente recarrega dados (via dependência `workspaceId` nos effects).
-- Busca limitada ao ambiente ativo.
-- PublicForm continua funcionando (policy pública preservada).
-
-## Fora de escopo nesta iteração
-
-- Envio real de email de convite (precisa edge function `invite-member` + SMTP — posso adicionar depois).
-- Fluxo de aceitar convite via link `/invite/:token`.
-- Transferência de ownership.
-- Auditoria de mudanças de permissão.
-
-## Pergunta única
-
-Confirma que posso usar essa versão enxuta de gestão de membros (convites criados como registro, sem envio de email ainda)? Se preferir, já incluo a edge function de envio nesta mesma iteração.
+4. Validar
+   - Criar um novo ambiente logado.
+   - Confirmar que ele aparece no switcher.
+   - Confirmar que o usuário owner aparece como membro.
+   - Confirmar que a troca de ambiente continua filtrando os dados por `workspace_id`.
