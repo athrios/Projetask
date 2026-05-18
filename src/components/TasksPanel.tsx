@@ -147,9 +147,16 @@ export const TasksPanel = ({
   const [statusFilter, setStatusFilter] = useState<TaskStatus | "todos">("todos");
   const [priorityFilter, setPriorityFilter] = useState<Priority | "todos">("todos");
   const [dateFilter, setDateFilter] = useState<string | null>(null);
+  const [hiddenStatuses, setHiddenStatuses] = useState<TaskStatus[]>(
+    () => lsGet<TaskStatus[]>("tasksHiddenStatuses", []),
+  );
   const [view, setView] = useState<ViewMode>(
     () => (lsGet<ViewMode>("tasksView", "list")),
   );
+
+  useEffect(() => {
+    localStorage.setItem("tasksHiddenStatuses", JSON.stringify(hiddenStatuses));
+  }, [hiddenStatuses]);
 
   useEffect(() => {
     localStorage.setItem("tasksView", JSON.stringify(view));
