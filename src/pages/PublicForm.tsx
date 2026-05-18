@@ -50,7 +50,7 @@ const PublicForm = () => {
     (async () => {
       const { data } = await supabase
         .from("forms")
-        .select("id,user_id,title,description,is_published")
+        .select("id,user_id,workspace_id,title,description,is_published")
         .eq("public_slug", slug)
         .eq("is_published", true)
         .maybeSingle();
