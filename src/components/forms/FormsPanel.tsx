@@ -24,7 +24,7 @@ import { toast } from "sonner";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { logActivity } from "@/lib/activityLog";
 
-type FieldType = "short_text" | "long_text" | "select" | "multi_select" | "date";
+type FieldType = "short_text" | "long_text" | "select" | "multi_select" | "date" | "file";
 
 interface Form {
   id: string;
