@@ -8,6 +8,7 @@ import NotFound from "./pages/NotFound.tsx";
 import Auth from "./pages/Auth.tsx";
 import PublicForm from "./pages/PublicForm.tsx";
 import { AuthProvider } from "./hooks/useAuth";
+import { WorkspaceProvider } from "./hooks/useWorkspace";
 
 const queryClient = new QueryClient();
 
