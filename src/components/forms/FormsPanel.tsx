@@ -217,6 +217,7 @@ const FormBuilder = ({
   userId: string;
   onClose: () => void;
 }) => {
+  const { workspaceId } = useWorkspace();
   const [title, setTitle] = useState(form.title);
   const [desc, setDesc] = useState(form.description);
   const [color, setColor] = useState(asColor(form.color));
@@ -242,12 +243,14 @@ const FormBuilder = ({
   };
 
   const addField = async (type: FieldType) => {
+    if (!workspaceId) return;
     await supabase.from("form_fields").insert({
-      form_id: form.id, user_id: userId, label: "Novo campo",
+      form_id: form.id, user_id: userId, workspace_id: workspaceId, label: "Novo campo",
       field_type: type, required: false, position: fields.length, options: [],
     });
     load();
   };
+
 
   const updateField = async (id: string, patch: Partial<Field>) => {
     await supabase.from("form_fields").update(patch as never).eq("id", id);
