@@ -282,6 +282,7 @@ export const TasksPanel = ({
       recurrence_interval: t.recurrence_interval ?? 1,
       recurrence_end_date: t.recurrence_end_date ?? null,
       parent_recurring_task_id: parentId,
+      workspace_id: workspaceId ?? undefined,
     } as never).select().single();
     if (error) return toast.error("Erro ao gerar recorrência: " + error.message);
     if (data) await logActivity(userId, "task", data.id, "recurrence_generated", `Próxima ocorrência criada para ${nextISO}`);
