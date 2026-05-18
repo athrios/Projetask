@@ -43,21 +43,23 @@ const startOfWeek = (d: Date) => {
 const isoOf = (d: Date) => d.toISOString().slice(0, 10);
 
 export const AgendaPanel = ({ userId: _userId }: Props) => {
+  const { workspaceId } = useWorkspace();
   const [view, setView] = useState<AgendaView>("week");
   const [anchor, setAnchor] = useState<string>(todayISO());
   const [tasks, setTasks] = useState<AgendaTask[]>([]);
   const [processes, setProcesses] = useState<AgendaProcess[]>([]);
 
   useEffect(() => {
+    if (!workspaceId) return;
     (async () => {
       const [t, p] = await Promise.all([
-        supabase.from("tasks").select("id,title,due_date,task_date,status,priority,done"),
-        supabase.from("processes").select("id,name,client_name,status,due_date"),
+        supabase.from("tasks").select("id,title,due_date,task_date,status,priority,done").eq("workspace_id", workspaceId),
+        supabase.from("processes").select("id,name,client_name,status,due_date").eq("workspace_id", workspaceId),
       ]);
       setTasks((t.data ?? []) as AgendaTask[]);
       setProcesses((p.data ?? []) as AgendaProcess[]);
     })();
-  }, []);
+  }, [workspaceId]);
 
   const today = todayISO();
 
