@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useWorkspace } from "@/hooks/useWorkspace";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { ListChecks, Workflow, CalendarClock, AlertCircle } from "lucide-react";
