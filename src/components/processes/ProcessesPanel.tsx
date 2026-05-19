@@ -1327,3 +1327,125 @@ const CurrentStepCard = ({
   );
 };
 
+/* ───────── Process detail (table type) ───────── */
+
+const PROCESS_STATUS_OPTIONS: { value: ProcessStatus; label: string }[] = [
+  { value: "nao_iniciado", label: "Não iniciado" },
+  { value: "em_andamento", label: "Em andamento" },
+  { value: "concluido", label: "Concluído" },
+  { value: "cancelado", label: "Cancelado" },
+];
+
+const ProcessTableDetail = ({
+  process,
+  templateName,
+  userId,
+  onClose,
+  onChanged,
+}: {
+  process: Process;
+  templateName: string | null;
+  userId: string;
+  onClose: () => void;
+  onChanged: () => void;
+}) => {
+  const initial = process.table_data ?? emptyTable();
+  const [draft, setDraft] = useState<TableData>(initial);
+  const [dirty, setDirty] = useState(false);
+  const [status, setStatus] = useState<ProcessStatus>(process.status);
+
+  const update = (next: TableData) => {
+    setDraft(next);
+    setDirty(true);
+  };
+
+  const hasAnyValue = (t: TableData) =>
+    t.rows.some((r) => Object.values(r.cells).some((v) => String(v).trim() !== ""));
+
+  const save = async () => {
+    let nextStatus = status;
+    if (status === "nao_iniciado" && hasAnyValue(draft)) nextStatus = "em_andamento";
+    const { error } = await supabase
+      .from("processes")
+      .update({ table_data: draft, status: nextStatus } as never)
+      .eq("id", process.id);
+    if (error) return toast.error(error.message);
+    setStatus(nextStatus);
+    setDirty(false);
+    await logActivity(userId, "process", process.id, "updated", `Tabela atualizada: "${process.name}"`);
+    toast.success("Tabela salva");
+    onChanged();
+  };
+
+  const changeStatus = async (s: ProcessStatus) => {
+    setStatus(s);
+    const { error } = await supabase
+      .from("processes")
+      .update({ status: s })
+      .eq("id", process.id);
+    if (error) return toast.error(error.message);
+    await logActivity(userId, "process", process.id, "status_changed", `Status alterado: "${process.name}" → ${s}`);
+    onChanged();
+  };
+
+  const addRow = () => {
+    const cells: Record<string, string> = {};
+    draft.columns.forEach((c) => (cells[c.id] = ""));
+    update({ ...draft, rows: [...draft.rows, { id: Math.random().toString(36).slice(2, 10), cells }] });
+  };
+  const addColumn = () => {
+    const col = {
+      id: Math.random().toString(36).slice(2, 10),
+      label: `Coluna ${draft.columns.length + 1}`,
+      kind: "text" as const,
+    };
+    update({
+      ...draft,
+      columns: [...draft.columns, col],
+      rows: draft.rows.map((r) => ({ ...r, cells: { ...r.cells, [col.id]: "" } })),
+    });
+  };
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-4xl max-h-[88vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="text-base">{process.name}</DialogTitle>
+          {templateName && (
+            <p className="text-xs text-muted-foreground">Modelo: {templateName} · Tabela</p>
+          )}
+        </DialogHeader>
+
+        <div className="flex items-center gap-2 flex-wrap -mt-1">
+          <Select value={status} onValueChange={(v) => changeStatus(v as ProcessStatus)}>
+            <SelectTrigger className="h-8 w-44 text-xs"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {PROCESS_STATUS_OPTIONS.map((o) => (
+                <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button size="sm" variant="outline" onClick={addRow} disabled={draft.columns.length === 0}>
+            <Plus className="h-3.5 w-3.5" /> Linha
+          </Button>
+          <Button size="sm" variant="outline" onClick={addColumn}>
+            <Plus className="h-3.5 w-3.5" /> Coluna
+          </Button>
+          <div className="flex-1" />
+          <Button size="sm" onClick={save} disabled={!dirty}>
+            Salvar
+          </Button>
+        </div>
+
+        <div className="mt-3">
+          <SheetEditor value={draft} onChange={update} />
+        </div>
+
+        <DialogFooter className="mt-4">
+          <Button variant="outline" onClick={onClose}>Fechar</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
