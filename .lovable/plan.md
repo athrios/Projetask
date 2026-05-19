@@ -1,100 +1,66 @@
-# Plano: Indicador de mês, navegação por dia e alertas de tarefas
+# Modal "Nova tarefa" com configuração completa antes de salvar
 
-Escopo dividido em 3 frentes independentes que serão entregues juntas.
+## Objetivo
+Permitir configurar título, prioridade, prazo, horário, status, observações, subtarefas e alertas antes de criar a tarefa — preservando o input rápido (Enter) atual.
 
-## 1) Indicador de mês (visual)
+## UX
 
-- Adicionar header com o mês de referência (ex.: "Maio de 2026") nas áreas:
-  - `AgendaPanel` (já tem navegação, falta o rótulo formal do mês).
-  - `TasksPanel` quando a visualização é agrupada por data.
-- Atualiza automaticamente conforme a âncora de navegação ou a primeira data visível das tarefas.
-- Estilo discreto, consistente com a toolbar atual (mesma tipografia/cor `text-muted-foreground`).
+**Barra de criação (substitui o form atual em `TasksPanel`)**
+```
+[+] [Nova tarefa  (Enter para adicionar)............] [Configurar] [Adicionar]
+```
+- Enter no input ou botão `Adicionar` → criação rápida (comportamento atual, sem alterações).
+- Botão `Configurar` (ou clique em um botão primário `Nova tarefa` no header) → abre o modal completo, pré-preenchido com o texto já digitado.
 
-## 2) Cabeçalho de dia clicável em Tarefas
+**Modal `Nova tarefa`** (componente novo `NewTaskDialog.tsx`)
+```
+Título            [____________________________]
+Prioridade        Prazo
+[Média ▼]         [Selecionar data]  [hh:mm]
+Status inicial
+[Pendente ▼]      (apenas pendente / fazendo / aguardando)
+Observações       [textarea curta, opcional]
+Subtarefas
+  [Digite uma subtarefa] [+]
+  • Conferir DBE              [editar] [×]
+  • Separar contrato social   [editar] [×]
+Alertas
+  [+ Adicionar alerta]  (opcional — abre TaskReminderEditor após salvar, ou config inline)
+                                          [Cancelar] [Criar tarefa]
+```
 
-- Em `TasksPanel`, transformar o cabeçalho do agrupamento (`06 de maio de 2026`) em botão.
-- Ao clicar, aplica filtro de data única (`dateFilter = iso`).
-- Quando filtrado, mostrar barra "Filtrando: 06 de maio de 2026" com botão "Limpar filtro".
-- Edição de tarefa continua via clique no item (não no cabeçalho).
-- Filtro vive apenas no estado local da página (não persiste).
+## Validações
+- Título obrigatório (mesmo schema `taskTitleSchema`).
+- Subtarefa vazia ignorada (mesmo `subtaskTitleSchema`).
+- Prazo, horário, observações opcionais.
+- Defaults: prioridade `media`, status `pendente`.
+- Cancelar → descarta tudo, nada é persistido.
 
-## 3) Alertas de tarefa
+## Fluxo de persistência (seguro)
+1. `INSERT` em `tasks` com todos os campos (workspace_id ativo, user_id, due_date, due_time, priority, status, notes).
+2. Capturar `id` retornado.
+3. Se houver subtarefas: `INSERT` em lote em `subtasks` com `task_id`, `workspace_id`, `user_id`, `position`.
+4. Se o passo 3 falhar: `DELETE` da tarefa criada para evitar registros órfãos + toast de erro.
+5. `logActivity` (created task) + recarregar lista. Sem alteração de schema/RLS — políticas existentes já cobrem.
 
-### Banco (migração)
+## Alertas (escopo mínimo nesta entrega)
+- Para manter o fluxo enxuto, no modal exibir apenas o link "Configurar alerta" — após criar a tarefa, abrir o `TaskReminderEditor` já existente com o `task.id` recém-criado (reaproveita o componente atual, evita duplicar lógica de reminder).
+- Se preferir totalmente inline, dá para incluir, mas adiciona complexidade. Default: pós-criação.
 
-Novas tabelas com RLS por `workspace_id`:
-
-- `task_reminders`
-  - `task_id`, `user_id`, `workspace_id`
-  - `offset_value int`, `offset_unit text` (`minutes|hours|days`)
-  - `reminder_at timestamptz` (calculado a partir do `due_date` + hora opcional)
-  - `notify_in_app bool`, `notify_email bool`
-  - `status text` (`pending|sent|cancelled`), `email_sent_at`, `in_app_created_at`
-- `notifications`
-  - `user_id`, `workspace_id`, `task_id`
-  - `title`, `message`, `read_at`
-
-Trigger de validação para `offset_unit` e `status`. Política RLS:
-- Reminders: visíveis/editáveis por membros do workspace com permissão `tarefas`.
-- Notifications: visíveis somente para `user_id = auth.uid()`; service role insere.
-
-Adicionar coluna `due_time time` em `tasks` (opcional, default null) — para alertas mais precisos. Se ausente, considerar 09:00.
-
-### UI na criação/edição de tarefa
-
-Nova seção "Alertas" no editor de tarefa:
-- Toggle "Ativar alerta".
-- Preset: Na hora / 5min / 15min / 30min / 1h / 1 dia / Personalizado.
-- Personalizado: input numérico + unidade (min/h/dias).
-- Canal: In-app / E-mail / Ambos.
-- Múltiplos alertas por tarefa (lista + botão "Adicionar alerta").
-
-Ao salvar a tarefa, recalcular `reminder_at = (due_date + due_time) - offset` e fazer upsert. Se a tarefa muda de prazo, recálculo. Se concluída/cancelada/excluída → marcar reminders como `cancelled`.
-
-### Sino de notificações (in-app)
-
-- Componente `NotificationsBell` na topbar do app (`Index.tsx`).
-- Conta não lidas (`read_at IS NULL`) do workspace ativo + user atual.
-- Popover com lista das últimas 20.
-- Realtime via Supabase channel em `notifications`.
-- Clique marca como lida e navega para a tarefa (`/?tab=tasks&task=<id>`).
-
-### Disparo (backend)
-
-- Nova edge function `process-task-reminders` agendada via pg_cron a cada minuto.
-- Lógica:
-  1. `SELECT * FROM task_reminders WHERE status='pending' AND reminder_at <= now()`.
-  2. Para cada: pular se task concluída/cancelada/deletada.
-  3. Se `notify_in_app` → insert em `notifications`.
-  4. Se `notify_email` → enfileirar via `enqueue_email('transactional_emails', ...)` usando infra de e-mail já existente, template inline simples.
-  5. Atualizar `status='sent'`, `email_sent_at`, `in_app_created_at`.
-- Idempotência: status garante não duplicar.
-
-### Permissões
-
-- RLS já cobre por workspace. Edge function usa service_role.
-- Notificações filtram por `user_id = auth.uid()` no client.
-
-## Arquivos
-
-**Migração:** uma migração com tabelas + RLS + triggers + coluna `due_time` + cron job.
-
-**Edge function:** `supabase/functions/process-task-reminders/index.ts` + entrada no `supabase/config.toml`.
-
-**Frontend:**
-- `src/components/agenda/AgendaPanel.tsx` — indicador de mês.
-- `src/components/TasksPanel.tsx` — indicador de mês, cabeçalho clicável, filtro por dia, seção de alertas no editor, integração reminders.
-- `src/components/notifications/NotificationsBell.tsx` (novo).
-- `src/components/notifications/TaskReminderEditor.tsx` (novo) — usado dentro de TasksPanel.
-- `src/pages/Index.tsx` — montar o sino na topbar.
-- `src/lib/reminders.ts` (novo) — helpers de cálculo `reminder_at`.
+## Arquivos a alterar/criar
+- **Novo:** `src/components/tasks/NewTaskDialog.tsx` — Dialog com estado local (title, priority, dueDate, dueTime, status, notes, subtasks[]), validação via `safeParse`, e callback `onCreated(taskId)`.
+- **Editar:** `src/components/TasksPanel.tsx`
+  - Adicionar botão `Configurar` na barra de input e estado `newDialogOpen`.
+  - Renderizar `<NewTaskDialog>` com prefill do `title` digitado.
+  - No `onCreated`: limpar input, recarregar, abrir opcionalmente `TaskReminderEditor`.
+  - Manter `add()` atual inalterado para o fluxo rápido.
 
 ## Critérios de aceite
+- Botão `Configurar` abre modal; campos preenchem corretamente; `Criar tarefa` persiste tudo de uma vez.
+- Subtarefas aparecem vinculadas na lista após criar.
+- Falha em subtarefa não deixa tarefa órfã (rollback manual).
+- Enter no input continua criando tarefa simples.
+- Workspace ativo, RLS e permissões respeitados (usa cliente autenticado e `workspace_id` atual — sem mudanças de banco).
 
-Conforme os 5 testes descritos no pedido.
-
-## Notas
-
-- A infra de e-mail (`process-email-queue`, `email_send_log`) já está deployada — o reminder apenas enfileira.
-- O domínio `task.athrioscontabil.com.br` está em verificação; e-mails só sairão após DNS ok, mas o fluxo fica completo.
-- Não altero o template Tabela nem outras áreas.
+## Sem mudanças
+- Sem migration. Sem alteração em edge functions. Sem alteração no `TaskReminderEditor`, `AgendaPanel`, ou outros painéis.
