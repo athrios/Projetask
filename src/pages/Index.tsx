@@ -14,6 +14,7 @@ import { AgendaPanel } from "@/components/agenda/AgendaPanel";
 import { GlobalSearch } from "@/components/shared/GlobalSearch";
 import { WorkspaceSwitcher } from "@/components/workspace/WorkspaceSwitcher";
 import { WorkspacesPanel } from "@/components/workspace/WorkspacesPanel";
+import { RequireModule, RequireOwner } from "@/components/auth/RequireModule";
 import {
   LogOut,
   CalendarClock,
