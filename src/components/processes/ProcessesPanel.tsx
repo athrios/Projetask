@@ -147,6 +147,10 @@ export const ProcessesPanel = ({ userId }: Props) => {
   const createProcess = async (templateId: string | null, name: string, dueDate: string | null) => {
     if (!workspaceId) return toast.error("Selecione um ambiente");
     const tpl = templates.find((t) => t.id === templateId);
+    const isTable = tpl?.template_type === "table";
+    const tableData = isTable
+      ? JSON.parse(JSON.stringify(tpl?.table_schema ?? emptyTable()))
+      : emptyTable();
     const { data: proc, error } = await supabase
       .from("processes")
       .insert({
@@ -156,12 +160,14 @@ export const ProcessesPanel = ({ userId }: Props) => {
         template_id: templateId,
         status: "nao_iniciado",
         due_date: dueDate,
-      })
+        template_type: isTable ? "table" : "tasks",
+        table_data: tableData,
+      } as never)
       .select()
       .single();
     if (error || !proc) return toast.error(error?.message ?? "Erro");
 
-    if (templateId) {
+    if (templateId && !isTable) {
       const { data: tmplSteps, error: stepsError } = await supabase
         .from("process_template_steps")
         .select("*")
