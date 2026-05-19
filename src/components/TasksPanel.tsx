@@ -161,6 +161,7 @@ export const TasksPanel = ({
   const [view, setView] = useState<ViewMode>(
     () => (lsGet<ViewMode>("tasksView", "list")),
   );
+  const [newDialogOpen, setNewDialogOpen] = useState(false);
 
   useEffect(() => {
     localStorage.setItem("tasksHiddenStatuses", JSON.stringify(hiddenStatuses));
