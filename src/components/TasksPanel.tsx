@@ -664,9 +664,13 @@ export const TasksPanel = ({
           <DropdownMenuItem onClick={() => setRecurEditingId(t.id)}>
             <Repeat className="h-3.5 w-3.5 mr-2" /> Recorrência
           </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => setReminderTaskId(t.id)}>
+            <BellRing className="h-3.5 w-3.5 mr-2" /> Alertas
+          </DropdownMenuItem>
           <DropdownMenuItem onClick={() => setHistoryId(t.id)}>
             <History className="h-3.5 w-3.5 mr-2" /> Histórico
           </DropdownMenuItem>
+
           <DropdownMenuItem onClick={() => remove(t.id)} className="text-destructive">
             <Trash2 className="h-3.5 w-3.5 mr-2" /> Remover
           </DropdownMenuItem>
