@@ -1,140 +1,100 @@
-## Evolução do Template Tabela — Tipos de coluna
+# Plano: Indicador de mês, navegação por dia e alertas de tarefas
 
-Estender o template Tabela existente para suportar 5 tipos de coluna: **Texto, Número, Real (moeda), Checkbox e Lista suspensa**. Sem migração de banco (o JSONB já comporta os novos campos) e sem quebrar templates/processos já criados.
+Escopo dividido em 3 frentes independentes que serão entregues juntas.
 
----
+## 1) Indicador de mês (visual)
 
-### 1. Modelo de dados (sem migração)
+- Adicionar header com o mês de referência (ex.: "Maio de 2026") nas áreas:
+  - `AgendaPanel` (já tem navegação, falta o rótulo formal do mês).
+  - `TasksPanel` quando a visualização é agrupada por data.
+- Atualiza automaticamente conforme a âncora de navegação ou a primeira data visível das tarefas.
+- Estilo discreto, consistente com a toolbar atual (mesma tipografia/cor `text-muted-foreground`).
 
-`process_templates.table_schema` e `processes.table_data` já são JSONB livres. Estendemos o tipo `TableColumn` em `src/lib/sheetFormula.ts`:
+## 2) Cabeçalho de dia clicável em Tarefas
 
-```ts
-type ColumnType = "text" | "number" | "currency" | "checkbox" | "select";
-interface TableColumn {
-  id: string;
-  label: string;
-  type: ColumnType;     // novo — substitui o atual `kind`
-  options?: string[];   // só para "select"
-  kind?: "text" | "number"; // mantido como legacy para retrocompat
-}
-```
+- Em `TasksPanel`, transformar o cabeçalho do agrupamento (`06 de maio de 2026`) em botão.
+- Ao clicar, aplica filtro de data única (`dateFilter = iso`).
+- Quando filtrado, mostrar barra "Filtrando: 06 de maio de 2026" com botão "Limpar filtro".
+- Edição de tarefa continua via clique no item (não no cabeçalho).
+- Filtro vive apenas no estado local da página (não persiste).
 
-Migração automática em runtime (sem tocar no banco):
-- Ao ler um template/processo, normalizar colunas: se `type` ausente, derivar de `kind` (`number` → `number`, resto → `text`). Templates antigos continuam funcionando.
+## 3) Alertas de tarefa
 
-Células permanecem como **string** no JSON (chave = `col.id`):
-- `text`: string livre
-- `number`: string numérica (ou fórmula `=...`)
-- `currency`: string numérica em **valor cru** (ex.: `"1250.5"`) — a formatação `R$ 1.250,50` é só de exibição
-- `checkbox`: `"true"` | `"false"` | `""`
-- `select`: uma das `options` ou `""`
+### Banco (migração)
 
-Vantagem: não quebra `buildCellMap`, fórmulas e dados de tabelas Tabela já criadas.
+Novas tabelas com RLS por `workspace_id`:
 
----
+- `task_reminders`
+  - `task_id`, `user_id`, `workspace_id`
+  - `offset_value int`, `offset_unit text` (`minutes|hours|days`)
+  - `reminder_at timestamptz` (calculado a partir do `due_date` + hora opcional)
+  - `notify_in_app bool`, `notify_email bool`
+  - `status text` (`pending|sent|cancelled`), `email_sent_at`, `in_app_created_at`
+- `notifications`
+  - `user_id`, `workspace_id`, `task_id`
+  - `title`, `message`, `read_at`
 
-### 2. Engine de fórmulas (`src/lib/sheetFormula.ts`)
+Trigger de validação para `offset_unit` e `status`. Política RLS:
+- Reminders: visíveis/editáveis por membros do workspace com permissão `tarefas`.
+- Notifications: visíveis somente para `user_id = auth.uid()`; service role insere.
 
-Pequenos ajustes:
-- `numericFromRaw` passa a aceitar `"true"/"false"` → `1/0` (futuro), mas por ora só **number** e **currency** participam de cálculo.
-- No `resolve` de refs, considerar o **tipo da coluna** referenciada via novo parâmetro opcional `columnTypeByRef`:
-  - `text` / `select` → 0
-  - `checkbox` → 0 (descartado conforme regra)
-  - `number` / `currency` → parse numérico normal
-- Assinatura: `evaluateCell(raw, cells, evaluating?, selfRef?, columnTypeByRef?)`. Default mantém comportamento atual (compat com testes existentes).
-- `buildCellMap` ganha um companion `buildColumnTypeMap(data)` para mapear `A`, `B`, … → tipo.
+Adicionar coluna `due_time time` em `tasks` (opcional, default null) — para alertas mais precisos. Se ausente, considerar 09:00.
 
-Testes novos em `src/test/sheetFormula.test.ts`:
-- Soma ignora célula `text` e `select`.
-- Coluna `currency` soma corretamente valores crus.
-- Checkbox não entra em soma.
+### UI na criação/edição de tarefa
 
----
+Nova seção "Alertas" no editor de tarefa:
+- Toggle "Ativar alerta".
+- Preset: Na hora / 5min / 15min / 30min / 1h / 1 dia / Personalizado.
+- Personalizado: input numérico + unidade (min/h/dias).
+- Canal: In-app / E-mail / Ambos.
+- Múltiplos alertas por tarefa (lista + botão "Adicionar alerta").
 
-### 3. Editor de coluna (`SheetEditor.tsx`)
+Ao salvar a tarefa, recalcular `reminder_at = (due_date + due_time) - offset` e fazer upsert. Se a tarefa muda de prazo, recálculo. Se concluída/cancelada/excluída → marcar reminders como `cancelled`.
 
-Cabeçalho de cada coluna passa a ter um botão de **configurar** (ícone `Settings2`) abrindo um `Popover`:
+### Sino de notificações (in-app)
 
-- Campo "Nome" (label).
-- `Select` "Tipo" com as 5 opções.
-- Se tipo = `select`: lista editável de opções (input + adicionar/remover; mínimo 1).
-- Validação: label ≤ 60 chars; opções ≤ 30 chars; máx 50 opções.
+- Componente `NotificationsBell` na topbar do app (`Index.tsx`).
+- Conta não lidas (`read_at IS NULL`) do workspace ativo + user atual.
+- Popover com lista das últimas 20.
+- Realtime via Supabase channel em `notifications`.
+- Clique marca como lida e navega para a tarefa (`/?tab=tasks&task=<id>`).
 
-Ao mudar o tipo, **manter os valores existentes** (não apagar), apenas a renderização da célula muda. Mudança para `select` sem `options` exige preencher pelo menos uma opção antes de aceitar.
+### Disparo (backend)
 
-Remoção do input "kind" inline atual no header — substituído pelo popover.
+- Nova edge function `process-task-reminders` agendada via pg_cron a cada minuto.
+- Lógica:
+  1. `SELECT * FROM task_reminders WHERE status='pending' AND reminder_at <= now()`.
+  2. Para cada: pular se task concluída/cancelada/deletada.
+  3. Se `notify_in_app` → insert em `notifications`.
+  4. Se `notify_email` → enfileirar via `enqueue_email('transactional_emails', ...)` usando infra de e-mail já existente, template inline simples.
+  5. Atualizar `status='sent'`, `email_sent_at`, `in_app_created_at`.
+- Idempotência: status garante não duplicar.
 
----
+### Permissões
 
-### 4. Renderização das células
+- RLS já cobre por workspace. Edge function usa service_role.
+- Notificações filtram por `user_id = auth.uid()` no client.
 
-Refatorar `CellInput` / `EditableCell` em `SheetEditor.tsx` em um switch por `column.type`:
+## Arquivos
 
-| Tipo       | Edição                                                    | Exibição                          |
-|------------|-----------------------------------------------------------|-----------------------------------|
-| `text`     | `<input>` text                                            | string crua, alinhamento esquerdo |
-| `number`   | `<input inputMode="decimal">` com filtro; fórmula `=` permitida | número formatado, alinhado à direita |
-| `currency` | `<input inputMode="decimal">` aceita `1234,56` ou `1234.56`; ao blur, formata para `R$ 1.250,50`; em foco mostra valor cru editável | `R$ 1.250,50`, alinhado à direita |
-| `checkbox` | `<Checkbox>` centralizado, toggle direto                  | mesmo (checked/uncheck)           |
-| `select`   | `<Select>` compacto com `column.options`                  | label da opção                    |
+**Migração:** uma migração com tabelas + RLS + triggers + coluna `due_time` + cron job.
 
-Helpers em `src/lib/sheetFormula.ts` (ou novo `src/lib/cellFormat.ts`):
-- `parseCurrencyInput(str): number | null`
-- `formatCurrencyBRL(n): string` (Intl.NumberFormat `pt-BR`, `style: 'currency'`)
-- `parseNumberInput(str): number | null`
+**Edge function:** `supabase/functions/process-task-reminders/index.ts` + entrada no `supabase/config.toml`.
 
-Fórmulas (`=...`) continuam permitidas apenas em `number` e `currency`. Para `text/select/checkbox`, ignoramos o `=` inicial (tratado como literal).
+**Frontend:**
+- `src/components/agenda/AgendaPanel.tsx` — indicador de mês.
+- `src/components/TasksPanel.tsx` — indicador de mês, cabeçalho clicável, filtro por dia, seção de alertas no editor, integração reminders.
+- `src/components/notifications/NotificationsBell.tsx` (novo).
+- `src/components/notifications/TaskReminderEditor.tsx` (novo) — usado dentro de TasksPanel.
+- `src/pages/Index.tsx` — montar o sino na topbar.
+- `src/lib/reminders.ts` (novo) — helpers de cálculo `reminder_at`.
 
----
+## Critérios de aceite
 
-### 5. Criação de processo a partir do template
+Conforme os 5 testes descritos no pedido.
 
-Já implementado via deep-clone de `table_schema` → `table_data`. Garantir que o clone inclua `type` e `options` (é só `JSON.parse(JSON.stringify(...))`, então já vale). Adicionar test/sanity de que mexer no processo não muda o template.
+## Notas
 
----
-
-### 6. Validação (`src/lib/validation.ts`)
-
-Adicionar `zod` schema para coluna:
-
-```ts
-const columnSchema = z.object({
-  id: z.string().min(1),
-  label: z.string().trim().min(1).max(60),
-  type: z.enum(["text","number","currency","checkbox","select"]),
-  options: z.array(z.string().trim().min(1).max(30)).max(50).optional(),
-}).refine(c => c.type !== "select" || (c.options && c.options.length > 0),
-  { message: "Lista suspensa precisa de pelo menos 1 opção" });
-```
-
-Validar no salvar do template e no salvar do processo.
-
----
-
-### 7. Permissões / Workspace
-
-Sem mudança. Tudo persiste em `process_templates`/`processes` que já têm RLS por `workspace_id` + `has_workspace_permission('processos', ...)`.
-
----
-
-### 8. Arquivos
-
-**Editar**
-- `src/lib/sheetFormula.ts` — novo `ColumnType`, helpers de formato, `evaluateCell` consciente de tipo, `buildColumnTypeMap`. Manter exports atuais (compat).
-- `src/components/processes/SheetEditor.tsx` — popover de configuração de coluna, renderização por tipo, normalização legacy ao receber `value`.
-- `src/components/processes/ProcessesPanel.tsx` — passar `columnTypeMap` ao avaliar fórmulas; nada além disso.
-- `src/lib/validation.ts` — schema de coluna + opções.
-- `src/test/sheetFormula.test.ts` — casos novos (currency, select/text ignorados em SOMA).
-
-**Sem migração de banco.** O JSONB existente comporta os campos novos; templates antigos são normalizados ao carregar.
-
----
-
-### 9. Critérios de aceite
-
-1. Templates Tabela antigos abrem sem erro e suas colunas viram `text`/`number` automaticamente.
-2. No editor, configurar uma coluna como cada um dos 5 tipos funciona; opções de `select` são editáveis.
-3. Linha nova respeita o tipo (checkbox aparece como checkbox, currency formata em R$ ao sair do campo, etc.).
-4. `=SOMA(C1:C5)` numa coluna `currency` soma corretamente; numa coluna `text` retorna 0.
-5. Criar processo a partir do template preserva tipos e opções; editar processo não muda template.
-6. RLS / workspace inalterados — sem regressão de isolamento.
+- A infra de e-mail (`process-email-queue`, `email_send_log`) já está deployada — o reminder apenas enfileira.
+- O domínio `task.athrioscontabil.com.br` está em verificação; e-mails só sairão após DNS ok, mas o fluxo fica completo.
+- Não altero o template Tabela nem outras áreas.
