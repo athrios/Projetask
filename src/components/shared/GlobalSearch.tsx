@@ -48,6 +48,7 @@ const LABEL: Record<ResultType, string> = {
 };
 
 export const GlobalSearch = ({ open, onOpenChange, onNavigate, workspaceId }: Props) => {
+  const { canViewModule } = useWorkspace();
   const [q, setQ] = useState("");
   const [results, setResults] = useState<Result[]>([]);
 
@@ -61,23 +62,35 @@ export const GlobalSearch = ({ open, onOpenChange, onNavigate, workspaceId }: Pr
     let cancelled = false;
     const run = async () => {
       const like = `%${term}%`;
+      const canTasks = canViewModule("tarefas");
+      const canProcs = canViewModule("processos");
+      const canReqs = canViewModule("solicitacoes");
+      const canForms = canViewModule("formularios");
       const [t, p, r, f] = await Promise.all([
-        supabase.from("tasks").select("id,title,status").eq("workspace_id", workspaceId).ilike("title", like).limit(8),
-        supabase.from("processes").select("id,name,status,client_name").eq("workspace_id", workspaceId).ilike("name", like).limit(8),
-        supabase.from("form_responses").select("id,submitter_name,status,form_id").eq("workspace_id", workspaceId).ilike("submitter_name", like).limit(8),
-        supabase.from("forms").select("id,title,is_published").eq("workspace_id", workspaceId).ilike("title", like).limit(8),
+        canTasks
+          ? supabase.from("tasks").select("id,title,status").eq("workspace_id", workspaceId).ilike("title", like).limit(8)
+          : Promise.resolve({ data: [] as any[] }),
+        canProcs
+          ? supabase.from("processes").select("id,name,status,client_name").eq("workspace_id", workspaceId).ilike("name", like).limit(8)
+          : Promise.resolve({ data: [] as any[] }),
+        canReqs
+          ? supabase.from("form_responses").select("id,submitter_name,status,form_id").eq("workspace_id", workspaceId).ilike("submitter_name", like).limit(8)
+          : Promise.resolve({ data: [] as any[] }),
+        canForms
+          ? supabase.from("forms").select("id,title,is_published").eq("workspace_id", workspaceId).ilike("title", like).limit(8)
+          : Promise.resolve({ data: [] as any[] }),
       ]);
       if (cancelled) return;
       const rs: Result[] = [];
-      (t.data ?? []).forEach((x) => rs.push({ type: "task", id: x.id, title: x.title, subtitle: x.status }));
-      (p.data ?? []).forEach((x) => rs.push({ type: "process", id: x.id, title: x.name, subtitle: x.client_name || x.status }));
-      (r.data ?? []).forEach((x) => rs.push({ type: "request", id: x.id, title: x.submitter_name || "Anônimo", subtitle: x.status }));
-      (f.data ?? []).forEach((x) => rs.push({ type: "form", id: x.id, title: x.title, subtitle: x.is_published ? "Publicado" : "Rascunho" }));
+      (t.data ?? []).forEach((x: any) => rs.push({ type: "task", id: x.id, title: x.title, subtitle: x.status }));
+      (p.data ?? []).forEach((x: any) => rs.push({ type: "process", id: x.id, title: x.name, subtitle: x.client_name || x.status }));
+      (r.data ?? []).forEach((x: any) => rs.push({ type: "request", id: x.id, title: x.submitter_name || "Anônimo", subtitle: x.status }));
+      (f.data ?? []).forEach((x: any) => rs.push({ type: "form", id: x.id, title: x.title, subtitle: x.is_published ? "Publicado" : "Rascunho" }));
       setResults(rs);
     };
     const id = setTimeout(run, 200);
     return () => { cancelled = true; clearTimeout(id); };
-  }, [q, open, workspaceId]);
+  }, [q, open, workspaceId, canViewModule]);
 
   const grouped = results.reduce<Record<ResultType, Result[]>>(
     (acc, r) => { (acc[r.type] ||= []).push(r); return acc; },
