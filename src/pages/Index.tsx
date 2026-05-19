@@ -14,6 +14,7 @@ import { AgendaPanel } from "@/components/agenda/AgendaPanel";
 import { GlobalSearch } from "@/components/shared/GlobalSearch";
 import { WorkspaceSwitcher } from "@/components/workspace/WorkspaceSwitcher";
 import { WorkspacesPanel } from "@/components/workspace/WorkspacesPanel";
+import { RequireModule, RequireOwner } from "@/components/auth/RequireModule";
 import {
   LogOut,
   CalendarClock,
@@ -219,24 +220,53 @@ const Index = () => {
             </header>
 
             {section === "today" && (
-              <TodayPanel date={today()} userId={user.id} />
+              <RequireModule module="hoje" onDenied={() => setSection("today")}>
+                <TodayPanel date={today()} userId={user.id} />
+              </RequireModule>
             )}
-            {section === "agenda" && <AgendaPanel userId={user.id} />}
+            {section === "agenda" && (
+              <RequireModule module="hoje" onDenied={() => setSection("today")}>
+                <AgendaPanel userId={user.id} />
+              </RequireModule>
+            )}
             {section === "schedule" && (
-              <SchedulePanel date={date} userId={user.id} tasks={tasks} />
+              <RequireModule module="cronograma" onDenied={() => setSection("today")}>
+                <SchedulePanel date={date} userId={user.id} tasks={tasks} />
+              </RequireModule>
             )}
             {(section === "tasks" || section === "done") && (
-              <TasksPanel
-                date={date}
-                userId={user.id}
-                filter={tasksFilter}
-                onTasksChange={setTasks}
-              />
+              <RequireModule
+                module={section === "done" ? "concluidas" : "tarefas"}
+                onDenied={() => setSection("today")}
+              >
+                <TasksPanel
+                  date={date}
+                  userId={user.id}
+                  filter={tasksFilter}
+                  onTasksChange={setTasks}
+                />
+              </RequireModule>
             )}
-            {section === "processes" && <ProcessesPanel userId={user.id} />}
-            {section === "forms" && <FormsPanel userId={user.id} />}
-            {section === "requests" && <RequestsPanel userId={user.id} />}
-            {section === "settings" && <WorkspacesPanel />}
+            {section === "processes" && (
+              <RequireModule module="processos" onDenied={() => setSection("today")}>
+                <ProcessesPanel userId={user.id} />
+              </RequireModule>
+            )}
+            {section === "forms" && (
+              <RequireModule module="formularios" onDenied={() => setSection("today")}>
+                <FormsPanel userId={user.id} />
+              </RequireModule>
+            )}
+            {section === "requests" && (
+              <RequireModule module="solicitacoes" onDenied={() => setSection("today")}>
+                <RequestsPanel userId={user.id} />
+              </RequireModule>
+            )}
+            {section === "settings" && (
+              <RequireOwner onDenied={() => setSection("today")}>
+                <WorkspacesPanel />
+              </RequireOwner>
+            )}
           </div>
         </div>
       </div>

@@ -95,6 +95,13 @@ export type Database = {
             referencedRelation: "forms"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "form_fields_form_id_fkey"
+            columns: ["form_id"]
+            isOneToOne: false
+            referencedRelation: "forms_public"
+            referencedColumns: ["id"]
+          },
         ]
       }
       form_responses: {
@@ -143,6 +150,13 @@ export type Database = {
             columns: ["form_id"]
             isOneToOne: false
             referencedRelation: "forms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "form_responses_form_id_fkey"
+            columns: ["form_id"]
+            isOneToOne: false
+            referencedRelation: "forms_public"
             referencedColumns: ["id"]
           },
         ]
@@ -675,7 +689,63 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      form_fields_public: {
+        Row: {
+          field_type: string | null
+          form_id: string | null
+          id: string | null
+          label: string | null
+          options: Json | null
+          position: number | null
+          required: boolean | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "form_fields_form_id_fkey"
+            columns: ["form_id"]
+            isOneToOne: false
+            referencedRelation: "forms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "form_fields_form_id_fkey"
+            columns: ["form_id"]
+            isOneToOne: false
+            referencedRelation: "forms_public"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      forms_public: {
+        Row: {
+          description: string | null
+          id: string | null
+          is_published: boolean | null
+          public_slug: string | null
+          title: string | null
+          user_id: string | null
+          workspace_id: string | null
+        }
+        Insert: {
+          description?: string | null
+          id?: string | null
+          is_published?: boolean | null
+          public_slug?: string | null
+          title?: string | null
+          user_id?: string | null
+          workspace_id?: string | null
+        }
+        Update: {
+          description?: string | null
+          id?: string | null
+          is_published?: boolean | null
+          public_slug?: string | null
+          title?: string | null
+          user_id?: string | null
+          workspace_id?: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       default_workspace_for: { Args: { _uid: string }; Returns: string }
