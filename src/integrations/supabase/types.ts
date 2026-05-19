@@ -287,6 +287,47 @@ export type Database = {
         }
         Relationships: []
       }
+      notifications: {
+        Row: {
+          created_at: string
+          id: string
+          message: string
+          read_at: string | null
+          task_id: string | null
+          title: string
+          user_id: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          message?: string
+          read_at?: string | null
+          task_id?: string | null
+          title: string
+          user_id: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          message?: string
+          read_at?: string | null
+          task_id?: string | null
+          title?: string
+          user_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notifications_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       process_steps: {
         Row: {
           completed_at: string | null
@@ -597,11 +638,71 @@ export type Database = {
         }
         Relationships: []
       }
+      task_reminders: {
+        Row: {
+          created_at: string
+          email_sent_at: string | null
+          id: string
+          in_app_created_at: string | null
+          notify_email: boolean
+          notify_in_app: boolean
+          offset_unit: string
+          offset_value: number
+          reminder_at: string
+          status: string
+          task_id: string
+          updated_at: string
+          user_id: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          email_sent_at?: string | null
+          id?: string
+          in_app_created_at?: string | null
+          notify_email?: boolean
+          notify_in_app?: boolean
+          offset_unit?: string
+          offset_value?: number
+          reminder_at: string
+          status?: string
+          task_id: string
+          updated_at?: string
+          user_id: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          email_sent_at?: string | null
+          id?: string
+          in_app_created_at?: string | null
+          notify_email?: boolean
+          notify_in_app?: boolean
+          offset_unit?: string
+          offset_value?: number
+          reminder_at?: string
+          status?: string
+          task_id?: string
+          updated_at?: string
+          user_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "task_reminders_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tasks: {
         Row: {
           created_at: string
           done: boolean
           due_date: string | null
+          due_time: string | null
           id: string
           is_recurring: boolean
           notes: string
@@ -623,6 +724,7 @@ export type Database = {
           created_at?: string
           done?: boolean
           due_date?: string | null
+          due_time?: string | null
           id?: string
           is_recurring?: boolean
           notes?: string
@@ -644,6 +746,7 @@ export type Database = {
           created_at?: string
           done?: boolean
           due_date?: string | null
+          due_time?: string | null
           id?: string
           is_recurring?: boolean
           notes?: string
