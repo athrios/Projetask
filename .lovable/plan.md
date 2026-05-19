@@ -1,154 +1,152 @@
-# Camada de segurança completa
+# Plano — Templates de Processo com tipo Tabela
 
-A maior parte do isolamento por `workspace_id` e RLS já está implementada nas rodadas anteriores. Este plano cobre apenas as **lacunas reais** ainda existentes, sem refazer o que já funciona.
-
----
-
-## 1. Banco / RLS (uma migração única)
-
-**1.1 Endurecer leitura pública de `form_fields`**
-Hoje a policy `public published fields read` expõe **todas** as colunas (`workspace_id`, `user_id`) para qualquer um que abra um formulário publicado. Vou:
-- Criar a view `public.form_fields_public` (`security_invoker=on`) expondo só `id, form_id, label, field_type, required, options, position`.
-- Trocar a policy de SELECT pública para `USING (false)` *apenas para anon* mantendo SELECT autenticado restrito a membros do workspace. Frontend público passa a ler da view.
-
-**1.2 Endurecer leitura pública de `forms`**
-Mesma ideia: criar view `forms_public` expondo apenas `id, title, description, is_published, public_slug, user_id, workspace_id` (user_id e workspace_id são necessários para o INSERT de resposta validar). Limitar a policy pública a `is_published = true` continua, mas via a view.
-
-**1.3 Policy faltando em `workspace_invitations`**
-Adicionar policy de UPDATE (`accepted_at`) para o convidado pelo email do JWT (`auth.jwt() ->> 'email' = email`).
-
-**1.4 Confirmar trigger `autofill_workspace_id`**
-Garantir trigger BEFORE INSERT ativo em todas as tabelas com `workspace_id` (tasks, subtasks, schedule_items, processes, process_steps, process_templates, process_template_steps, forms, form_fields). Já existem as funções; vou só anexar onde faltar.
-
-**1.5 `activity_logs`**
-Já tem RLS por membership. Sem mudança.
-
-**1.6 Soft delete em `workspaces`**
-Já existe `archived_at`. Adicionar policy de UPDATE de `archived_at` restrita ao owner (já coberta pela policy genérica de owner). Sem nova migração.
+Adicionar suporte a **dois tipos** de modelo de processo: `tasks` (atual, intocado) e `table` (novo, planilha simples). Implementação incremental, sem quebrar o que já existe.
 
 ---
 
-## 2. Frontend — guards de rota e UI
+## 1. Banco de dados (1 migração)
 
-**2.1 `<RequireModule module="...">`** — novo wrapper em `src/components/auth/RequireModule.tsx`.
-Se `canViewModule(m) === false`, redireciona para `today` e mostra toast "Sem permissão". Aplicado em `Index.tsx` antes de renderizar cada Panel.
-
-**2.2 Settings/Ambientes só para master**
-`Index.tsx` já filtra via `isOwnerOfAny`. Adicionar dupla checagem dentro de `WorkspacesPanel` (redirect se não-owner).
-
-**2.3 Esconder ações conforme permissão**
-Revisar `TasksPanel`, `ProcessesPanel`, `FormsPanel`, `RequestsPanel`: botões de criar/editar/excluir só renderizam quando `can(module, 'create'|'edit'|'delete')`. RLS já é o backstop; isto é só UX.
-
----
-
-## 3. PublicForm — endurecer
-
-- Ler de `forms_public` e `form_fields_public` (sem expor colunas internas).
-- Validar com zod no submit: `submitter_name` 1–120 chars, cada campo texto ≤ 5000 chars, multi_select array ≤ 50 itens.
-- Sanitizar strings com trim e remover caracteres de controle.
-- Texto de descrição e label já são renderizados como texto (React escapa). Manter.
-- Nome do arquivo já é sanitizado; manter limite 20MB.
-- Sem leitura de `localStorage` aqui (já está OK).
-
----
-
-## 4. Validação centralizada (zod)
-
-Novo `src/lib/validation.ts` com schemas reutilizáveis:
-- `workspaceNameSchema` (1–80)
-- `taskTitleSchema` (1–200), `notesSchema` (≤ 5000)
-- `processNameSchema`, `stepTitleSchema`
-- `formTitleSchema`, `fieldLabelSchema`, `optionSchema`
-- `memberEmailSchema`
-
-Aplicar nos diálogos de criação/edição (CreateWorkspaceDialog, TasksPanel inputs, ProcessesPanel, FormsPanel, WorkspacesPanel invites). Erros via `toast.error`.
-
----
-
-## 5. XSS / renderização
-
-Auditoria do código: o único `dangerouslySetInnerHTML` está em `ui/chart.tsx` (CSS interno, sem input de usuário). Nenhuma ação. Confirmar que `notes`, `description`, `submitter_name` são sempre renderizados como `{value}` ou via `whitespace-pre-wrap` (texto, não HTML). Já está.
-
----
-
-## 6. Busca global
-
-`GlobalSearch` já filtra por `workspace_id`. Adicionar filtro extra por permissão: se `!canViewModule('processos')`, pular query de `processes`; idem para `solicitacoes` e `formularios`. Pequeno ajuste em `GlobalSearch.tsx` (receber `can` do hook).
-
----
-
-## 7. Logs de auditoria
-
-`activityLog.ts` já registra eventos. Adicionar chamadas em pontos faltantes:
-- `WorkspacesPanel`: criar/arquivar workspace, adicionar/remover membro, alterar permissões.
-- `FormsPanel`: publicar/despublicar.
-- `RequestsPanel`: conversão de resposta em tarefa/processo (verificar — pode já existir).
-- `ProcessesPanel`: mudança de status do processo.
-
----
-
-## 8. Exclusões com confirmação
-
-Garantir `AlertDialog` antes de excluir em: workspace, formulário, processo, modelo, tarefa com subtarefas, resposta. Maioria já tem; cobrir os que faltarem após varredura rápida nos painéis.
-
----
-
-## 9. LocalStorage
-
-Auditado:
-- `activeWorkspaceId` — preferência, OK.
-- `tasksHiddenStatuses`, `tasksView` — UI, OK.
-- Sessão Supabase — normal.
-Nenhum dado sensível. Sem ação.
-
----
-
-## Arquivos a criar/editar
-
-**Criar**
-- `supabase/migrations/<ts>_security_hardening.sql`
-- `src/components/auth/RequireModule.tsx`
-- `src/lib/validation.ts`
-
-**Editar**
-- `src/pages/Index.tsx` (aplicar `RequireModule`)
-- `src/pages/PublicForm.tsx` (usar views, zod)
-- `src/components/shared/GlobalSearch.tsx` (filtro por permissão)
-- `src/components/workspace/CreateWorkspaceDialog.tsx`, `WorkspacesPanel.tsx`
-- `src/components/TasksPanel.tsx`, `processes/ProcessesPanel.tsx`, `forms/FormsPanel.tsx`, `requests/RequestsPanel.tsx` (zod + audit logs + guards de botão)
-- `src/lib/activityLog.ts` (helpers extras se faltarem)
-
----
-
-## Detalhes técnicos da migração
+Manter tudo simples com JSONB. Sem tabelas novas.
 
 ```sql
--- 1. Views públicas
-CREATE OR REPLACE VIEW public.forms_public WITH (security_invoker=on) AS
-  SELECT id, user_id, workspace_id, title, description, is_published, public_slug
-  FROM public.forms WHERE is_published = true;
+ALTER TABLE process_templates
+  ADD COLUMN template_type text NOT NULL DEFAULT 'tasks',
+  ADD COLUMN table_schema jsonb NOT NULL DEFAULT '{"columns":[],"rows":[]}'::jsonb;
 
-CREATE OR REPLACE VIEW public.form_fields_public WITH (security_invoker=on) AS
-  SELECT ff.id, ff.form_id, ff.label, ff.field_type, ff.required, ff.options, ff.position
-  FROM public.form_fields ff
-  JOIN public.forms f ON f.id = ff.form_id AND f.is_published = true;
+ALTER TABLE processes
+  ADD COLUMN template_type text NOT NULL DEFAULT 'tasks',
+  ADD COLUMN table_data jsonb NOT NULL DEFAULT '{"columns":[],"rows":[]}'::jsonb;
 
-GRANT SELECT ON public.forms_public, public.form_fields_public TO anon, authenticated;
+-- Validação
+CREATE OR REPLACE FUNCTION validate_template_type() RETURNS trigger AS $$
+BEGIN
+  IF NEW.template_type NOT IN ('tasks','table') THEN
+    RAISE EXCEPTION 'invalid template_type: %', NEW.template_type;
+  END IF;
+  RETURN NEW;
+END $$ LANGUAGE plpgsql SET search_path=public;
 
--- 2. Restringir SELECT direto público a usuários autenticados membros
-DROP POLICY "public published forms read" ON public.forms;
-DROP POLICY "public published fields read" ON public.form_fields;
--- (views acima cobrem o caso público; tabelas-base ficam só com policies de workspace)
-
--- 3. Convite — aceitar
-CREATE POLICY "invitee accepts" ON public.workspace_invitations
-FOR UPDATE TO authenticated
-USING (lower(email) = lower(auth.jwt() ->> 'email'))
-WITH CHECK (lower(email) = lower(auth.jwt() ->> 'email'));
+CREATE TRIGGER process_templates_type BEFORE INSERT OR UPDATE ON process_templates
+  FOR EACH ROW EXECUTE FUNCTION validate_template_type();
+CREATE TRIGGER processes_type BEFORE INSERT OR UPDATE ON processes
+  FOR EACH ROW EXECUTE FUNCTION validate_template_type();
 ```
+
+Modelos e processos antigos ficam automaticamente com `template_type = 'tasks'` pelo `DEFAULT`. RLS e `workspace_id` continuam valendo sem mudança (as colunas novas estão nas mesmas tabelas).
+
+**Formato do JSON da tabela:**
+```json
+{
+  "columns": [
+    { "id": "A", "label": "Descrição", "kind": "text"  },
+    { "id": "B", "label": "Valor",     "kind": "number"},
+    { "id": "C", "label": "Observação","kind": "text"  }
+  ],
+  "rows": [
+    { "id": "r1", "cells": { "A": "Honorários", "B": "500", "C": "Pago" } },
+    { "id": "r2", "cells": { "A": "Total", "B": "=SOMA(B1:B1)", "C": "" } }
+  ]
+}
+```
+Referências de fórmula usam **letra da coluna + índice 1-based da linha** (independente do `id` interno).
 
 ---
 
-## Critério de aceite (validação após aplicação)
+## 2. Engine de fórmulas (`src/lib/sheetFormula.ts`)
 
-Rodar `supabase--linter`, criar 2 workspaces de teste com usuários distintos via console, e verificar manualmente os 13 cenários listados pelo usuário.
+Sem `eval`. Parser próprio mínimo e seguro:
+
+- Detecta `=` no início da célula.
+- Tokens permitidos: números, refs `[A-Z]+\d+`, ranges `REF:REF`, operadores `+ - * /`, parênteses, funções `SOMA|SUM|MEDIA|AVERAGE`.
+- Avaliação por shunting-yard → RPN.
+- Refs vazias = 0; texto em célula referenciada num cálculo numérico = 0.
+- Detecção de ciclo via set de células em avaliação → retorna `#CICLO`.
+- Erros retornam `#ERRO` (mostrado discreto na célula) com tooltip da mensagem.
+- Recalcula tudo a cada edição (tabelas pequenas; barato).
+
+Tests: `src/test/sheetFormula.test.ts` cobrindo +, -, *, /, SOMA/SUM, MEDIA/AVERAGE, ref vazia, ciclo, fórmula inválida.
+
+---
+
+## 3. Frontend — modelo
+
+**`ProcessesPanel.tsx`** (diálogo Criar/Editar modelo):
+- Adicionar `<Select>` "Tipo de modelo" com opções `Tarefas` / `Tabela`.
+- Se `tasks`: UI atual (etapas).
+- Se `table`: renderizar `<TableBuilder />` (novo componente) operando sobre `table_schema`.
+
+**Novo `src/components/processes/TableBuilder.tsx`:**
+- Adicionar/remover/renomear coluna (label + kind text|number).
+- Adicionar/remover linha.
+- Editar células (inputs em linha, mesmo visual leve).
+- Preview de fórmulas usando o engine.
+- Validação (zod): máx 50 colunas, máx 500 linhas, label ≤ 60 chars, célula ≤ 1000 chars.
+
+---
+
+## 4. Frontend — criação de processo
+
+Ao criar processo a partir de um modelo:
+- Se `template_type = 'tasks'`: fluxo atual (cria `process_steps` a partir dos `process_template_steps`).
+- Se `table'`: copiar `template.table_schema` para `processes.table_data` (deep clone), não criar steps.
+
+---
+
+## 5. Frontend — detalhe do processo
+
+Reaproveitar o drawer atual. Switch por `template_type`:
+
+- `tasks` → componente atual (etapas).
+- `table` → novo `<ProcessTableView />`:
+  - Cabeçalho: nome do processo, nome do modelo, `<StatusPill>` editável, botões **Salvar**, **Adicionar linha**, **Adicionar coluna**.
+  - Grid: cabeçalho de colunas + linhas numeradas (1, 2, 3…) + células editáveis. Células de fórmula mostram valor calculado; ao focar, mostra a fórmula crua.
+  - Visual: bordas suaves (`border-border`), `bg-card`, células alinhadas, sem peso visual de formulário (inspirado em Notion/Sheets).
+  - Salvar = `UPDATE processes SET table_data = ...`.
+
+**Status automático:**
+- Criação: `nao_iniciado` (default já existente).
+- Primeira edição salva com células preenchidas: passa a `em_andamento` (se ainda estava `nao_iniciado`).
+- Usuário pode marcar `concluido` ou `cancelado` manualmente pelo StatusPill.
+
+**Card do processo:** adicionar badge pequena "Tabela" quando `template_type='table'`. Mantém cor do modelo.
+
+---
+
+## 6. Permissões / Ambientes
+
+Sem mudança de regra. As colunas novas ficam nas tabelas `process_templates` e `processes` que já têm RLS por `workspace_id` + `has_workspace_permission('processos', ...)`. O autofill de `workspace_id` continua funcionando.
+
+`GlobalSearch` e listagens já filtram por workspace — sem alteração.
+
+---
+
+## 7. Arquivos
+
+**Migração**
+- `supabase/migrations/<ts>_process_template_types.sql`
+
+**Criar**
+- `src/lib/sheetFormula.ts` (parser + avaliador + helpers de letra→índice)
+- `src/components/processes/TableBuilder.tsx` (editor de schema no modelo)
+- `src/components/processes/ProcessTableView.tsx` (tabela no processo)
+- `src/test/sheetFormula.test.ts`
+
+**Editar**
+- `src/components/processes/ProcessesPanel.tsx`
+  - Tipos `Template` e `Process` ganham `template_type` e payload de tabela.
+  - Diálogo de modelo com seletor de tipo + render condicional.
+  - Criação de processo: branch tasks vs table.
+  - Drawer/detalhe: branch tasks vs table.
+  - Card: badge de tipo.
+- `src/lib/validation.ts` — schemas `tableColumnSchema`, `tableCellSchema`.
+- `src/integrations/supabase/types.ts` — atualizado automaticamente pela migração.
+
+---
+
+## 8. Critérios de aceite
+
+1. Modelo Tarefas existente continua funcionando idêntico ao atual.
+2. Criar modelo Tabela "Apuração mensal" com colunas Descrição/Valor/Observação, linhas, fórmula `=SOMA(B1:B3)` → salva e recalcula.
+3. Criar processo a partir desse modelo → tabela independente; editar processo não altera o modelo.
+4. Trocar de workspace esconde modelos e processos do outro ambiente.
+5. Permissões de Processos (view/create/edit/delete) aplicam-se ao novo tipo.
