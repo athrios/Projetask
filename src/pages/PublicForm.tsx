@@ -54,17 +54,16 @@ const PublicForm = () => {
     if (!slug) return;
     (async () => {
       const { data } = await supabase
-        .from("forms")
+        .from("forms_public" as never)
         .select("id,user_id,workspace_id,title,description,is_published")
         .eq("public_slug", slug)
-        .eq("is_published", true)
         .maybeSingle();
       if (!data) { setLoading(false); return; }
       setForm(data as Form);
       const { data: fs } = await supabase
-        .from("form_fields")
-        .select("*")
-        .eq("form_id", data.id)
+        .from("form_fields_public" as never)
+        .select("id,form_id,label,field_type,required,options,position")
+        .eq("form_id", (data as Form).id)
         .order("position", { ascending: true });
       setFields((fs ?? []) as Field[]);
       setLoading(false);
@@ -74,13 +73,24 @@ const PublicForm = () => {
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form) return;
-    if (!name.trim()) return toast.error("Informe seu nome");
-    if (name.length > 120) return toast.error("Nome muito longo");
+    const nameParsed = safeParse(submitterNameSchema, name);
+    if (!nameParsed.ok) return toast.error(nameParsed.error);
+    const cleanValues: Record<string, unknown> = {};
     for (const f of fields) {
       const v = values[f.label];
       const empty = v === undefined || v === null || v === "" || (Array.isArray(v) && v.length === 0);
       if (f.required && empty) {
         return toast.error(`Preencha "${f.label}"`);
+      }
+      if (typeof v === "string") {
+        const r = safeParse(publicTextAnswerSchema, v);
+        if (!r.ok) return toast.error(`${f.label}: ${r.error}`);
+        cleanValues[f.label] = r.value;
+      } else if (Array.isArray(v)) {
+        if (v.length > 50) return toast.error(`${f.label}: máximo 50 itens`);
+        cleanValues[f.label] = v.slice(0, 50).map((x) => (typeof x === "string" ? x.slice(0, 200) : x));
+      } else {
+        cleanValues[f.label] = v;
       }
     }
     setSubmitting(true);
