@@ -80,6 +80,9 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useWorkspace } from "@/hooks/useWorkspace";
+import { TaskReminderEditor } from "@/components/notifications/TaskReminderEditor";
+import { BellRing } from "lucide-react";
+
 
 export interface Task {
   id: string;
@@ -98,6 +101,8 @@ export interface Task {
   parent_recurring_task_id?: string | null;
   source_type?: "manual" | "request" | "process";
   source_id?: string | null;
+  due_time?: string | null;
+
 }
 
 interface Subtask {
@@ -632,6 +637,8 @@ export const TasksPanel = ({
 
   const [historyId, setHistoryId] = useState<string | null>(null);
   const [recurEditingId, setRecurEditingId] = useState<string | null>(null);
+  const [reminderTaskId, setReminderTaskId] = useState<string | null>(null);
+
 
   const RowActions = ({ t }: { t: Task }) => (
     <div className="flex items-center gap-0.5">
@@ -657,9 +664,13 @@ export const TasksPanel = ({
           <DropdownMenuItem onClick={() => setRecurEditingId(t.id)}>
             <Repeat className="h-3.5 w-3.5 mr-2" /> Recorrência
           </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => setReminderTaskId(t.id)}>
+            <BellRing className="h-3.5 w-3.5 mr-2" /> Alertas
+          </DropdownMenuItem>
           <DropdownMenuItem onClick={() => setHistoryId(t.id)}>
             <History className="h-3.5 w-3.5 mr-2" /> Histórico
           </DropdownMenuItem>
+
           <DropdownMenuItem onClick={() => remove(t.id)} className="text-destructive">
             <Trash2 className="h-3.5 w-3.5 mr-2" /> Remover
           </DropdownMenuItem>

@@ -63,6 +63,12 @@ export const AgendaPanel = ({ userId: _userId }: Props) => {
 
   const today = todayISO();
 
+  const monthLabel = useMemo(() => {
+    const d = new Date(anchor + "T00:00:00");
+    const s = d.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
+    return s.charAt(0).toUpperCase() + s.slice(1);
+  }, [anchor]);
+
   const range = useMemo(() => {
     const a = new Date(anchor + "T00:00:00");
     if (view === "day") return [isoOf(a)];
@@ -81,6 +87,7 @@ export const AgendaPanel = ({ userId: _userId }: Props) => {
     for (let i = 1; i <= last.getDate(); i++) days.push(isoOf(new Date(first.getFullYear(), first.getMonth(), i)));
     return days;
   }, [anchor, view]);
+
 
   const dateOf = (t: AgendaTask) => t.due_date ?? t.task_date;
   const overdueTasks = tasks.filter((t) => !t.done && t.due_date && t.due_date < today);
@@ -116,12 +123,16 @@ export const AgendaPanel = ({ userId: _userId }: Props) => {
             </button>
           ))}
         </div>
-        <div className="flex items-center gap-1">
-          <Button size="sm" variant="outline" onClick={() => shift(-1)} className="h-8 px-2">‹</Button>
-          <Button size="sm" variant="outline" onClick={() => setAnchor(today)} className="h-8 text-xs">Hoje</Button>
-          <Button size="sm" variant="outline" onClick={() => shift(1)} className="h-8 px-2">›</Button>
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium text-foreground/80 tabular-nums px-1">{monthLabel}</span>
+          <div className="flex items-center gap-1">
+            <Button size="sm" variant="outline" onClick={() => shift(-1)} className="h-8 px-2">‹</Button>
+            <Button size="sm" variant="outline" onClick={() => setAnchor(today)} className="h-8 text-xs">Hoje</Button>
+            <Button size="sm" variant="outline" onClick={() => shift(1)} className="h-8 px-2">›</Button>
+          </div>
         </div>
       </div>
+
 
       {overdueTasks.length > 0 && (
         <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-3">
