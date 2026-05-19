@@ -69,8 +69,8 @@ const PublicForm = () => {
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form) return;
-    const nameParsed = safeParse(submitterNameSchema, name);
-    if (!nameParsed.ok) return toast.error(nameParsed.error);
+    const nameParsed = submitterNameSchema.safeParse(name);
+    if (!nameParsed.success) return toast.error(nameParsed.error.issues[0]?.message ?? "Nome inválido");
     const cleanValues: Record<string, unknown> = {};
     for (const f of fields) {
       const v = values[f.label];
@@ -79,9 +79,9 @@ const PublicForm = () => {
         return toast.error(`Preencha "${f.label}"`);
       }
       if (typeof v === "string") {
-        const r = safeParse(publicTextAnswerSchema, v);
-        if (!r.ok) return toast.error(`${f.label}: ${r.error}`);
-        cleanValues[f.label] = r.value;
+        const r = publicTextAnswerSchema.safeParse(v);
+        if (!r.success) return toast.error(`${f.label}: ${r.error.issues[0]?.message ?? "inválido"}`);
+        cleanValues[f.label] = r.data;
       } else if (Array.isArray(v)) {
         if (v.length > 50) return toast.error(`${f.label}: máximo 50 itens`);
         cleanValues[f.label] = v.slice(0, 50).map((x) => (typeof x === "string" ? x.slice(0, 200) : x));
