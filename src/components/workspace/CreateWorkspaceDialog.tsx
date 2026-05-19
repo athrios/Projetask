@@ -30,12 +30,13 @@ export const CreateWorkspaceDialog = ({ open, onOpenChange }: Props) => {
   const [saving, setSaving] = useState(false);
 
   const submit = async () => {
-    const n = name.trim();
-    if (!n || !user) return toast.error("Nome obrigatório");
+    const parsed = (await import("@/lib/validation")).workspaceNameSchema.safeParse(name);
+    if (!parsed.success) return toast.error(parsed.error.issues[0]?.message ?? "Nome inválido");
+    if (!user) return toast.error("Sessão expirada");
     setSaving(true);
     const { data, error } = await supabase
       .from("workspaces")
-      .insert({ owner_id: user.id, name: n, color })
+      .insert({ owner_id: user.id, name: parsed.data, color })
       .select("id")
       .single();
     setSaving(false);
