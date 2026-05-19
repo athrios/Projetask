@@ -219,32 +219,44 @@ const CellInput = ({
       </div>
     );
   }
+  return <EditableCell raw={raw} display={display} error={error} isFormula={isFormula} kind={kind} onCommit={onCommit} />;
+};
+
+import { useState, useRef, useEffect } from "react";
+
+const EditableCell = ({
+  raw, display, error, isFormula, kind, onCommit,
+}: {
+  raw: string; display: string; error?: string; isFormula: boolean;
+  kind?: "text" | "number"; onCommit: (v: string) => void;
+}) => {
+  const [focused, setFocused] = useState(false);
+  const [draft, setDraft] = useState(raw);
+  const inputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => { if (!focused) setDraft(raw); }, [raw, focused]);
+  const shown = focused ? draft : (isFormula ? display : raw);
   return (
     <input
+      ref={inputRef}
       type="text"
-      defaultValue={raw}
-      onBlur={(e) => {
-        if (e.target.value !== raw) onCommit(e.target.value);
+      value={shown}
+      onChange={(e) => setDraft(e.target.value)}
+      onFocus={() => { setDraft(raw); setFocused(true); }}
+      onBlur={() => {
+        setFocused(false);
+        if (draft !== raw) onCommit(draft);
       }}
       onKeyDown={(e) => {
-        if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+        if (e.key === "Enter") inputRef.current?.blur();
+        if (e.key === "Escape") { setDraft(raw); inputRef.current?.blur(); }
       }}
       className={cn(
         "w-full px-2 py-1.5 text-sm bg-transparent outline-none focus:bg-accent/30 focus:ring-1 focus:ring-ring",
         kind === "number" && "text-right tabular-nums",
-        isFormula && "text-primary",
+        !focused && isFormula && "text-primary",
         error && "text-destructive",
       )}
-      title={error || (isFormula ? `Calculado: ${display}` : undefined)}
-      // show calculated value when not focused
-      onFocus={(e) => {
-        e.target.value = raw;
-      }}
-      ref={(el) => {
-        if (el && document.activeElement !== el) {
-          el.value = isFormula ? display : raw;
-        }
-      }}
+      title={error || (isFormula ? `Fórmula: ${raw} = ${display}` : undefined)}
     />
   );
 };
