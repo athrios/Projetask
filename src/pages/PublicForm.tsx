@@ -94,8 +94,8 @@ const PublicForm = () => {
       form_id: form.id,
       owner_id: form.user_id,
       workspace_id: form.workspace_id,
-      submitter_name: name.trim(),
-      data: values as never,
+      submitter_name: nameParsed.data,
+      data: cleanValues as never,
       status: "recebida",
     });
     setSubmitting(false);
