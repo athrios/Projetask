@@ -769,6 +769,7 @@ const TemplateManager = ({
             {templates.map((t) => {
               const steps = stepsByTpl[t.id] ?? [];
               const tplColor = asColor(t.color);
+              const kind: TemplateKind = (t.template_type ?? "tasks") as TemplateKind;
               return (
                 <div key={t.id} className={cn("rounded-lg border p-3 space-y-2 border-l-4", colorLeftBorder[tplColor])}>
                   <div className="flex items-center justify-between gap-2">
@@ -781,6 +782,9 @@ const TemplateManager = ({
                       >
                         {t.name}
                       </span>
+                      <span className="inline-flex items-center rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                        {kind === "table" ? "Tabela" : "Tarefas"}
+                      </span>
                     </div>
                     <button onClick={() => removeTpl(t.id)} className="text-muted-foreground hover:text-destructive">
                       <Trash2 className="h-3.5 w-3.5" />
@@ -788,48 +792,64 @@ const TemplateManager = ({
                   </div>
                   <ColorSwatchPicker value={tplColor} onChange={(c) => updateTplColor(t.id, c)} />
 
-                  <ol className="space-y-1 text-sm">
-                    {steps.map((s, i) => (
-                      <li key={s.id} className="flex items-center gap-2 group">
-                        <span className="text-xs text-muted-foreground w-5">{i + 1}.</span>
-                        <span className="flex-1 truncate">{s.title}</span>
+                  {kind === "table" ? (
+                    <div className="space-y-2">
+                      <SheetEditor
+                        value={tableDraft[t.id] ?? t.table_schema ?? emptyTable()}
+                        onChange={(v) => setTableDraft((p) => ({ ...p, [t.id]: v }))}
+                      />
+                      <div className="flex justify-end">
+                        <Button size="sm" onClick={() => saveTableSchema(t.id)}>
+                          Salvar tabela do modelo
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <ol className="space-y-1 text-sm">
+                        {steps.map((s, i) => (
+                          <li key={s.id} className="flex items-center gap-2 group">
+                            <span className="text-xs text-muted-foreground w-5">{i + 1}.</span>
+                            <span className="flex-1 truncate">{s.title}</span>
+                            <Input
+                              type="number"
+                              min={0}
+                              defaultValue={s.due_offset_days ?? 0}
+                              onBlur={async (e) => {
+                                const v = Math.max(0, Number(e.target.value) || 0);
+                                await supabase.from("process_template_steps")
+                                  .update({ due_offset_days: v } as never).eq("id", s.id);
+                                loadSteps();
+                              }}
+                              className="h-7 w-20 text-xs"
+                              title="Prazo em dias após o início do processo"
+                            />
+                            <span className="text-[11px] text-muted-foreground">dias</span>
+                            <button
+                              onClick={() => removeStep(s.id)}
+                              className="text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100"
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </button>
+                          </li>
+                        ))}
+                      </ol>
+                      <form
+                        className="flex gap-2"
+                        onSubmit={(e) => { e.preventDefault(); addStep(t.id); }}
+                      >
                         <Input
-                          type="number"
-                          min={0}
-                          defaultValue={s.due_offset_days ?? 0}
-                          onBlur={async (e) => {
-                            const v = Math.max(0, Number(e.target.value) || 0);
-                            await supabase.from("process_template_steps")
-                              .update({ due_offset_days: v } as never).eq("id", s.id);
-                            loadSteps();
-                          }}
-                          className="h-7 w-20 text-xs"
-                          title="Prazo em dias após o início do processo"
+                          value={stepInput[t.id] ?? ""}
+                          onChange={(e) => setStepInput((p) => ({ ...p, [t.id]: e.target.value }))}
+                          placeholder="Adicionar etapa…"
+                          className="h-8 text-sm"
                         />
-                        <span className="text-[11px] text-muted-foreground">dias</span>
-                        <button
-                          onClick={() => removeStep(s.id)}
-                          className="text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100"
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </button>
-                      </li>
-                    ))}
-                  </ol>
-                  <form
-                    className="flex gap-2"
-                    onSubmit={(e) => { e.preventDefault(); addStep(t.id); }}
-                  >
-                    <Input
-                      value={stepInput[t.id] ?? ""}
-                      onChange={(e) => setStepInput((p) => ({ ...p, [t.id]: e.target.value }))}
-                      placeholder="Adicionar etapa…"
-                      className="h-8 text-sm"
-                    />
-                    <Button type="submit" size="sm" variant="outline">
-                      <Plus className="h-3.5 w-3.5" />
-                    </Button>
-                  </form>
+                        <Button type="submit" size="sm" variant="outline">
+                          <Plus className="h-3.5 w-3.5" />
+                        </Button>
+                      </form>
+                    </>
+                  )}
                 </div>
               );
             })}
