@@ -218,6 +218,7 @@ const Index = () => {
                   className="w-auto h-9"
                 />
               )}
+              <NotificationsBell onOpenTask={() => setSection("tasks")} />
             </header>
 
             {section === "today" && (
