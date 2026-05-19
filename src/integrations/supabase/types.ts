@@ -304,6 +304,8 @@ export type Database = {
           description: string
           id: string
           name: string
+          table_schema: Json
+          template_type: string
           user_id: string
           workspace_id: string | null
         }
@@ -313,6 +315,8 @@ export type Database = {
           description?: string
           id?: string
           name: string
+          table_schema?: Json
+          template_type?: string
           user_id: string
           workspace_id?: string | null
         }
@@ -322,6 +326,8 @@ export type Database = {
           description?: string
           id?: string
           name?: string
+          table_schema?: Json
+          template_type?: string
           user_id?: string
           workspace_id?: string | null
         }
@@ -336,7 +342,9 @@ export type Database = {
           name: string
           notes: string
           status: string
+          table_data: Json
           template_id: string | null
+          template_type: string
           updated_at: string
           user_id: string
           workspace_id: string | null
@@ -349,7 +357,9 @@ export type Database = {
           name: string
           notes?: string
           status?: string
+          table_data?: Json
           template_id?: string | null
+          template_type?: string
           updated_at?: string
           user_id: string
           workspace_id?: string | null
@@ -362,7 +372,9 @@ export type Database = {
           name?: string
           notes?: string
           status?: string
+          table_data?: Json
           template_id?: string | null
+          template_type?: string
           updated_at?: string
           user_id?: string
           workspace_id?: string | null

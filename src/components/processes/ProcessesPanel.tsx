@@ -40,11 +40,18 @@ import {
   type TemplateColor,
 } from "./templateColors";
 
+import { SheetEditor, emptyTable } from "./SheetEditor";
+import type { TableData } from "@/lib/sheetFormula";
+
+type TemplateKind = "tasks" | "table";
+
 interface Template {
   id: string;
   name: string;
   description: string;
   color?: string;
+  template_type?: TemplateKind;
+  table_schema?: TableData;
   steps?: TmplStep[];
 }
 interface TmplStep {
@@ -63,6 +70,8 @@ interface Process {
   due_date: string | null;
   notes: string;
   created_at?: string;
+  template_type?: TemplateKind;
+  table_data?: TableData;
 }
 interface Step {
   id: string;
@@ -97,8 +106,8 @@ export const ProcessesPanel = ({ userId }: Props) => {
     ]);
     if (t.error) return toast.error(t.error.message);
     if (p.error) return toast.error(p.error.message);
-    setTemplates((t.data ?? []) as Template[]);
-    const procs = (p.data ?? []) as Process[];
+    setTemplates((t.data ?? []) as unknown as Template[]);
+    const procs = (p.data ?? []) as unknown as Process[];
     let grouped: Record<string, Step[]> = {};
     if (procs.length) {
       const { data: s } = await supabase
@@ -115,7 +124,9 @@ export const ProcessesPanel = ({ userId }: Props) => {
 
     const normalized = procs.map((proc) => ({
       ...proc,
-      status: computeProcessStatus(proc.status, grouped[proc.id] ?? []),
+      status: proc.template_type === "table"
+        ? proc.status
+        : computeProcessStatus(proc.status, grouped[proc.id] ?? []),
     }));
     setProcesses(normalized);
     if (openProc) {
@@ -138,6 +149,10 @@ export const ProcessesPanel = ({ userId }: Props) => {
   const createProcess = async (templateId: string | null, name: string, dueDate: string | null) => {
     if (!workspaceId) return toast.error("Selecione um ambiente");
     const tpl = templates.find((t) => t.id === templateId);
+    const isTable = tpl?.template_type === "table";
+    const tableData = isTable
+      ? JSON.parse(JSON.stringify(tpl?.table_schema ?? emptyTable()))
+      : emptyTable();
     const { data: proc, error } = await supabase
       .from("processes")
       .insert({
@@ -147,12 +162,14 @@ export const ProcessesPanel = ({ userId }: Props) => {
         template_id: templateId,
         status: "nao_iniciado",
         due_date: dueDate,
-      })
+        template_type: isTable ? "table" : "tasks",
+        table_data: tableData,
+      } as never)
       .select()
       .single();
     if (error || !proc) return toast.error(error?.message ?? "Erro");
 
-    if (templateId) {
+    if (templateId && !isTable) {
       const { data: tmplSteps, error: stepsError } = await supabase
         .from("process_template_steps")
         .select("*")
@@ -241,17 +258,23 @@ export const ProcessesPanel = ({ userId }: Props) => {
         </div>
       )}
 
-      {openProc && (
+      {openProc && openProc.template_type === "table" ? (
+        <ProcessTableDetail
+          process={openProc}
+          templateName={templates.find((t) => t.id === openProc.template_id)?.name ?? null}
+          userId={userId}
+          onClose={() => setOpenProc(null)}
+          onChanged={() => load()}
+        />
+      ) : openProc ? (
         <ProcessDetail
           process={openProc}
           steps={stepsByProc[openProc.id] ?? []}
           userId={userId}
           onClose={() => setOpenProc(null)}
-          onChanged={() => {
-            load();
-          }}
+          onChanged={() => load()}
         />
-      )}
+      ) : null}
     </div>
   );
 };
@@ -398,14 +421,21 @@ const ProcessCard = ({
     >
       <div className="flex items-start justify-between gap-2">
         <div className="flex-1 min-w-0 space-y-1.5">
-          <span
-            className={cn(
-              "inline-flex items-center max-w-full truncate rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide",
-              colorPill[templateColor],
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span
+              className={cn(
+                "inline-flex items-center max-w-full truncate rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide",
+                colorPill[templateColor],
+              )}
+            >
+              {templateName ?? "Processo avulso"}
+            </span>
+            {p.template_type === "table" && (
+              <span className="inline-flex items-center rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                Tabela
+              </span>
             )}
-          >
-            {templateName ?? "Processo avulso"}
-          </span>
+          </div>
           <h4 className="text-sm font-semibold truncate">{p.name}</h4>
           {p.client_name && (
             <p className="text-xs text-muted-foreground truncate">{p.client_name}</p>
@@ -414,26 +444,35 @@ const ProcessCard = ({
         <StatusPill domain="process" value={p.status} size="xs" />
       </div>
       <div className="mt-3 space-y-2">
-        <div className="flex items-center gap-2">
-          <div className="h-1.5 flex-1 rounded-full bg-muted overflow-hidden">
-            <div className="h-full bg-foreground/70" style={{ width: `${pct}%` }} />
-          </div>
-          <span className="text-[11px] text-muted-foreground tabular-nums">
-            {done}/{total}
-          </span>
-        </div>
-        {current && (
-          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <ChevronRight className="h-3 w-3" />
-            <span className="shrink-0">Etapa atual:</span>
-            <span className="truncate">{current.title}</span>
-          </div>
+        {p.template_type !== "table" && (
+          <>
+            <div className="flex items-center gap-2">
+              <div className="h-1.5 flex-1 rounded-full bg-muted overflow-hidden">
+                <div className="h-full bg-foreground/70" style={{ width: `${pct}%` }} />
+              </div>
+              <span className="text-[11px] text-muted-foreground tabular-nums">
+                {done}/{total}
+              </span>
+            </div>
+            {current && (
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <ChevronRight className="h-3 w-3" />
+                <span className="shrink-0">Etapa atual:</span>
+                <span className="truncate">{current.title}</span>
+              </div>
+            )}
+            {currentNote && (
+              <div className="rounded-md bg-muted/40 px-2 py-1.5">
+                <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Observação</p>
+                <p className="text-xs text-foreground/80 line-clamp-2 break-words">{currentNote}</p>
+              </div>
+            )}
+          </>
         )}
-        {currentNote && (
-          <div className="rounded-md bg-muted/40 px-2 py-1.5">
-            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Observação</p>
-            <p className="text-xs text-foreground/80 line-clamp-2 break-words">{currentNote}</p>
-          </div>
+        {p.template_type === "table" && (
+          <p className="text-[11px] text-muted-foreground">
+            {p.table_data?.rows?.length ?? 0} linha(s) · {p.table_data?.columns?.length ?? 0} coluna(s)
+          </p>
         )}
         {p.due_date && (
           <p className="text-[11px] text-muted-foreground">Prazo: {p.due_date}</p>
@@ -600,7 +639,9 @@ const TemplateManager = ({
   const [stepsByTpl, setStepsByTpl] = useState<Record<string, TmplStep[]>>({});
   const [newTplName, setNewTplName] = useState("");
   const [newTplColor, setNewTplColor] = useState<TemplateColor>("gray");
+  const [newTplType, setNewTplType] = useState<TemplateKind>("tasks");
   const [stepInput, setStepInput] = useState<Record<string, string>>({});
+  const [tableDraft, setTableDraft] = useState<Record<string, TableData>>({});
 
   const loadSteps = async () => {
     if (!templates.length || !workspaceId) return;
@@ -621,16 +662,49 @@ const TemplateManager = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, templates.length, workspaceId]);
 
+  // Sync table drafts when templates list changes
+  useEffect(() => {
+    setTableDraft((prev) => {
+      const next = { ...prev };
+      templates.forEach((t) => {
+        if (t.template_type === "table" && !next[t.id]) {
+          next[t.id] = t.table_schema ?? emptyTable();
+        }
+      });
+      return next;
+    });
+  }, [templates]);
+
   const addTpl = async () => {
     const n = newTplName.trim();
     if (!n || !workspaceId) return;
     const { error } = await supabase
       .from("process_templates")
-      .insert({ name: n, user_id: userId, workspace_id: workspaceId, color: newTplColor } as never);
+      .insert({
+        name: n,
+        user_id: userId,
+        workspace_id: workspaceId,
+        color: newTplColor,
+        template_type: newTplType,
+        table_schema: newTplType === "table" ? emptyTable() : { columns: [], rows: [] },
+      } as never);
     if (error) return toast.error(error.message);
     toast.success("Modelo criado");
     setNewTplName("");
     setNewTplColor("gray");
+    setNewTplType("tasks");
+    reload();
+  };
+
+  const saveTableSchema = async (id: string) => {
+    const schema = tableDraft[id];
+    if (!schema) return;
+    const { error } = await supabase
+      .from("process_templates")
+      .update({ table_schema: schema } as never)
+      .eq("id", id);
+    if (error) return toast.error(error.message);
+    toast.success("Tabela do modelo salva");
     reload();
   };
 
@@ -686,6 +760,13 @@ const TemplateManager = ({
                 onChange={(e) => setNewTplName(e.target.value)}
                 placeholder="Novo modelo (ex.: Alteração Contratual)"
               />
+              <Select value={newTplType} onValueChange={(v) => setNewTplType(v as TemplateKind)}>
+                <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="tasks">Tarefas</SelectItem>
+                  <SelectItem value="table">Tabela</SelectItem>
+                </SelectContent>
+              </Select>
               <Button type="submit" size="sm">Adicionar</Button>
             </div>
             <ColorSwatchPicker value={newTplColor} onChange={setNewTplColor} />
@@ -694,6 +775,7 @@ const TemplateManager = ({
             {templates.map((t) => {
               const steps = stepsByTpl[t.id] ?? [];
               const tplColor = asColor(t.color);
+              const kind: TemplateKind = (t.template_type ?? "tasks") as TemplateKind;
               return (
                 <div key={t.id} className={cn("rounded-lg border p-3 space-y-2 border-l-4", colorLeftBorder[tplColor])}>
                   <div className="flex items-center justify-between gap-2">
@@ -706,6 +788,9 @@ const TemplateManager = ({
                       >
                         {t.name}
                       </span>
+                      <span className="inline-flex items-center rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                        {kind === "table" ? "Tabela" : "Tarefas"}
+                      </span>
                     </div>
                     <button onClick={() => removeTpl(t.id)} className="text-muted-foreground hover:text-destructive">
                       <Trash2 className="h-3.5 w-3.5" />
@@ -713,48 +798,64 @@ const TemplateManager = ({
                   </div>
                   <ColorSwatchPicker value={tplColor} onChange={(c) => updateTplColor(t.id, c)} />
 
-                  <ol className="space-y-1 text-sm">
-                    {steps.map((s, i) => (
-                      <li key={s.id} className="flex items-center gap-2 group">
-                        <span className="text-xs text-muted-foreground w-5">{i + 1}.</span>
-                        <span className="flex-1 truncate">{s.title}</span>
+                  {kind === "table" ? (
+                    <div className="space-y-2">
+                      <SheetEditor
+                        value={tableDraft[t.id] ?? t.table_schema ?? emptyTable()}
+                        onChange={(v) => setTableDraft((p) => ({ ...p, [t.id]: v }))}
+                      />
+                      <div className="flex justify-end">
+                        <Button size="sm" onClick={() => saveTableSchema(t.id)}>
+                          Salvar tabela do modelo
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <ol className="space-y-1 text-sm">
+                        {steps.map((s, i) => (
+                          <li key={s.id} className="flex items-center gap-2 group">
+                            <span className="text-xs text-muted-foreground w-5">{i + 1}.</span>
+                            <span className="flex-1 truncate">{s.title}</span>
+                            <Input
+                              type="number"
+                              min={0}
+                              defaultValue={s.due_offset_days ?? 0}
+                              onBlur={async (e) => {
+                                const v = Math.max(0, Number(e.target.value) || 0);
+                                await supabase.from("process_template_steps")
+                                  .update({ due_offset_days: v } as never).eq("id", s.id);
+                                loadSteps();
+                              }}
+                              className="h-7 w-20 text-xs"
+                              title="Prazo em dias após o início do processo"
+                            />
+                            <span className="text-[11px] text-muted-foreground">dias</span>
+                            <button
+                              onClick={() => removeStep(s.id)}
+                              className="text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100"
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </button>
+                          </li>
+                        ))}
+                      </ol>
+                      <form
+                        className="flex gap-2"
+                        onSubmit={(e) => { e.preventDefault(); addStep(t.id); }}
+                      >
                         <Input
-                          type="number"
-                          min={0}
-                          defaultValue={s.due_offset_days ?? 0}
-                          onBlur={async (e) => {
-                            const v = Math.max(0, Number(e.target.value) || 0);
-                            await supabase.from("process_template_steps")
-                              .update({ due_offset_days: v } as never).eq("id", s.id);
-                            loadSteps();
-                          }}
-                          className="h-7 w-20 text-xs"
-                          title="Prazo em dias após o início do processo"
+                          value={stepInput[t.id] ?? ""}
+                          onChange={(e) => setStepInput((p) => ({ ...p, [t.id]: e.target.value }))}
+                          placeholder="Adicionar etapa…"
+                          className="h-8 text-sm"
                         />
-                        <span className="text-[11px] text-muted-foreground">dias</span>
-                        <button
-                          onClick={() => removeStep(s.id)}
-                          className="text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100"
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </button>
-                      </li>
-                    ))}
-                  </ol>
-                  <form
-                    className="flex gap-2"
-                    onSubmit={(e) => { e.preventDefault(); addStep(t.id); }}
-                  >
-                    <Input
-                      value={stepInput[t.id] ?? ""}
-                      onChange={(e) => setStepInput((p) => ({ ...p, [t.id]: e.target.value }))}
-                      placeholder="Adicionar etapa…"
-                      className="h-8 text-sm"
-                    />
-                    <Button type="submit" size="sm" variant="outline">
-                      <Plus className="h-3.5 w-3.5" />
-                    </Button>
-                  </form>
+                        <Button type="submit" size="sm" variant="outline">
+                          <Plus className="h-3.5 w-3.5" />
+                        </Button>
+                      </form>
+                    </>
+                  )}
                 </div>
               );
             })}
@@ -1223,6 +1324,128 @@ const CurrentStepCard = ({
         </Button>
       </div>
     </div>
+  );
+};
+
+/* ───────── Process detail (table type) ───────── */
+
+const PROCESS_STATUS_OPTIONS: { value: ProcessStatus; label: string }[] = [
+  { value: "nao_iniciado", label: "Não iniciado" },
+  { value: "em_andamento", label: "Em andamento" },
+  { value: "concluido", label: "Concluído" },
+  { value: "cancelado", label: "Cancelado" },
+];
+
+const ProcessTableDetail = ({
+  process,
+  templateName,
+  userId,
+  onClose,
+  onChanged,
+}: {
+  process: Process;
+  templateName: string | null;
+  userId: string;
+  onClose: () => void;
+  onChanged: () => void;
+}) => {
+  const initial = process.table_data ?? emptyTable();
+  const [draft, setDraft] = useState<TableData>(initial);
+  const [dirty, setDirty] = useState(false);
+  const [status, setStatus] = useState<ProcessStatus>(process.status);
+
+  const update = (next: TableData) => {
+    setDraft(next);
+    setDirty(true);
+  };
+
+  const hasAnyValue = (t: TableData) =>
+    t.rows.some((r) => Object.values(r.cells).some((v) => String(v).trim() !== ""));
+
+  const save = async () => {
+    let nextStatus = status;
+    if (status === "nao_iniciado" && hasAnyValue(draft)) nextStatus = "em_andamento";
+    const { error } = await supabase
+      .from("processes")
+      .update({ table_data: draft, status: nextStatus } as never)
+      .eq("id", process.id);
+    if (error) return toast.error(error.message);
+    setStatus(nextStatus);
+    setDirty(false);
+    await logActivity(userId, "process", process.id, "updated", `Tabela atualizada: "${process.name}"`);
+    toast.success("Tabela salva");
+    onChanged();
+  };
+
+  const changeStatus = async (s: ProcessStatus) => {
+    setStatus(s);
+    const { error } = await supabase
+      .from("processes")
+      .update({ status: s })
+      .eq("id", process.id);
+    if (error) return toast.error(error.message);
+    await logActivity(userId, "process", process.id, "status_changed", `Status alterado: "${process.name}" → ${s}`);
+    onChanged();
+  };
+
+  const addRow = () => {
+    const cells: Record<string, string> = {};
+    draft.columns.forEach((c) => (cells[c.id] = ""));
+    update({ ...draft, rows: [...draft.rows, { id: Math.random().toString(36).slice(2, 10), cells }] });
+  };
+  const addColumn = () => {
+    const col = {
+      id: Math.random().toString(36).slice(2, 10),
+      label: `Coluna ${draft.columns.length + 1}`,
+      kind: "text" as const,
+    };
+    update({
+      ...draft,
+      columns: [...draft.columns, col],
+      rows: draft.rows.map((r) => ({ ...r, cells: { ...r.cells, [col.id]: "" } })),
+    });
+  };
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-4xl max-h-[88vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="text-base">{process.name}</DialogTitle>
+          {templateName && (
+            <p className="text-xs text-muted-foreground">Modelo: {templateName} · Tabela</p>
+          )}
+        </DialogHeader>
+
+        <div className="flex items-center gap-2 flex-wrap -mt-1">
+          <Select value={status} onValueChange={(v) => changeStatus(v as ProcessStatus)}>
+            <SelectTrigger className="h-8 w-44 text-xs"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {PROCESS_STATUS_OPTIONS.map((o) => (
+                <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button size="sm" variant="outline" onClick={addRow} disabled={draft.columns.length === 0}>
+            <Plus className="h-3.5 w-3.5" /> Linha
+          </Button>
+          <Button size="sm" variant="outline" onClick={addColumn}>
+            <Plus className="h-3.5 w-3.5" /> Coluna
+          </Button>
+          <div className="flex-1" />
+          <Button size="sm" onClick={save} disabled={!dirty}>
+            Salvar
+          </Button>
+        </div>
+
+        <div className="mt-3">
+          <SheetEditor value={draft} onChange={update} />
+        </div>
+
+        <DialogFooter className="mt-4">
+          <Button variant="outline" onClick={onClose}>Fechar</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 };
 
