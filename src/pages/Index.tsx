@@ -140,11 +140,16 @@ const Index = () => {
     <main className="min-h-screen bg-background">
       <div className="flex min-h-screen">
         <aside className="w-60 shrink-0 border-r bg-sidebar text-sidebar-foreground flex flex-col">
-          <div className="px-4 py-4 border-b border-sidebar-border">
-            <h1 className="text-sm font-semibold tracking-tight text-sidebar-primary">
-              Plano do dia
-            </h1>
-            <p className="text-[11px] text-sidebar-foreground/70 truncate">
+          <div className="px-4 py-5 border-b border-sidebar-border relative">
+            {/* Gold accent line */}
+            <div className="absolute bottom-0 left-4 right-4 h-[1px] bg-gradient-to-r from-transparent via-[hsl(42,42%,50%)] to-transparent opacity-60" />
+            <div className="flex items-center gap-2 mb-0.5">
+              <div className="w-1.5 h-4 rounded-sm bg-[hsl(42,42%,50%)] opacity-80" />
+              <h1 className="text-sm font-semibold tracking-wide text-sidebar-primary uppercase letter-spacing-widest">
+                Projetask
+              </h1>
+            </div>
+            <p className="text-[11px] text-sidebar-foreground/60 truncate pl-3.5">
               {user.email}
             </p>
           </div>
@@ -174,8 +179,8 @@ const Index = () => {
                   className={cn(
                     "w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-sm transition",
                     active
-                      ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
-                      : "text-sidebar-foreground/80 hover:bg-sidebar-accent/60",
+                      ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium border-l-2 border-[hsl(42,42%,50%)] pl-[calc(0.625rem-2px)]"
+                      : "text-sidebar-foreground/80 hover:bg-sidebar-accent/60 border-l-2 border-transparent",
                   )}
                 >
                   <I className="h-4 w-4" />
@@ -200,15 +205,18 @@ const Index = () => {
             <header className="mb-6 flex items-start justify-between gap-4">
               <div>
                 <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1">
-                  <Icon className="h-3.5 w-3.5" />
-                  <span>{meta.label}</span>
+                  <Icon className="h-3.5 w-3.5 text-[hsl(42,42%,50%)]" />
+                  <span className="tracking-wide uppercase text-[10px] font-medium">{meta.label}</span>
                 </div>
-                <h2 className="text-2xl font-semibold tracking-tight">
+                <h2 className="text-2xl font-semibold tracking-tight text-foreground">
                   {section === "today" ? "Hoje" : meta.label}
                 </h2>
-                <p className="text-sm text-muted-foreground mt-1">
-                  {meta.subtitle}
-                </p>
+                <div className="flex items-center gap-2 mt-1">
+                  <div className="w-8 h-[2px] rounded-full bg-[hsl(42,42%,50%)] opacity-70" />
+                  <p className="text-sm text-muted-foreground">
+                    {meta.subtitle}
+                  </p>
+                </div>
               </div>
               {section === "schedule" && (
                 <Input
