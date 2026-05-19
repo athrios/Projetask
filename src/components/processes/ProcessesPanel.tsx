@@ -258,17 +258,23 @@ export const ProcessesPanel = ({ userId }: Props) => {
         </div>
       )}
 
-      {openProc && (
+      {openProc && openProc.template_type === "table" ? (
+        <ProcessTableDetail
+          process={openProc}
+          templateName={templates.find((t) => t.id === openProc.template_id)?.name ?? null}
+          userId={userId}
+          onClose={() => setOpenProc(null)}
+          onChanged={() => load()}
+        />
+      ) : openProc ? (
         <ProcessDetail
           process={openProc}
           steps={stepsByProc[openProc.id] ?? []}
           userId={userId}
           onClose={() => setOpenProc(null)}
-          onChanged={() => {
-            load();
-          }}
+          onChanged={() => load()}
         />
-      )}
+      ) : null}
     </div>
   );
 };
