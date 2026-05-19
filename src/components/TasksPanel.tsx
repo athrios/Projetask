@@ -101,6 +101,8 @@ export interface Task {
   parent_recurring_task_id?: string | null;
   source_type?: "manual" | "request" | "process";
   source_id?: string | null;
+  due_time?: string | null;
+
 }
 
 interface Subtask {
