@@ -180,7 +180,12 @@ export interface EvalResult {
 
 const numericFromRaw = (raw: string): number => {
   if (raw == null || raw === "") return 0;
-  const n = Number(String(raw).replace(",", "."));
+  const s = String(raw).trim();
+  // Accept BR currency-ish input "1.250,50" or plain "1250.50"
+  const normalized = s.includes(",")
+    ? s.replace(/\./g, "").replace(",", ".")
+    : s;
+  const n = Number(normalized);
   return Number.isFinite(n) ? n : 0;
 };
 
@@ -192,11 +197,49 @@ const formatNum = (n: number): string => {
     : String(Number(n.toFixed(4)));
 };
 
+// ---- Column types ----
+export type ColumnType = "text" | "number" | "currency" | "checkbox" | "select";
+
+export interface TableColumn {
+  id: string;
+  label: string;
+  type?: ColumnType;
+  options?: string[];
+  /** legacy field kept for backwards-compat with early Table templates */
+  kind?: "text" | "number";
+}
+export interface TableRow { id: string; cells: Record<string, string> }
+export interface TableData { columns: TableColumn[]; rows: TableRow[] }
+
+/** Normalize a column (fill `type` from legacy `kind` if missing). */
+export function normalizeColumn(c: TableColumn): TableColumn {
+  if (c.type) return c;
+  const derived: ColumnType = c.kind === "number" ? "number" : "text";
+  return { ...c, type: derived };
+}
+
+export function normalizeTable(d: TableData): TableData {
+  return { columns: d.columns.map(normalizeColumn), rows: d.rows };
+}
+
+const isNumericType = (t: ColumnType | undefined) =>
+  t === "number" || t === "currency";
+
+/** Map of column letter -> column type. */
+export function buildColumnTypeMap(data: TableData): Record<string, ColumnType> {
+  const m: Record<string, ColumnType> = {};
+  data.columns.forEach((col, c) => {
+    m[colLetter(c)] = normalizeColumn(col).type ?? "text";
+  });
+  return m;
+}
+
 export function evaluateCell(
   raw: string,
   cells: CellsByRef,
   evaluating: Set<string> = new Set(),
   selfRef?: string,
+  columnTypeByLetter?: Record<string, ColumnType>,
 ): EvalResult {
   if (raw == null) return { display: "", isFormula: false };
   const s = String(raw);
@@ -207,13 +250,23 @@ export function evaluateCell(
     return { display: "#CICLO", error: "Referência circular", isFormula: true };
   }
   if (selfRef) evaluating.add(selfRef);
+
+  const typeOfRef = (ref: string): ColumnType | undefined => {
+    if (!columnTypeByLetter) return undefined;
+    const m = /^([A-Z]+)\d+$/.exec(ref);
+    return m ? columnTypeByLetter[m[1]] : undefined;
+  };
+
   try {
     const toks = tokenize(s.slice(1));
     const resolve: Resolver = (ref) => {
+      const t = typeOfRef(ref);
+      // Only numeric column types participate in calculations.
+      if (columnTypeByLetter && t && !isNumericType(t)) return 0;
       const v = cells[ref];
       if (v == null || v === "") return 0;
       if (String(v).startsWith("=")) {
-        const sub = evaluateCell(v, cells, evaluating, ref);
+        const sub = evaluateCell(v, cells, evaluating, ref, columnTypeByLetter);
         if (sub.error) throw new Error(sub.error);
         return sub.numeric ?? 0;
       }
@@ -247,11 +300,6 @@ export function evaluateCell(
   }
 }
 
-// Build a flat CellsByRef map from columns + rows (1-based row index).
-export interface TableColumn { id: string; label: string; kind?: "text" | "number" }
-export interface TableRow { id: string; cells: Record<string, string> }
-export interface TableData { columns: TableColumn[]; rows: TableRow[] }
-
 export function buildCellMap(data: TableData): CellsByRef {
   const m: CellsByRef = {};
   data.rows.forEach((row, r) => {
@@ -261,4 +309,29 @@ export function buildCellMap(data: TableData): CellsByRef {
     });
   });
   return m;
+}
+
+// ---- Format helpers ----
+
+/** Parse a user-typed currency/number string into a numeric value. */
+export function parseCurrencyInput(s: string): number | null {
+  if (s == null) return null;
+  const cleaned = String(s).replace(/[R$\s]/g, "").trim();
+  if (cleaned === "") return null;
+  // Treat as BR if contains comma; else plain
+  const normalized = cleaned.includes(",")
+    ? cleaned.replace(/\./g, "").replace(",", ".")
+    : cleaned;
+  const n = Number(normalized);
+  return Number.isFinite(n) ? n : null;
+}
+
+const brl = new Intl.NumberFormat("pt-BR", {
+  style: "currency",
+  currency: "BRL",
+});
+
+export function formatCurrencyBRL(n: number): string {
+  if (!Number.isFinite(n)) return "";
+  return brl.format(n);
 }
