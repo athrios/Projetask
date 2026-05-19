@@ -14,11 +14,7 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { CheckCircle2 } from "lucide-react";
-import {
-  submitterNameSchema,
-  publicTextAnswerSchema,
-  safeParse,
-} from "@/lib/validation";
+import { submitterNameSchema, publicTextAnswerSchema } from "@/lib/validation";
 
 type FieldType = "short_text" | "long_text" | "select" | "multi_select" | "date" | "file";
 
