@@ -1192,6 +1192,22 @@ export const TasksPanel = ({
             </DialogContent>
           </Dialog>
         )}
+        {/* Reminder editor */}
+        {reminderTaskId && (() => {
+          const t = tasks.find((x) => x.id === reminderTaskId);
+          if (!t) return null;
+          return (
+            <TaskReminderEditor
+              open
+              onOpenChange={(o) => !o && setReminderTaskId(null)}
+              taskId={t.id}
+              userId={userId}
+              dueDate={t.due_date}
+              dueTime={t.due_time ?? null}
+              onDueTimeChange={() => load()}
+            />
+          );
+        })()}
       </section>
     </TooltipProvider>
   );
