@@ -754,6 +754,13 @@ const TemplateManager = ({
                 onChange={(e) => setNewTplName(e.target.value)}
                 placeholder="Novo modelo (ex.: Alteração Contratual)"
               />
+              <Select value={newTplType} onValueChange={(v) => setNewTplType(v as TemplateKind)}>
+                <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="tasks">Tarefas</SelectItem>
+                  <SelectItem value="table">Tabela</SelectItem>
+                </SelectContent>
+              </Select>
               <Button type="submit" size="sm">Adicionar</Button>
             </div>
             <ColorSwatchPicker value={newTplColor} onChange={setNewTplColor} />
