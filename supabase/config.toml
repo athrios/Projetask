@@ -2,3 +2,7 @@ project_id = "zhkkncubaqhghiljztaa"
 
 [functions.process-email-queue]
 verify_jwt = true
+
+[functions.process-task-reminders]
+verify_jwt = true
+
