@@ -124,7 +124,9 @@ export const ProcessesPanel = ({ userId }: Props) => {
 
     const normalized = procs.map((proc) => ({
       ...proc,
-      status: computeProcessStatus(proc.status, grouped[proc.id] ?? []),
+      status: proc.template_type === "table"
+        ? proc.status
+        : computeProcessStatus(proc.status, grouped[proc.id] ?? []),
     }));
     setProcesses(normalized);
     if (openProc) {
