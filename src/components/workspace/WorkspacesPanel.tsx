@@ -16,6 +16,7 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { Plus, Trash2, Copy, Send } from "lucide-react";
 import { CreateWorkspaceDialog } from "./CreateWorkspaceDialog";
+import { buildAppUrl } from "@/lib/appUrl";
 
 type Member = { id: string; user_id: string; role: string };
 type Perm = {
