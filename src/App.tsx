@@ -7,6 +7,8 @@ import Index from "./pages/Index.tsx";
 import NotFound from "./pages/NotFound.tsx";
 import Auth from "./pages/Auth.tsx";
 import PublicForm from "./pages/PublicForm.tsx";
+import AcceptInvite from "./pages/AcceptInvite.tsx";
+import Unsubscribe from "./pages/Unsubscribe.tsx";
 import { AuthProvider } from "./hooks/useAuth";
 import { WorkspaceProvider } from "./hooks/useWorkspace";
 
@@ -24,6 +26,8 @@ const App = () => (
               <Route path="/" element={<Index />} />
               <Route path="/auth" element={<Auth />} />
               <Route path="/f/:slug" element={<PublicForm />} />
+              <Route path="/convite/:id" element={<AcceptInvite />} />
+              <Route path="/unsubscribe" element={<Unsubscribe />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </WorkspaceProvider>
