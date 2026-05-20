@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useWorkspace, type ModuleKey } from "@/hooks/useWorkspace";
@@ -28,6 +28,8 @@ import {
   Inbox,
   CalendarRange,
   Search,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -48,37 +50,63 @@ const SECTION_META: Record<
   Section,
   { label: string; icon: typeof Sun; subtitle: string }
 > = {
-  today: { label: "Hoje", icon: Sun, subtitle: "O que precisa acontecer hoje." },
-  agenda: { label: "Agenda", icon: CalendarRange, subtitle: "Visão de tarefas e processos por dia, semana e mês." },
-  schedule: { label: "Cronograma", icon: CalendarClock, subtitle: "Sua agenda do dia, bloco a bloco." },
-  tasks: { label: "Tarefas", icon: ListChecks, subtitle: "Organize suas tarefas por data, status e prioridade." },
-  processes: { label: "Processos", icon: Workflow, subtitle: "Processos recorrentes em execução." },
-  forms: { label: "Formulários", icon: FileText, subtitle: "Formulários para receber solicitações." },
-  requests: { label: "Respostas", icon: Inbox, subtitle: "Respostas recebidas dos formulários." },
-  done: { label: "Concluídas", icon: CheckCircle2, subtitle: "O que você já tirou da frente." },
-  settings: { label: "Ambientes", icon: Settings, subtitle: "Gerencie ambientes, membros e permissões." },
+  today:     { label: "Hoje",         icon: Sun,          subtitle: "O que precisa acontecer hoje." },
+  agenda:    { label: "Agenda",       icon: CalendarRange, subtitle: "Visão de tarefas e processos por dia, semana e mês." },
+  schedule:  { label: "Cronograma",   icon: CalendarClock, subtitle: "Sua agenda do dia, bloco a bloco." },
+  tasks:     { label: "Tarefas",      icon: ListChecks,    subtitle: "Organize suas tarefas por data, status e prioridade." },
+  processes: { label: "Processos",    icon: Workflow,      subtitle: "Processos recorrentes em execução." },
+  forms:     { label: "Formulários",  icon: FileText,      subtitle: "Formulários para receber solicitações." },
+  requests:  { label: "Respostas",    icon: Inbox,         subtitle: "Respostas recebidas dos formulários." },
+  done:      { label: "Concluídas",   icon: CheckCircle2,  subtitle: "O que você já tirou da frente." },
+  settings:  { label: "Ambientes",    icon: Settings,      subtitle: "Gerencie ambientes, membros e permissões." },
 };
 
 const SECTION_MODULE: Record<Exclude<Section, "settings">, ModuleKey> = {
-  today: "hoje",
-  agenda: "hoje",
-  schedule: "cronograma",
-  tasks: "tarefas",
+  today:     "hoje",
+  agenda:    "hoje",
+  schedule:  "cronograma",
+  tasks:     "tarefas",
   processes: "processos",
-  forms: "formularios",
-  requests: "solicitacoes",
-  done: "concluidas",
+  forms:     "formularios",
+  requests:  "solicitacoes",
+  done:      "concluidas",
 };
 
 const Index = () => {
   const { user, loading } = useAuth();
   const { workspaceId, canViewModule, isOwnerOfAny, loading: wsLoading } = useWorkspace();
   const nav = useNavigate();
-  const [date, setDate] = useState(today());
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [section, setSection] = useState<Section>("today");
+
+  const [date, setDate]           = useState(today());
+  const [tasks, setTasks]         = useState<Task[]>([]);
+  const [section, setSection]     = useState<Section>("today");
   const [searchOpen, setSearchOpen] = useState(false);
 
+  // ── Sidebar collapse ──────────────────────────────────────────
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+
+  // ── Section transition (120 ms fade + lift) ───────────────────
+  const [contentVisible, setContentVisible] = useState(true);
+  const pendingSection = useRef<Section | null>(null);
+
+  const changeSection = (id: Section) => {
+    if (id === section) return;
+    pendingSection.current = id;
+    setContentVisible(false);
+  };
+
+  useEffect(() => {
+    if (!contentVisible && pendingSection.current) {
+      const t = setTimeout(() => {
+        setSection(pendingSection.current!);
+        pendingSection.current = null;
+        setContentVisible(true);
+      }, 80); // fade-out duration before swapping content
+      return () => clearTimeout(t);
+    }
+  }, [contentVisible]);
+
+  // ── Auth guard ────────────────────────────────────────────────
   useEffect(() => {
     if (!loading && !user) nav("/auth", { replace: true });
   }, [user, loading, nav]);
@@ -119,7 +147,6 @@ const Index = () => {
     return canViewModule(SECTION_MODULE[s]);
   });
 
-  // Redirect away from sections the active workspace doesn't allow
   useEffect(() => {
     if (wsLoading) return;
     if (!visibleSections.includes(section)) {
@@ -132,41 +159,76 @@ const Index = () => {
 
   const meta = SECTION_META[section];
   const Icon = meta.icon;
-
   const tasksFilter: TasksFilter =
     section === "today" ? "today" : section === "done" ? "done" : "all";
 
   return (
     <main className="min-h-screen bg-background">
       <div className="flex min-h-screen">
-        <aside className="w-60 shrink-0 border-r bg-sidebar text-sidebar-foreground flex flex-col">
-          <div className="px-4 py-5 border-b border-sidebar-border relative">
+
+        {/* ── SIDEBAR ─────────────────────────────────────────── */}
+        <aside
+          className={cn(
+            "shrink-0 border-r bg-sidebar text-sidebar-foreground flex flex-col",
+            "transition-[width] duration-200 ease-in-out overflow-hidden",
+            sidebarOpen ? "w-60" : "w-14",
+          )}
+        >
+          {/* Header */}
+          <div className="px-3 py-4 border-b border-sidebar-border relative flex items-center gap-2 min-h-[60px]">
             {/* Gold accent line */}
-            <div className="absolute bottom-0 left-4 right-4 h-[1px] bg-gradient-to-r from-transparent via-[hsl(42,42%,50%)] to-transparent opacity-60" />
-            <div className="flex items-center gap-2 mb-0.5">
-              <div className="w-1.5 h-4 rounded-sm bg-[hsl(42,42%,50%)] opacity-80" />
-              <h1 className="text-sm font-semibold tracking-wide text-sidebar-primary uppercase letter-spacing-widest">
-                Projetask
-              </h1>
-            </div>
-            <p className="text-[11px] text-sidebar-foreground/60 truncate pl-3.5">
-              {user.email}
-            </p>
-          </div>
+            <div className="absolute bottom-0 left-3 right-3 h-[1px] bg-gradient-to-r from-transparent via-[hsl(42,42%,50%)] to-transparent opacity-60" />
 
-          <WorkspaceSwitcher onManage={() => setSection("settings")} />
+            {sidebarOpen && (
+              <div className="flex flex-col flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-0.5">
+                  <div className="w-1.5 h-4 rounded-sm bg-[hsl(42,42%,50%)] opacity-80 shrink-0" />
+                  <h1 className="text-sm font-semibold tracking-wide text-sidebar-primary uppercase">
+                    Projetask
+                  </h1>
+                </div>
+                <p className="text-[11px] text-sidebar-foreground/60 truncate pl-3.5">
+                  {user.email}
+                </p>
+              </div>
+            )}
 
-          <div className="px-2 pt-1">
+            {/* Toggle button */}
             <button
-              onClick={() => setSearchOpen(true)}
-              className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-xs text-sidebar-foreground/70 border border-sidebar-border hover:bg-sidebar-accent/60"
+              onClick={() => setSidebarOpen((o) => !o)}
+              className={cn(
+                "shrink-0 p-1 rounded-md text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-sidebar-accent/60 transition-colors",
+                !sidebarOpen && "mx-auto",
+              )}
+              title={sidebarOpen ? "Ocultar menu" : "Mostrar menu"}
             >
-              <Search className="h-3.5 w-3.5" />
-              <span className="flex-1 text-left">Buscar...</span>
-              <kbd className="text-[10px] px-1.5 py-0.5 rounded bg-sidebar-accent/60 border border-sidebar-border">⌘K</kbd>
+              {sidebarOpen
+                ? <PanelLeftClose className="h-4 w-4" />
+                : <PanelLeftOpen  className="h-4 w-4" />
+              }
             </button>
           </div>
 
+          {/* Workspace switcher — only when open */}
+          {sidebarOpen && (
+            <WorkspaceSwitcher onManage={() => changeSection("settings")} />
+          )}
+
+          {/* Search bar — only when open */}
+          {sidebarOpen && (
+            <div className="px-2 pt-1">
+              <button
+                onClick={() => setSearchOpen(true)}
+                className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-xs text-sidebar-foreground/70 border border-sidebar-border hover:bg-sidebar-accent/60"
+              >
+                <Search className="h-3.5 w-3.5" />
+                <span className="flex-1 text-left">Buscar...</span>
+                <kbd className="text-[10px] px-1.5 py-0.5 rounded bg-sidebar-accent/60 border border-sidebar-border">⌘K</kbd>
+              </button>
+            </div>
+          )}
+
+          {/* Nav */}
           <nav className="flex-1 p-2 space-y-0.5">
             {visibleSections.map((id) => {
               const m = SECTION_META[id];
@@ -175,33 +237,48 @@ const Index = () => {
               return (
                 <button
                   key={id}
-                  onClick={() => setSection(id)}
+                  onClick={() => changeSection(id)}
+                  title={!sidebarOpen ? m.label : undefined}
                   className={cn(
-                    "w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-sm transition",
+                    "w-full flex items-center rounded-md text-sm transition-colors duration-150",
+                    sidebarOpen ? "gap-2 px-2.5 py-1.5" : "justify-center px-0 py-2",
                     active
-                      ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium border-l-2 border-[hsl(42,42%,50%)] pl-[calc(0.625rem-2px)]"
+                      ? cn(
+                          "bg-sidebar-accent text-sidebar-accent-foreground font-medium",
+                          sidebarOpen && "border-l-2 border-[hsl(42,42%,50%)] pl-[calc(0.625rem-2px)]",
+                        )
                       : "text-sidebar-foreground/80 hover:bg-sidebar-accent/60 border-l-2 border-transparent",
+                    !sidebarOpen && active && "bg-sidebar-accent text-sidebar-accent-foreground border-l-0",
                   )}
                 >
-                  <I className="h-4 w-4" />
-                  <span>{m.label}</span>
+                  <I className={cn("shrink-0", sidebarOpen ? "h-4 w-4" : "h-5 w-5")} />
+                  {sidebarOpen && <span>{m.label}</span>}
                 </button>
               );
             })}
           </nav>
+
+          {/* Footer */}
           <div className="p-2 border-t border-sidebar-border">
             <button
               onClick={() => supabase.auth.signOut()}
-              className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-sm text-sidebar-foreground/70 hover:bg-sidebar-accent/60"
+              title={!sidebarOpen ? "Sair" : undefined}
+              className={cn(
+                "w-full flex items-center rounded-md text-sm text-sidebar-foreground/70 hover:bg-sidebar-accent/60 transition-colors duration-150",
+                sidebarOpen ? "gap-2 px-2.5 py-1.5" : "justify-center px-0 py-2",
+              )}
             >
-              <LogOut className="h-4 w-4" />
-              Sair
+              <LogOut className={cn("shrink-0", sidebarOpen ? "h-4 w-4" : "h-5 w-5")} />
+              {sidebarOpen && <span>Sair</span>}
             </button>
           </div>
         </aside>
 
+        {/* ── MAIN CONTENT ────────────────────────────────────── */}
         <div className="flex-1 min-w-0">
           <div className="max-w-5xl mx-auto px-8 py-8">
+
+            {/* Section header */}
             <header className="mb-6 flex items-start justify-between gap-4">
               <div>
                 <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1">
@@ -213,9 +290,7 @@ const Index = () => {
                 </h2>
                 <div className="flex items-center gap-2 mt-1">
                   <div className="w-8 h-[2px] rounded-full bg-[hsl(42,42%,50%)] opacity-70" />
-                  <p className="text-sm text-muted-foreground">
-                    {meta.subtitle}
-                  </p>
+                  <p className="text-sm text-muted-foreground">{meta.subtitle}</p>
                 </div>
               </div>
               {section === "schedule" && (
@@ -226,57 +301,66 @@ const Index = () => {
                   className="w-auto h-9"
                 />
               )}
-              <NotificationsBell onOpenTask={() => setSection("tasks")} />
+              <NotificationsBell onOpenTask={() => changeSection("tasks")} />
             </header>
 
-            {section === "today" && (
-              <RequireModule module="hoje" onDenied={() => setSection("today")}>
-                <TodayPanel date={today()} userId={user.id} />
-              </RequireModule>
-            )}
-            {section === "agenda" && (
-              <RequireModule module="hoje" onDenied={() => setSection("today")}>
-                <AgendaPanel userId={user.id} />
-              </RequireModule>
-            )}
-            {section === "schedule" && (
-              <RequireModule module="cronograma" onDenied={() => setSection("today")}>
-                <SchedulePanel date={date} userId={user.id} tasks={tasks} />
-              </RequireModule>
-            )}
-            {(section === "tasks" || section === "done") && (
-              <RequireModule
-                module={section === "done" ? "concluidas" : "tarefas"}
-                onDenied={() => setSection("today")}
-              >
-                <TasksPanel
-                  date={date}
-                  userId={user.id}
-                  filter={tasksFilter}
-                  onTasksChange={setTasks}
-                />
-              </RequireModule>
-            )}
-            {section === "processes" && (
-              <RequireModule module="processos" onDenied={() => setSection("today")}>
-                <ProcessesPanel userId={user.id} />
-              </RequireModule>
-            )}
-            {section === "forms" && (
-              <RequireModule module="formularios" onDenied={() => setSection("today")}>
-                <FormsPanel userId={user.id} />
-              </RequireModule>
-            )}
-            {section === "requests" && (
-              <RequireModule module="solicitacoes" onDenied={() => setSection("today")}>
-                <RequestsPanel userId={user.id} />
-              </RequireModule>
-            )}
-            {section === "settings" && (
-              <RequireOwner onDenied={() => setSection("today")}>
-                <WorkspacesPanel />
-              </RequireOwner>
-            )}
+            {/* ── Animated content area ── */}
+            <div
+              style={{
+                transition: "opacity 120ms ease, transform 120ms ease",
+                opacity:   contentVisible ? 1 : 0,
+                transform: contentVisible ? "translateY(0)" : "translateY(6px)",
+              }}
+            >
+              {section === "today" && (
+                <RequireModule module="hoje" onDenied={() => changeSection("today")}>
+                  <TodayPanel date={today()} userId={user.id} />
+                </RequireModule>
+              )}
+              {section === "agenda" && (
+                <RequireModule module="hoje" onDenied={() => changeSection("today")}>
+                  <AgendaPanel userId={user.id} />
+                </RequireModule>
+              )}
+              {section === "schedule" && (
+                <RequireModule module="cronograma" onDenied={() => changeSection("today")}>
+                  <SchedulePanel date={date} userId={user.id} tasks={tasks} />
+                </RequireModule>
+              )}
+              {(section === "tasks" || section === "done") && (
+                <RequireModule
+                  module={section === "done" ? "concluidas" : "tarefas"}
+                  onDenied={() => changeSection("today")}
+                >
+                  <TasksPanel
+                    date={date}
+                    userId={user.id}
+                    filter={tasksFilter}
+                    onTasksChange={setTasks}
+                  />
+                </RequireModule>
+              )}
+              {section === "processes" && (
+                <RequireModule module="processos" onDenied={() => changeSection("today")}>
+                  <ProcessesPanel userId={user.id} />
+                </RequireModule>
+              )}
+              {section === "forms" && (
+                <RequireModule module="formularios" onDenied={() => changeSection("today")}>
+                  <FormsPanel userId={user.id} />
+                </RequireModule>
+              )}
+              {section === "requests" && (
+                <RequireModule module="solicitacoes" onDenied={() => changeSection("today")}>
+                  <RequestsPanel userId={user.id} />
+                </RequireModule>
+              )}
+              {section === "settings" && (
+                <RequireOwner onDenied={() => changeSection("today")}>
+                  <WorkspacesPanel />
+                </RequireOwner>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -284,7 +368,7 @@ const Index = () => {
       <GlobalSearch
         open={searchOpen}
         onOpenChange={setSearchOpen}
-        onNavigate={(s) => setSection(s)}
+        onNavigate={(s) => changeSection(s)}
         workspaceId={workspaceId}
       />
     </main>
