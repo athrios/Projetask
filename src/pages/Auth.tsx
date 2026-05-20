@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { z } from "zod";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -16,14 +16,16 @@ const schema = z.object({
 const AuthPage = () => {
   const { user } = useAuth();
   const nav = useNavigate();
+  const [params] = useSearchParams();
+  const redirect = params.get("redirect") || "/";
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (user) nav("/", { replace: true });
-  }, [user, nav]);
+    if (user) nav(redirect, { replace: true });
+  }, [user, nav, redirect]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -38,7 +40,7 @@ const AuthPage = () => {
         const { error } = await supabase.auth.signUp({
           email: parsed.data.email,
           password: parsed.data.password,
-          options: { emailRedirectTo: `${window.location.origin}/` },
+          options: { emailRedirectTo: `${window.location.origin}${redirect}` },
         });
         if (error) throw error;
         toast.success("Conta criada! Verifique seu email se necessário.");
