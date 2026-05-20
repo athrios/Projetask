@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { Plus, Trash2, Copy } from "lucide-react";
+import { Plus, Trash2, Copy, Send } from "lucide-react";
 import { CreateWorkspaceDialog } from "./CreateWorkspaceDialog";
 
 type Member = { id: string; user_id: string; role: string };
