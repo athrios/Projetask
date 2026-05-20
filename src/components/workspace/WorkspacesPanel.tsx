@@ -398,7 +398,7 @@ const InvitesTab = ({ workspaceId, workspaceName }: { workspaceId: string; works
   };
 
   const copyLink = (id: string) => {
-    navigator.clipboard.writeText(`${window.location.origin}/convite/${id}`);
+    navigator.clipboard.writeText(buildAppUrl(`/convite/${id}`));
     toast.success("Link copiado");
   };
 
