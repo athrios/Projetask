@@ -414,7 +414,7 @@ const InvitesTab = ({ workspaceId, workspaceName }: { workspaceId: string; works
                 {new Date(i.created_at).toLocaleDateString("pt-BR")}
               </p>
             </div>
-            <Button size="sm" variant="ghost" onClick={() => copyId(i.id)}>
+            <Button size="sm" variant="ghost" onClick={() => copyLink(i.id)}>
               <Copy className="h-3.5 w-3.5" />
             </Button>
             <Button size="sm" variant="ghost" onClick={() => remove(i.id)} className="text-destructive">
