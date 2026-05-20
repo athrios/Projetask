@@ -1,34 +1,43 @@
-## Objetivo
-Aplicar **Roboto** (Google Fonts) como fonte padrão de todo o app, mantendo todo o restante do design (cores, espaçamentos, componentes) intocado.
+## Envio de e-mail dos convites de workspace
 
-## Mudanças
+### Objetivo
+Disparar automaticamente um e-mail para o convidado sempre que um novo convite for criado em **Workspaces → Convites**, usando o remetente `convites@task.athrioscontabil.com.br`.
 
-### 1. `index.html`
-Adicionar o preconnect e o link do Google Fonts para Roboto (pesos 400, 500, 700) no `<head>`.
+### Etapas
 
-```html
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
-```
+**1. Infraestrutura de e-mails do app**
+- Provisionar a infraestrutura de envio (fila com retentativas, supressão de bounces, log de envios, cron de processamento).
+- Criar as funções de envio (`send-transactional-email`), unsubscribe (`handle-email-unsubscribe`) e supressão (`handle-email-suppression`).
 
-### 2. `tailwind.config.ts`
-Estender `theme.fontFamily.sans` para usar Roboto antes da stack padrão:
+**2. Template "Convite para workspace"**
+- Novo template React Email em `supabase/functions/_shared/transactional-email-templates/workspace-invite.tsx`.
+- Conteúdo: saudação, nome de quem convidou, nome do workspace, botão **Aceitar convite** apontando para `/convite/{id}`, e nota de validade.
+- Assunto: `Você foi convidado(a) para o workspace {nome}`.
+- Remetente visível: `Athrios Tarefas <convites@task.athrioscontabil.com.br>`.
 
-```ts
-fontFamily: {
-  sans: ['Roboto', 'ui-sans-serif', 'system-ui', 'sans-serif'],
-}
-```
+**3. Página de aceitação `/convite/:id`**
+- Nova rota pública.
+- Se o visitante não está logado, redireciona para `/auth` (login/cadastro) preservando o destino.
+- Após login, busca o convite (RLS já permite quando o e-mail confere), exibe nome do workspace e botão **Aceitar**.
+- Ao aceitar: marca `accepted_at`, insere o usuário em `workspace_members` e dá feedback de sucesso.
+- Trata estados: convite inexistente, já aceito, e-mail não confere com o da conta.
 
-Assim qualquer classe `font-sans` (padrão do Tailwind aplicada via `body`) usa Roboto automaticamente, sem precisar tocar em componente nenhum.
+**4. Disparo do e-mail na criação do convite**
+- Em `WorkspacesPanel.tsx → InvitesTab.create`: após o insert bem-sucedido em `workspace_invitations`, chamar `supabase.functions.invoke('send-transactional-email', ...)` com:
+  - `templateName: 'workspace-invite'`
+  - `recipientEmail`: o e-mail informado
+  - `idempotencyKey`: `workspace-invite-{id}` (evita reenvio em retries)
+  - `templateData`: `{ inviterName, workspaceName, acceptUrl }`
+- Remover o aviso "O envio de e-mail será habilitado em breve" e substituir por mensagem de status do envio.
 
-### 3. `src/index.css` (opcional, garantia extra)
-Garantir que `body` herda a stack — já usa `@apply` do Tailwind, então nada muda; apenas valido que `font-feature-settings` continua compatível.
+### Detalhes técnicos
+- Sender domain: `task.athrioscontabil.com.br` (já verificado).
+- O rodapé de cancelamento é anexado automaticamente pelo sistema — o template não inclui esse link.
+- `idempotencyKey` baseado no `id` do convite garante que cliques duplos ou retries não gerem dois e-mails.
+- Página de aceite usa o `id` do convite como token (já é UUID); RLS garante que só o dono do e-mail pode lê-lo/aceitá-lo.
+- Sem mudanças no schema do banco — `workspace_invitations` e `workspace_members` já existem.
 
-## Fora do escopo
-- Não alterar cores, layout, componentes ou comportamento.
-- Não adicionar fonte serifada ou display extra.
-
-## Resultado
-Todo o app passa a renderizar em Roboto, com fallback para a fonte do sistema enquanto o Google Fonts carrega.
+### Fora de escopo
+- Reenviar convite manualmente (pode vir depois).
+- Expiração automática de convites.
+- Personalização visual avançada do template além das cores do app.
