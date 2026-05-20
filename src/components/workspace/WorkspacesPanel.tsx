@@ -383,7 +383,7 @@ const InvitesTab = ({ workspaceId, workspaceName }: { workspaceId: string; works
       (user.user_metadata?.name as string | undefined) ||
       user.email ||
       "Alguém";
-    const acceptUrl = `${window.location.origin}/convite/${invite.id}`;
+    const acceptUrl = buildAppUrl(`/convite/${invite.id}`);
     const { error: mailError } = await supabase.functions.invoke("send-transactional-email", {
       body: {
         templateName: "workspace-invite",
