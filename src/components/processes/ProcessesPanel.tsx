@@ -1056,6 +1056,44 @@ const ProcessDetail = ({
     onChanged();
   };
 
+  const changeStepStatus = async (s: Step, next: string) => {
+    if (next === s.status) return;
+    if (next === "feita") return completeStep(s);
+    if (next === "pulado") return dismissStep(s);
+    const patch: Record<string, unknown> = { status: next, completed_at: null, dismissed_at: null };
+    if (next !== "pendente" && !s.started_at) patch.started_at = new Date().toISOString();
+    const { error } = await supabase.from("process_steps").update(patch).eq("id", s.id);
+    if (error) return toast.error(error.message);
+    const after = steps.map((x) => (x.id === s.id ? { ...x, ...patch, status: next } as Step : x));
+    await persistProcessStatus(after);
+    toast.success("Status atualizado");
+    onChanged();
+  };
+
+  const addCustomStatus = async (): Promise<string | null> => {
+    const label = window.prompt("Nome do novo status:")?.trim();
+    if (!label || !workspaceId) return null;
+    const reserved = ["pendente", "fazendo", "feita", "pulado"];
+    if (reserved.includes(label.toLowerCase())) {
+      toast.error("Esse nome já é um status padrão");
+      return null;
+    }
+    if (customStatuses.some((c) => c.label.toLowerCase() === label.toLowerCase())) {
+      return label;
+    }
+    const { data, error } = await supabase
+      .from("process_step_custom_statuses")
+      .insert({ workspace_id: workspaceId, user_id: userId, label, color: "gray" })
+      .select("id,label,color")
+      .single();
+    if (error) {
+      toast.error(error.message);
+      return null;
+    }
+    setCustomStatuses((p) => [...p, data as CustomStepStatus]);
+    return label;
+  };
+
   const addStep = async () => {
     const t = stepInput.trim();
     if (!t || !workspaceId) return;
