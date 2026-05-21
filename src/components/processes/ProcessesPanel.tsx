@@ -411,7 +411,8 @@ const ProcessCard = ({
   const done = steps.filter((s) => s.status === "feita" || s.status === "pulado").length;
   const total = steps.length;
   const pct = total ? Math.round((done / total) * 100) : 0;
-  const current = steps.find((s) => s.status === "fazendo") ?? steps.find((s) => s.status === "pendente");
+  const sorted = [...steps].sort((a, b) => a.position - b.position);
+  const current = sorted.find((s) => s.status !== "pendente" && s.status !== "feita" && s.status !== "pulado") ?? sorted.find((s) => s.status === "pendente");
   const currentNote = current?.notes?.trim() ?? "";
   return (
     <div
