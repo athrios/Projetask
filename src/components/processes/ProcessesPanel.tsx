@@ -1336,6 +1336,7 @@ const ResolvedStepRow = ({
 
 const CurrentStepCard = ({
   s, index, draft, onDraftChange, onSaveObservation, onComplete, onDismiss, onRemove, disabled, showStartHint,
+  customStatuses, onChangeStatus, onAddCustomStatus,
 }: {
   s: Step;
   index: number;
@@ -1347,9 +1348,19 @@ const CurrentStepCard = ({
   onRemove: () => void;
   disabled: boolean;
   showStartHint: boolean;
+  customStatuses: CustomStepStatus[];
+  onChangeStatus: (v: string) => void;
+  onAddCustomStatus: () => void;
 }) => {
   const today = new Date().toISOString().slice(0, 10);
   const overdue = s.due_date && s.due_date < today;
+  const defaultStatuses = [
+    { value: "pendente", label: "Pendente" },
+    { value: "fazendo", label: "Em andamento" },
+    { value: "feita", label: "Concluída" },
+    { value: "pulado", label: "Dispensada" },
+  ];
+  const isCustom = !defaultStatuses.some((d) => d.value === s.status);
   return (
     <div className="rounded-lg border-2 border-foreground/20 bg-card p-4 space-y-3 shadow-sm">
       <div className="flex items-start gap-2">
@@ -1357,7 +1368,33 @@ const CurrentStepCard = ({
         <div className="flex-1 min-w-0">
           <h4 className="text-sm font-semibold">{s.title}</h4>
           <div className="flex items-center gap-2 mt-1 flex-wrap">
-            <StatusPill domain="process_step" value={s.status} size="xs" />
+            <Select
+              value={s.status}
+              onValueChange={(v) => {
+                if (v === "__add__") onAddCustomStatus();
+                else onChangeStatus(v);
+              }}
+            >
+              <SelectTrigger className="h-7 w-auto min-w-[140px] text-xs px-2">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {defaultStatuses.map((o) => (
+                  <SelectItem key={o.value} value={o.value} className="text-xs">{o.label}</SelectItem>
+                ))}
+                {customStatuses.length > 0 && <div className="my-1 h-px bg-border" />}
+                {customStatuses.map((c) => (
+                  <SelectItem key={c.id} value={c.label} className="text-xs">{c.label}</SelectItem>
+                ))}
+                {isCustom && !customStatuses.some((c) => c.label === s.status) && (
+                  <SelectItem value={s.status} className="text-xs">{s.status}</SelectItem>
+                )}
+                <div className="my-1 h-px bg-border" />
+                <SelectItem value="__add__" className="text-xs text-primary">
+                  + Adicionar status
+                </SelectItem>
+              </SelectContent>
+            </Select>
             {s.due_date && (
               <span
                 className={cn(
@@ -1371,7 +1408,7 @@ const CurrentStepCard = ({
             )}
             {showStartHint && (
               <span className="text-[11px] text-muted-foreground">
-                Clique em “Iniciar processo” para começar.
+                Clique em &ldquo;Iniciar processo&rdquo; para começar.
               </span>
             )}
           </div>
