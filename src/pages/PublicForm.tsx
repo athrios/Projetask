@@ -94,7 +94,7 @@ const PublicForm = () => {
         cleanValues[f.label] = r.data;
       } else if (Array.isArray(v)) {
         if (v.length > 50) return toast.error(`${f.label}: máximo 50 itens`);
-        cleanValues[f.label] = v.slice(0, 50).map((x) => (typeof x === "string" ? x.slice(0, 200) : x));
+        cleanValues[f.label] = v.slice(0, 50);
       } else {
         cleanValues[f.label] = v;
       }
