@@ -1062,7 +1062,7 @@ const ProcessDetail = ({
     if (next === "pulado") return dismissStep(s);
     const patch: Record<string, unknown> = { status: next, completed_at: null, dismissed_at: null };
     if (next !== "pendente" && !s.started_at) patch.started_at = new Date().toISOString();
-    const { error } = await supabase.from("process_steps").update(patch).eq("id", s.id);
+    const { error } = await supabase.from("process_steps").update(patch as never).eq("id", s.id);
     if (error) return toast.error(error.message);
     const after = steps.map((x) => (x.id === s.id ? { ...x, ...patch, status: next } as Step : x));
     await persistProcessStatus(after);
