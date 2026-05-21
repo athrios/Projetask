@@ -411,7 +411,8 @@ const ProcessCard = ({
   const done = steps.filter((s) => s.status === "feita" || s.status === "pulado").length;
   const total = steps.length;
   const pct = total ? Math.round((done / total) * 100) : 0;
-  const current = steps.find((s) => s.status === "fazendo") ?? steps.find((s) => s.status === "pendente");
+  const sorted = [...steps].sort((a, b) => a.position - b.position);
+  const current = sorted.find((s) => s.status !== "pendente" && s.status !== "feita" && s.status !== "pulado") ?? sorted.find((s) => s.status === "pendente");
   const currentNote = current?.notes?.trim() ?? "";
   return (
     <div
@@ -522,7 +523,8 @@ const ListView = ({
     {processes.map((p) => {
       const steps = stepsByProc[p.id] ?? [];
       const done = steps.filter((s) => s.status === "feita" || s.status === "pulado").length;
-      const current = steps.find((s) => s.status === "fazendo") ?? steps.find((s) => s.status === "pendente");
+      const sorted = [...steps].sort((a, b) => a.position - b.position);
+      const current = sorted.find((s) => s.status !== "pendente" && s.status !== "feita" && s.status !== "pulado") ?? sorted.find((s) => s.status === "pendente");
       return (
         <div key={p.id} className="px-4 py-3 flex items-center gap-3 group hover:bg-muted/30">
           <button onClick={() => onOpen(p)} className="flex-1 min-w-0 text-left">
