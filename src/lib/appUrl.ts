@@ -1,4 +1,4 @@
-export const PUBLIC_APP_URL = "https://athrios-tarefas.lovable.app";
+export const PUBLIC_APP_URL = "https://ambitask.lovable.app";
 
 export const buildAppUrl = (path: string) => {
   const normalized = path.startsWith("/") ? path : `/${path}`;
