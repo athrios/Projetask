@@ -1424,16 +1424,14 @@ const CurrentStepCard = ({
 
       <div>
         <label className="text-xs font-medium">Observação</label>
-        <Textarea
-          value={draft}
-          onChange={(e) => onDraftChange(e.target.value)}
-          placeholder="Anotações desta etapa…"
-          className="min-h-[70px] mt-1"
-        />
-        <div className="flex justify-end mt-1">
-          <Button size="sm" variant="ghost" onClick={onSaveObservation}>
-            Salvar observação
-          </Button>
+        <div className="mt-1">
+          <NoteField
+            value={s.notes ?? ""}
+            onSave={onSaveObservation}
+            placeholder="Anotações desta etapa…"
+            rows={3}
+            className="min-h-[70px]"
+          />
         </div>
       </div>
 
