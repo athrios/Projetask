@@ -74,6 +74,7 @@ const fmt = (t: string) => t.slice(0, 5);
 export const SchedulePanel = ({ date, userId, tasks }: Props) => {
   const { workspaceId } = useWorkspace();
   const [items, setItems] = useState<ScheduleItem[]>([]);
+  const [importableTasks, setImportableTasks] = useState<Task[]>([]);
 
   const load = async () => {
     if (!workspaceId) { setItems([]); return; }
@@ -88,8 +89,23 @@ export const SchedulePanel = ({ date, userId, tasks }: Props) => {
     setItems((data ?? []) as ScheduleItem[]);
   };
 
+  const loadImportable = async () => {
+    if (!workspaceId) { setImportableTasks([]); return; }
+    const { data, error } = await supabase
+      .from("tasks")
+      .select("*")
+      .eq("workspace_id", workspaceId)
+      .eq("done", false)
+      .not("status", "in", "(feita,cancelado)")
+      .order("task_date", { ascending: true })
+      .limit(200);
+    if (error) return;
+    setImportableTasks((data ?? []) as Task[]);
+  };
+
   useEffect(() => {
     load();
+    loadImportable();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [date, workspaceId]);
 
