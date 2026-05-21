@@ -457,6 +457,13 @@ const ColorSwatchPicker = ({
 
 /* ───────── Sub-components ───────── */
 
+const CARD_STEP_STATUSES: { value: string; label: string }[] = [
+  { value: "pendente", label: "Pendente" },
+  { value: "fazendo", label: "Em andamento" },
+  { value: "feita", label: "Concluída" },
+  { value: "pulado", label: "Dispensada" },
+];
+
 const ProcessCard = ({
   p,
   steps,
@@ -464,6 +471,7 @@ const ProcessCard = ({
   templateColor = "gray",
   onOpen,
   onRemove,
+  onChangeStepStatus,
 }: {
   p: Process;
   steps: Step[];
@@ -471,6 +479,7 @@ const ProcessCard = ({
   templateColor?: TemplateColor;
   onOpen: () => void;
   onRemove?: () => void;
+  onChangeStepStatus?: (stepId: string, next: string) => void | Promise<void>;
 }) => {
   const done = steps.filter((s) => s.status === "feita" || s.status === "pulado").length;
   const total = steps.length;
