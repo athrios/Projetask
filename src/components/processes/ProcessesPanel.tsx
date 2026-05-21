@@ -22,6 +22,7 @@ import { Plus, Trash2, Settings2, Workflow, ChevronRight, Check, AlertCircle, Pl
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { StatusPill } from "@/components/shared/StatusPill";
+import { NoteField } from "@/components/shared/NoteField";
 import { ViewSwitcher, type ViewMode } from "@/components/shared/ViewSwitcher";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { PROCESS_STATUS, type ProcessStatus } from "@/lib/taskTokens";
