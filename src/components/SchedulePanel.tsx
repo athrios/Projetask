@@ -181,13 +181,13 @@ export const SchedulePanel = ({ date, userId, tasks }: Props) => {
   };
 
   const insertItem = async (
-    _start: string,
+    customStart: string,
     title: string,
     duration: number,
     taskId: string | null = null,
   ) => {
-    // New row always appended; its start will be computed/persisted by cascade
-    const start = fromMin(lastEnd);
+    // First row uses the user-provided start; subsequent rows append after lastEnd
+    const start = items.length === 0 ? customStart : fromMin(lastEnd);
     const { error } = await supabase.from("schedule_items").insert({
       user_id: userId,
       task_date: date,
