@@ -391,12 +391,14 @@ const ProcessCard = ({
   templateName,
   templateColor = "gray",
   onOpen,
+  onRemove,
 }: {
   p: Process;
   steps: Step[];
   templateName?: string | null;
   templateColor?: TemplateColor;
   onOpen: () => void;
+  onRemove?: () => void;
 }) => {
   const done = steps.filter((s) => s.status === "feita" || s.status === "pulado").length;
   const total = steps.length;
@@ -415,7 +417,7 @@ const ProcessCard = ({
         }
       }}
       className={cn(
-        "rounded-xl border bg-card p-4 hover:shadow-sm transition group cursor-pointer text-left border-l-4",
+        "rounded-xl border bg-card p-4 hover:shadow-sm transition group cursor-pointer text-left border-l-4 relative",
         colorLeftBorder[templateColor],
       )}
     >
@@ -441,7 +443,22 @@ const ProcessCard = ({
             <p className="text-xs text-muted-foreground truncate">{p.client_name}</p>
           )}
         </div>
-        <StatusPill domain="process" value={p.status} size="xs" />
+        <div className="flex items-center gap-1 shrink-0">
+          <StatusPill domain="process" value={p.status} size="xs" />
+          {onRemove && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (confirm("Excluir processo?")) onRemove();
+              }}
+              className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition"
+              aria-label="Excluir processo"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
       </div>
       <div className="mt-3 space-y-2">
         {p.template_type !== "table" && (
