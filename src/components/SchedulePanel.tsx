@@ -181,13 +181,13 @@ export const SchedulePanel = ({ date, userId, tasks }: Props) => {
   };
 
   const insertItem = async (
-    _start: string,
+    customStart: string,
     title: string,
     duration: number,
     taskId: string | null = null,
   ) => {
-    // New row always appended; its start will be computed/persisted by cascade
-    const start = fromMin(lastEnd);
+    // First row uses the user-provided start; subsequent rows append after lastEnd
+    const start = items.length === 0 ? customStart : fromMin(lastEnd);
     const { error } = await supabase.from("schedule_items").insert({
       user_id: userId,
       task_date: date,
@@ -277,6 +277,7 @@ export const SchedulePanel = ({ date, userId, tasks }: Props) => {
             initialStart={p.start}
             initialDuration={p.duration}
             tasks={importableTasks}
+            editableStart={i === 0 && items.length === 0}
             onCommit={(start, title, duration, taskId) =>
               insertItem(start, title, duration, taskId)
             }
@@ -407,18 +408,19 @@ const PlaceholderRow = ({
   initialStart,
   initialDuration,
   tasks,
+  editableStart = false,
   onCommit,
 }: {
   initialStart: string;
   initialDuration: number;
   tasks: Task[];
+  editableStart?: boolean;
   onCommit: (start: string, title: string, duration: number, taskId: string | null) => void;
 }) => {
   const [start, setStart] = useState(initialStart);
   const [title, setTitle] = useState("");
   const [duration, setDuration] = useState(initialDuration);
   useEffect(() => setStart(initialStart), [initialStart]);
-  const end = fromMin(toMin(start) + duration);
 
   const commit = (t: string, taskId: string | null = null) => {
     if (t.trim()) onCommit(start, t, duration, taskId);
@@ -426,9 +428,18 @@ const PlaceholderRow = ({
 
   return (
     <li className="flex flex-wrap items-center gap-2 px-3 py-2 opacity-70 hover:opacity-100 transition">
-      <div className="h-8 w-[100px] text-xs flex items-center px-2 text-muted-foreground tabular-nums">
-        {start}
-      </div>
+      {editableStart ? (
+        <Input
+          type="time"
+          value={start}
+          onChange={(e) => setStart(e.target.value)}
+          className="h-8 text-xs w-[100px]"
+        />
+      ) : (
+        <div className="h-8 w-[100px] text-xs flex items-center px-2 text-muted-foreground tabular-nums">
+          {start}
+        </div>
+      )}
       <ImportButton
         tasks={tasks}
         onPick={(task) => {

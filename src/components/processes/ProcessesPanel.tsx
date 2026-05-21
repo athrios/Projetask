@@ -482,9 +482,10 @@ const ProcessCard = ({
             </div>
             {current && (
               <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                <ChevronRight className="h-3 w-3" />
+                <ChevronRight className="h-3 w-3 shrink-0" />
                 <span className="shrink-0">Etapa atual:</span>
-                <span className="truncate">{current.title}</span>
+                <span className="truncate flex-1">{current.title}</span>
+                <StatusPill domain="process_step" value={current.status} size="xs" className="shrink-0" />
               </div>
             )}
             {currentNote && (
