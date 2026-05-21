@@ -234,6 +234,19 @@ const PublicForm = () => {
                   )}
                 </div>
               )}
+              {f.field_type === "state_city" && (
+                <StateCityField
+                  value={v as { uf?: string; cidade?: string } | undefined}
+                  onChange={(val) => set(val)}
+                  required={f.required}
+                />
+              )}
+              {f.field_type === "partner_group" && (
+                <PartnerGroupField
+                  value={(Array.isArray(v) ? v : []) as never}
+                  onChange={(val) => set(val)}
+                />
+              )}
             </div>
           );
         })}
