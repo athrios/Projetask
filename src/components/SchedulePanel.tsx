@@ -277,6 +277,7 @@ export const SchedulePanel = ({ date, userId, tasks }: Props) => {
             initialStart={p.start}
             initialDuration={p.duration}
             tasks={importableTasks}
+            editableStart={i === 0 && items.length === 0}
             onCommit={(start, title, duration, taskId) =>
               insertItem(start, title, duration, taskId)
             }
