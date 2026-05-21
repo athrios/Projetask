@@ -72,9 +72,32 @@ export const RequestsPanel = ({ userId }: Props) => {
     load();
   };
 
+  const formatValue = (v: unknown): string => {
+    if (v === null || v === undefined || v === "") return "—";
+    if (Array.isArray(v)) {
+      return v
+        .map((x, i) =>
+          x && typeof x === "object"
+            ? `\n  ${i + 1}) ${Object.entries(x as Record<string, unknown>)
+                .map(([kk, vv]) => `${kk}: ${formatValue(vv)}`)
+                .join("; ")}`
+            : String(x),
+        )
+        .join(", ");
+    }
+    if (typeof v === "object") {
+      const o = v as Record<string, unknown>;
+      if ("uf" in o || "cidade" in o) return `${o.uf ?? "—"} / ${o.cidade ?? "—"}`;
+      return Object.entries(o)
+        .map(([kk, vv]) => `${kk}: ${formatValue(vv)}`)
+        .join("; ");
+    }
+    return String(v);
+  };
+
   const formatData = (data: Record<string, unknown>) =>
     Object.entries(data ?? {})
-      .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(", ") : String(v ?? "—")}`)
+      .map(([k, v]) => `${k}: ${formatValue(v)}`)
       .join("\n");
 
   const convertToTask = async (r: Response) => {
