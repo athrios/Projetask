@@ -237,7 +237,7 @@ export const SchedulePanel = ({ date, userId, tasks }: Props) => {
             title={it.title}
             duration={it.duration_minutes}
             status={it.status}
-            tasks={tasks}
+            tasks={importableTasks}
             linkedTaskId={it.task_id}
             isFirst={idx === 0}
             onChangeStart={(v) => updateItem(it.id, { start_time: v + ":00" })}
