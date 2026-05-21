@@ -226,6 +226,59 @@ export const ProcessesPanel = ({ userId }: Props) => {
     load();
   };
 
+  const changeStepStatusFromCard = async (processId: string, stepId: string, next: string) => {
+    const procSteps = stepsByProc[processId] ?? [];
+    const proc = processes.find((p) => p.id === processId);
+    const s = procSteps.find((x) => x.id === stepId);
+    if (!s || !proc || s.status === next) return;
+    const now = new Date().toISOString();
+    const patch: Record<string, unknown> = { status: next };
+    if (next === "feita") {
+      patch.completed_at = now;
+    } else if (next === "pulado") {
+      patch.dismissed_at = now;
+    } else {
+      patch.completed_at = null;
+      patch.dismissed_at = null;
+      if (next !== "pendente" && !s.started_at) patch.started_at = now;
+    }
+    const { error } = await supabase.from("process_steps").update(patch as never).eq("id", stepId);
+    if (error) return toast.error(error.message);
+    let after: Step[] = procSteps.map((x) =>
+      x.id === stepId ? ({ ...x, ...patch, status: next } as Step) : x,
+    );
+    if (next === "feita" || next === "pulado") {
+      const nextPending = [...after].sort((a, b) => a.position - b.position).find((x) => x.status === "pendente");
+      if (nextPending) {
+        const startedAt = new Date().toISOString();
+        const { error: e2 } = await supabase
+          .from("process_steps")
+          .update({ status: "fazendo", started_at: startedAt })
+          .eq("id", nextPending.id);
+        if (e2) {
+          toast.error(e2.message);
+          return;
+        }
+        after = after.map((x) =>
+          x.id === nextPending.id ? { ...x, status: "fazendo", started_at: startedAt } : x,
+        );
+      }
+    }
+    const nextProcStatus = computeProcessStatus(
+      proc.status === "cancelado" ? "cancelado" : proc.status,
+      after,
+    );
+    if (nextProcStatus !== proc.status) {
+      await supabase.from("processes").update({ status: nextProcStatus }).eq("id", proc.id);
+      if (nextProcStatus === "concluido") {
+        await logActivity(userId, "process", proc.id, "completed", `Processo concluído: "${proc.name}"`);
+        toast.success("Processo concluído");
+      }
+    }
+    toast.success("Status da etapa atualizado");
+    load();
+  };
+
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between gap-3">
