@@ -1300,7 +1300,6 @@ const ProcessDetail = ({
                 setObsDraft((p) => ({ ...p, [currentStep.id]: v }));
                 return saveObservation(currentStep, v);
               }}
-              onComplete={() => completeStep(currentStep)}
               onDismiss={() => dismissStep(currentStep)}
               onRemove={() => removeStep(currentStep.id)}
               disabled={isCancelled || currentStep.status === "pendente"}
