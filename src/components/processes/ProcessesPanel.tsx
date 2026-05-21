@@ -542,11 +542,13 @@ const KanbanView = ({
   stepsByProc,
   templates,
   onOpen,
+  onRemove,
 }: {
   processes: Process[];
   stepsByProc: Record<string, Step[]>;
   templates: Template[];
   onOpen: (p: Process) => void;
+  onRemove: (id: string) => void;
 }) => (
   <div className="overflow-x-auto -mx-2 pb-2">
     <div className="flex gap-3 px-2 min-w-max">
@@ -569,6 +571,7 @@ const KanbanView = ({
                     templateName={tpl?.name ?? null}
                     templateColor={asColor(tpl?.color)}
                     onOpen={() => onOpen(p)}
+                    onRemove={() => onRemove(p.id)}
                   />
                 );
               })}
