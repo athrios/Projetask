@@ -328,6 +328,33 @@ export type Database = {
           },
         ]
       }
+      process_step_custom_statuses: {
+        Row: {
+          color: string
+          created_at: string
+          id: string
+          label: string
+          user_id: string
+          workspace_id: string
+        }
+        Insert: {
+          color?: string
+          created_at?: string
+          id?: string
+          label: string
+          user_id: string
+          workspace_id: string
+        }
+        Update: {
+          color?: string
+          created_at?: string
+          id?: string
+          label?: string
+          user_id?: string
+          workspace_id?: string
+        }
+        Relationships: []
+      }
       process_steps: {
         Row: {
           completed_at: string | null
