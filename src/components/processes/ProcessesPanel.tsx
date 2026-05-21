@@ -1332,7 +1332,7 @@ const ProcessDetail = ({
                     >
                       <span className="w-5 tabular-nums">{steps.findIndex((x) => x.id === s.id) + 1}.</span>
                       <span className="flex-1 truncate">{s.title}</span>
-                      {s.due_date && <span className="tabular-nums">{s.due_date}</span>}
+                      {s.due_date && <span className="tabular-nums">{fmtDate(s.due_date)}</span>}
                       <StatusPill domain="process_step" value={s.status} size="xs" />
                     </li>
                   ))}
