@@ -33,6 +33,15 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar";
 import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
+
+const fmtDate = (iso?: string | null) => {
+  if (!iso) return "";
+  try {
+    return format(parseISO(iso), "dd-MM-yy");
+  } catch {
+    return iso;
+  }
+};
 import {
   TEMPLATE_COLORS,
   asColor,
@@ -217,6 +226,59 @@ export const ProcessesPanel = ({ userId }: Props) => {
     load();
   };
 
+  const changeStepStatusFromCard = async (processId: string, stepId: string, next: string) => {
+    const procSteps = stepsByProc[processId] ?? [];
+    const proc = processes.find((p) => p.id === processId);
+    const s = procSteps.find((x) => x.id === stepId);
+    if (!s || !proc || s.status === next) return;
+    const now = new Date().toISOString();
+    const patch: Record<string, unknown> = { status: next };
+    if (next === "feita") {
+      patch.completed_at = now;
+    } else if (next === "pulado") {
+      patch.dismissed_at = now;
+    } else {
+      patch.completed_at = null;
+      patch.dismissed_at = null;
+      if (next !== "pendente" && !s.started_at) patch.started_at = now;
+    }
+    const { error } = await supabase.from("process_steps").update(patch as never).eq("id", stepId);
+    if (error) return toast.error(error.message);
+    let after: Step[] = procSteps.map((x) =>
+      x.id === stepId ? ({ ...x, ...patch, status: next } as Step) : x,
+    );
+    if (next === "feita" || next === "pulado") {
+      const nextPending = [...after].sort((a, b) => a.position - b.position).find((x) => x.status === "pendente");
+      if (nextPending) {
+        const startedAt = new Date().toISOString();
+        const { error: e2 } = await supabase
+          .from("process_steps")
+          .update({ status: "fazendo", started_at: startedAt })
+          .eq("id", nextPending.id);
+        if (e2) {
+          toast.error(e2.message);
+          return;
+        }
+        after = after.map((x) =>
+          x.id === nextPending.id ? { ...x, status: "fazendo", started_at: startedAt } : x,
+        );
+      }
+    }
+    const nextProcStatus = computeProcessStatus(
+      proc.status === "cancelado" ? "cancelado" : proc.status,
+      after,
+    );
+    if (nextProcStatus !== proc.status) {
+      await supabase.from("processes").update({ status: nextProcStatus }).eq("id", proc.id);
+      if (nextProcStatus === "concluido") {
+        await logActivity(userId, "process", proc.id, "completed", `Processo concluído: "${proc.name}"`);
+        toast.success("Processo concluído");
+      }
+    }
+    toast.success("Status da etapa atualizado");
+    load();
+  };
+
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between gap-3">
@@ -261,6 +323,9 @@ export const ProcessesPanel = ({ userId }: Props) => {
                 templateColor={asColor(tpl?.color)}
                 onOpen={() => setOpenProc(p)}
                 onRemove={() => removeProcess(p.id)}
+                onChangeStepStatus={(stepId, next) => {
+                  void changeStepStatusFromCard(p.id, stepId, next);
+                }}
               />
             );
           })}
@@ -394,6 +459,13 @@ const ColorSwatchPicker = ({
 
 /* ───────── Sub-components ───────── */
 
+const CARD_STEP_STATUSES: { value: string; label: string }[] = [
+  { value: "pendente", label: "Pendente" },
+  { value: "fazendo", label: "Em andamento" },
+  { value: "feita", label: "Concluída" },
+  { value: "pulado", label: "Dispensada" },
+];
+
 const ProcessCard = ({
   p,
   steps,
@@ -401,6 +473,7 @@ const ProcessCard = ({
   templateColor = "gray",
   onOpen,
   onRemove,
+  onChangeStepStatus,
 }: {
   p: Process;
   steps: Step[];
@@ -408,6 +481,7 @@ const ProcessCard = ({
   templateColor?: TemplateColor;
   onOpen: () => void;
   onRemove?: () => void;
+  onChangeStepStatus?: (stepId: string, next: string) => void | Promise<void>;
 }) => {
   const done = steps.filter((s) => s.status === "feita" || s.status === "pulado").length;
   const total = steps.length;
@@ -486,11 +560,52 @@ const ProcessCard = ({
                 <ChevronRight className="h-3 w-3 shrink-0" />
                 <span className="shrink-0">Etapa atual:</span>
                 <span className="truncate flex-1">{current.title}</span>
-                <StatusPill domain="process_step" value={current.status} size="xs" className="shrink-0" />
+                {onChangeStepStatus ? (
+                  <div
+                    onClick={(e) => e.stopPropagation()}
+                    onKeyDown={(e) => e.stopPropagation()}
+                    onPointerDown={(e) => e.stopPropagation()}
+                    className="shrink-0"
+                  >
+                    <Select
+                      value={CARD_STEP_STATUSES.some((o) => o.value === current.status) ? current.status : "__other__"}
+                      onValueChange={(v) => {
+                        if (v === "__other__") return;
+                        onChangeStepStatus(current.id, v);
+                      }}
+                    >
+                      <SelectTrigger
+                        className="h-6 px-2 py-0 text-[11px] gap-1 border-muted-foreground/20 hover:border-foreground/40 transition w-auto min-w-[110px]"
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {CARD_STEP_STATUSES.map((o) => (
+                          <SelectItem key={o.value} value={o.value} className="text-xs">
+                            {o.label}
+                          </SelectItem>
+                        ))}
+                        {!CARD_STEP_STATUSES.some((o) => o.value === current.status) && (
+                          <SelectItem value="__other__" className="text-xs" disabled>
+                            {current.status}
+                          </SelectItem>
+                        )}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                ) : (
+                  <StatusPill domain="process_step" value={current.status} size="xs" className="shrink-0" />
+                )}
               </div>
             )}
             {currentNote && (
-              <div className="rounded-md bg-muted/40 px-2 py-1.5">
+              <div
+                className="rounded-md bg-muted/40 px-2 py-1.5 cursor-text select-text"
+                onClick={(e) => e.stopPropagation()}
+                onMouseDown={(e) => e.stopPropagation()}
+                onPointerDown={(e) => e.stopPropagation()}
+                onKeyDown={(e) => e.stopPropagation()}
+              >
                 <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Observação</p>
                 <p className="text-xs text-foreground/80 line-clamp-2 break-words">{currentNote}</p>
               </div>
@@ -503,7 +618,7 @@ const ProcessCard = ({
           </p>
         )}
         {p.due_date && (
-          <p className="text-[11px] text-muted-foreground">Prazo: {p.due_date}</p>
+          <p className="text-[11px] text-muted-foreground">Prazo: {fmtDate(p.due_date)}</p>
         )}
       </div>
     </div>
@@ -1185,7 +1300,6 @@ const ProcessDetail = ({
                 setObsDraft((p) => ({ ...p, [currentStep.id]: v }));
                 return saveObservation(currentStep, v);
               }}
-              onComplete={() => completeStep(currentStep)}
               onDismiss={() => dismissStep(currentStep)}
               onRemove={() => removeStep(currentStep.id)}
               disabled={isCancelled || currentStep.status === "pendente"}
@@ -1218,7 +1332,7 @@ const ProcessDetail = ({
                     >
                       <span className="w-5 tabular-nums">{steps.findIndex((x) => x.id === s.id) + 1}.</span>
                       <span className="flex-1 truncate">{s.title}</span>
-                      {s.due_date && <span className="tabular-nums">{s.due_date}</span>}
+                      {s.due_date && <span className="tabular-nums">{fmtDate(s.due_date)}</span>}
                       <StatusPill domain="process_step" value={s.status} size="xs" />
                     </li>
                   ))}
@@ -1337,13 +1451,12 @@ const ResolvedStepRow = ({
 };
 
 const CurrentStepCard = ({
-  s, index, onSaveObservation, onComplete, onDismiss, onRemove, disabled, showStartHint,
+  s, index, onSaveObservation, onDismiss, onRemove, disabled, showStartHint,
   customStatuses, onChangeStatus, onAddCustomStatus,
 }: {
   s: Step;
   index: number;
   onSaveObservation: (v: string) => Promise<void>;
-  onComplete: () => void;
   onDismiss: () => void;
   onRemove: () => void;
   disabled: boolean;
@@ -1403,7 +1516,7 @@ const CurrentStepCard = ({
                 )}
               >
                 {overdue && <AlertCircle className="h-3 w-3" />}
-                Prazo: {s.due_date}
+                Prazo: {fmtDate(s.due_date)}
               </span>
             )}
             {showStartHint && (
@@ -1436,9 +1549,6 @@ const CurrentStepCard = ({
       </div>
 
       <div className="flex flex-wrap gap-2 pt-1 border-t">
-        <Button size="sm" onClick={onComplete} disabled={disabled}>
-          <Check className="h-3.5 w-3.5" /> Marcar como concluída
-        </Button>
         <Button size="sm" variant="outline" onClick={onDismiss} disabled={disabled}>
           <SkipForward className="h-3.5 w-3.5" /> Dispensar etapa
         </Button>
