@@ -109,6 +109,26 @@ export const SchedulePanel = ({ date, userId, tasks }: Props) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [date, workspaceId]);
 
+  // Realtime: tasks linked to schedule items should mirror status/title here automatically
+  useEffect(() => {
+    if (!workspaceId) return;
+    const channel = supabase
+      .channel(`schedule-tasks-${workspaceId}-${date}`)
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "tasks", filter: `workspace_id=eq.${workspaceId}` },
+        () => {
+          load();
+          loadImportable();
+        },
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workspaceId, date]);
+
   // Cascade: each row's start = base (first row) + sum of previous durations
   const computedStarts = useMemo(() => {
     const out: string[] = [];
