@@ -1053,10 +1053,10 @@ const ProcessDetail = ({
     onChanged();
   };
 
-  const saveObservation = async (s: Step) => {
-    const v = obsDraft[s.id] ?? s.notes ?? "";
-    await supabase.from("process_steps").update({ notes: v }).eq("id", s.id);
-    toast.success("Observação salva");
+  const saveObservation = async (s: Step, valueOverride?: string) => {
+    const v = valueOverride ?? obsDraft[s.id] ?? s.notes ?? "";
+    const { error } = await supabase.from("process_steps").update({ notes: v }).eq("id", s.id);
+    if (error) throw new Error(error.message);
     onChanged();
   };
 
