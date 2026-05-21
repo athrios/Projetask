@@ -1,43 +1,27 @@
-## Envio de e-mail dos convites de workspace
+## Objetivo
 
-### Objetivo
-Disparar automaticamente um e-mail para o convidado sempre que um novo convite for criado em **Workspaces → Convites**, usando o remetente `convites@task.athrioscontabil.com.br`.
+Mudar o botão de importação do cronograma para listar **todas as tarefas não concluídas** do workspace atual, independente da data ou do status específico (pendente, fazendo, aguardando etc.) — excluindo apenas `feita` e `cancelado`.
 
-### Etapas
+## Comportamento atual
 
-**1. Infraestrutura de e-mails do app**
-- Provisionar a infraestrutura de envio (fila com retentativas, supressão de bounces, log de envios, cron de processamento).
-- Criar as funções de envio (`send-transactional-email`), unsubscribe (`handle-email-unsubscribe`) e supressão (`handle-email-suppression`).
+O `ImportButton` no `SchedulePanel` recebe a lista `tasks` do componente pai, que hoje é filtrada pela data do dia visualizado (`task_date = hoje`). Isso esconde tarefas pendentes de outros dias.
 
-**2. Template "Convite para workspace"**
-- Novo template React Email em `supabase/functions/_shared/transactional-email-templates/workspace-invite.tsx`.
-- Conteúdo: saudação, nome de quem convidou, nome do workspace, botão **Aceitar convite** apontando para `/convite/{id}`, e nota de validade.
-- Assunto: `Você foi convidado(a) para o workspace {nome}`.
-- Remetente visível: `Athrios Tarefas <convites@task.athrioscontabil.com.br>`.
+## Mudança proposta
 
-**3. Página de aceitação `/convite/:id`**
-- Nova rota pública.
-- Se o visitante não está logado, redireciona para `/auth` (login/cadastro) preservando o destino.
-- Após login, busca o convite (RLS já permite quando o e-mail confere), exibe nome do workspace e botão **Aceitar**.
-- Ao aceitar: marca `accepted_at`, insere o usuário em `workspace_members` e dá feedback de sucesso.
-- Trata estados: convite inexistente, já aceito, e-mail não confere com o da conta.
+1. **`SchedulePanel.tsx`** — Em vez de depender da prop `tasks` (filtrada por data), buscar internamente uma lista própria de tarefas importáveis:
+   - Query na tabela `tasks` filtrando por:
+     - `workspace_id = workspaceId`
+     - `status NOT IN ('feita', 'cancelado')`
+     - `done = false`
+   - Ordenar por `task_date` ascendente, depois `priority`.
+   - Recarregar quando o workspace muda ou após importar/desvincular.
 
-**4. Disparo do e-mail na criação do convite**
-- Em `WorkspacesPanel.tsx → InvitesTab.create`: após o insert bem-sucedido em `workspace_invitations`, chamar `supabase.functions.invoke('send-transactional-email', ...)` com:
-  - `templateName: 'workspace-invite'`
-  - `recipientEmail`: o e-mail informado
-  - `idempotencyKey`: `workspace-invite-{id}` (evita reenvio em retries)
-  - `templateData`: `{ inviterName, workspaceName, acceptUrl }`
-- Remover o aviso "O envio de e-mail será habilitado em breve" e substituir por mensagem de status do envio.
+2. **Manter a prop `tasks`** por compatibilidade, mas o `ImportButton` passa a usar a nova lista interna (`importableTasks`).
 
-### Detalhes técnicos
-- Sender domain: `task.athrioscontabil.com.br` (já verificado).
-- O rodapé de cancelamento é anexado automaticamente pelo sistema — o template não inclui esse link.
-- `idempotencyKey` baseado no `id` do convite garante que cliques duplos ou retries não gerem dois e-mails.
-- Página de aceite usa o `id` do convite como token (já é UUID); RLS garante que só o dono do e-mail pode lê-lo/aceitá-lo.
-- Sem mudanças no schema do banco — `workspace_invitations` e `workspace_members` já existem.
+3. **Opcional (UX)**: mostrar a data da tarefa ao lado do título no dropdown (ex.: "Revisar contrato · 18/05") para o usuário se localizar quando há muitas tarefas de dias diferentes.
 
-### Fora de escopo
-- Reenviar convite manualmente (pode vir depois).
-- Expiração automática de convites.
-- Personalização visual avançada do template além das cores do app.
+## Detalhes técnicos
+
+- Nenhuma mudança de schema, RLS ou backend.
+- Nenhum impacto em outras telas — `TodayPanel`/`Index` continuam filtrando por data para suas próprias listagens.
+- Tarefas recorrentes-pai (`is_recurring=true` sem instância) seguem a mesma regra de status.
