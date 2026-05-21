@@ -1169,9 +1169,10 @@ const ProcessDetail = ({
               key={s.id}
               s={s}
               index={steps.findIndex((x) => x.id === s.id)}
-              draft={obsDraft[s.id] ?? s.notes ?? ""}
-              onDraftChange={(v) => setObsDraft((p) => ({ ...p, [s.id]: v }))}
-              onSaveObservation={() => saveObservation(s)}
+              onSaveObservation={(v) => {
+                setObsDraft((p) => ({ ...p, [s.id]: v }));
+                return saveObservation(s, v);
+              }}
             />
           ))}
 
