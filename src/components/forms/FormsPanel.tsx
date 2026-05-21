@@ -326,10 +326,6 @@ const FormBuilder = ({
                         ))}
                       </SelectContent>
                     </Select>
-                    <label className="flex items-center gap-1.5 text-xs">
-                      <Switch checked={f.required} onCheckedChange={(v) => updateField(f.id, { required: v })} />
-                      Obrigatório
-                    </label>
                     <button
                       onClick={() => removeField(f.id)}
                       className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100"
@@ -337,6 +333,10 @@ const FormBuilder = ({
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
                   </div>
+                  <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer w-fit select-none">
+                    <Switch checked={f.required} onCheckedChange={(v) => updateField(f.id, { required: v })} />
+                    <span>Resposta obrigatória</span>
+                  </label>
                   {(f.field_type === "select" || f.field_type === "multi_select") && (
                     <Textarea
                       defaultValue={Array.isArray(f.options) ? (f.options as string[]).join("\n") : ""}
