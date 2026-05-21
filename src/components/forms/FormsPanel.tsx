@@ -362,13 +362,13 @@ const FormBuilder = ({
             <div className="flex items-center gap-2 rounded-lg border p-3 bg-muted/30">
               <LinkIcon className="h-4 w-4 text-muted-foreground" />
               <span className="text-xs text-muted-foreground flex-1 truncate">
-                {window.location.origin}/f/{form.public_slug}
+                {buildAppUrl(`/f/${form.public_slug}`)}
               </span>
               <Button
                 size="sm"
                 variant="outline"
                 onClick={() => {
-                  navigator.clipboard.writeText(`${window.location.origin}/f/${form.public_slug}`);
+                  navigator.clipboard.writeText(buildAppUrl(`/f/${form.public_slug}`));
                   toast.success("Link copiado");
                 }}
               >
