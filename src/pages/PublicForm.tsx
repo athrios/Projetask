@@ -15,8 +15,18 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { CheckCircle2 } from "lucide-react";
 import { submitterNameSchema, publicTextAnswerSchema } from "@/lib/validation";
+import { StateCityField } from "@/components/forms/fields/StateCityField";
+import { PartnerGroupField } from "@/components/forms/fields/PartnerGroupField";
 
-type FieldType = "short_text" | "long_text" | "select" | "multi_select" | "date" | "file";
+type FieldType =
+  | "short_text"
+  | "long_text"
+  | "select"
+  | "multi_select"
+  | "date"
+  | "file"
+  | "state_city"
+  | "partner_group";
 
 interface Form {
   id: string;
