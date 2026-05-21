@@ -348,13 +348,22 @@ const ScheduleRow = ({
             <Link2 className="h-3.5 w-3.5" />
           </button>
         )}
-        <Input
-          value={localTitle}
-          onChange={(e) => setLocalTitle(e.target.value)}
-          onBlur={() => localTitle !== title && onChangeTitle(localTitle)}
-          placeholder="Tarefa..."
-          className={`h-8 text-sm flex-1 ${status === "feita" ? "line-through text-muted-foreground" : ""}`}
-        />
+        {linkedTaskId ? (
+          <div
+            title="Vinculado a uma tarefa — edite o título na seção Tarefas"
+            className={`h-8 text-sm flex-1 flex items-center px-3 rounded-md border border-dashed border-border bg-muted/30 text-foreground/90 truncate cursor-not-allowed ${status === "feita" ? "line-through text-muted-foreground" : ""}`}
+          >
+            {title || <span className="text-muted-foreground italic">Tarefa vinculada</span>}
+          </div>
+        ) : (
+          <Input
+            value={localTitle}
+            onChange={(e) => setLocalTitle(e.target.value)}
+            onBlur={() => localTitle !== title && onChangeTitle(localTitle)}
+            placeholder="Tarefa..."
+            className={`h-8 text-sm flex-1 ${status === "feita" ? "line-through text-muted-foreground" : ""}`}
+          />
+        )}
       </div>
       <Select value={String(duration)} onValueChange={(v) => onChangeDuration(Number(v))}>
         <SelectTrigger className="h-8 text-xs w-[90px]">
