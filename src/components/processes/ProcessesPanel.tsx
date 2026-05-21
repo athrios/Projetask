@@ -1451,13 +1451,12 @@ const ResolvedStepRow = ({
 };
 
 const CurrentStepCard = ({
-  s, index, onSaveObservation, onComplete, onDismiss, onRemove, disabled, showStartHint,
+  s, index, onSaveObservation, onDismiss, onRemove, disabled, showStartHint,
   customStatuses, onChangeStatus, onAddCustomStatus,
 }: {
   s: Step;
   index: number;
   onSaveObservation: (v: string) => Promise<void>;
-  onComplete: () => void;
   onDismiss: () => void;
   onRemove: () => void;
   disabled: boolean;
