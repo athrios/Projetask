@@ -408,18 +408,19 @@ const PlaceholderRow = ({
   initialStart,
   initialDuration,
   tasks,
+  editableStart = false,
   onCommit,
 }: {
   initialStart: string;
   initialDuration: number;
   tasks: Task[];
+  editableStart?: boolean;
   onCommit: (start: string, title: string, duration: number, taskId: string | null) => void;
 }) => {
   const [start, setStart] = useState(initialStart);
   const [title, setTitle] = useState("");
   const [duration, setDuration] = useState(initialDuration);
   useEffect(() => setStart(initialStart), [initialStart]);
-  const end = fromMin(toMin(start) + duration);
 
   const commit = (t: string, taskId: string | null = null) => {
     if (t.trim()) onCommit(start, t, duration, taskId);
@@ -427,9 +428,18 @@ const PlaceholderRow = ({
 
   return (
     <li className="flex flex-wrap items-center gap-2 px-3 py-2 opacity-70 hover:opacity-100 transition">
-      <div className="h-8 w-[100px] text-xs flex items-center px-2 text-muted-foreground tabular-nums">
-        {start}
-      </div>
+      {editableStart ? (
+        <Input
+          type="time"
+          value={start}
+          onChange={(e) => setStart(e.target.value)}
+          className="h-8 text-xs w-[100px]"
+        />
+      ) : (
+        <div className="h-8 w-[100px] text-xs flex items-center px-2 text-muted-foreground tabular-nums">
+          {start}
+        </div>
+      )}
       <ImportButton
         tasks={tasks}
         onPick={(task) => {
