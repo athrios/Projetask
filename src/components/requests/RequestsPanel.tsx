@@ -72,9 +72,32 @@ export const RequestsPanel = ({ userId }: Props) => {
     load();
   };
 
+  const formatValue = (v: unknown): string => {
+    if (v === null || v === undefined || v === "") return "—";
+    if (Array.isArray(v)) {
+      return v
+        .map((x, i) =>
+          x && typeof x === "object"
+            ? `\n  ${i + 1}) ${Object.entries(x as Record<string, unknown>)
+                .map(([kk, vv]) => `${kk}: ${formatValue(vv)}`)
+                .join("; ")}`
+            : String(x),
+        )
+        .join(", ");
+    }
+    if (typeof v === "object") {
+      const o = v as Record<string, unknown>;
+      if ("uf" in o || "cidade" in o) return `${o.uf ?? "—"} / ${o.cidade ?? "—"}`;
+      return Object.entries(o)
+        .map(([kk, vv]) => `${kk}: ${formatValue(vv)}`)
+        .join("; ");
+    }
+    return String(v);
+  };
+
   const formatData = (data: Record<string, unknown>) =>
     Object.entries(data ?? {})
-      .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(", ") : String(v ?? "—")}`)
+      .map(([k, v]) => `${k}: ${formatValue(v)}`)
       .join("\n");
 
   const convertToTask = async (r: Response) => {
@@ -248,19 +271,50 @@ export const RequestsPanel = ({ userId }: Props) => {
                   </p>
                 </div>
               )}
-              <div className="rounded-lg border p-3 bg-muted/20 space-y-2">
-                {Object.entries(open.data ?? {}).map(([k, v]) => (
-                  <div key={k}>
-                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{k}</p>
-                    {v && typeof v === "object" && !Array.isArray(v) && "path" in (v as object) ? (
-                      <FileLink file={v as { path: string; name: string }} />
-                    ) : (
-                      <p className="text-sm whitespace-pre-wrap">
-                        {Array.isArray(v) ? v.join(", ") : String(v ?? "—")}
-                      </p>
-                    )}
-                  </div>
-                ))}
+              <div className="rounded-lg border p-3 bg-muted/20 space-y-3">
+                {Object.entries(open.data ?? {}).map(([k, v]) => {
+                  const isFile =
+                    v && typeof v === "object" && !Array.isArray(v) && "path" in (v as object);
+                  const isPartnerList =
+                    Array.isArray(v) &&
+                    v.length > 0 &&
+                    typeof v[0] === "object" &&
+                    v[0] !== null &&
+                    !Array.isArray(v[0]);
+                  const isStateCity =
+                    v &&
+                    typeof v === "object" &&
+                    !Array.isArray(v) &&
+                    ("uf" in (v as object) || "cidade" in (v as object));
+                  return (
+                    <div key={k}>
+                      <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{k}</p>
+                      {isFile ? (
+                        <FileLink file={v as { path: string; name: string }} />
+                      ) : isStateCity ? (
+                        <p className="text-sm">
+                          {(v as { uf?: string }).uf ?? "—"} / {(v as { cidade?: string }).cidade ?? "—"}
+                        </p>
+                      ) : isPartnerList ? (
+                        <div className="space-y-2 mt-1">
+                          {(v as Array<Record<string, unknown>>).map((row, i) => (
+                            <div key={i} className="rounded-md border p-2 bg-background text-xs space-y-0.5">
+                              <p className="font-semibold mb-1">Sócio {i + 1}</p>
+                              {Object.entries(row).map(([kk, vv]) => (
+                                <p key={kk}>
+                                  <span className="text-muted-foreground">{kk}: </span>
+                                  {formatValue(vv)}
+                                </p>
+                              ))}
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-sm whitespace-pre-wrap">{formatValue(v)}</p>
+                      )}
+                    </div>
+                  );
+                })}
                 {Object.keys(open.data ?? {}).length === 0 && (
                   <p className="text-xs text-muted-foreground">Sem campos preenchidos.</p>
                 )}

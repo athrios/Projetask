@@ -15,8 +15,18 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { CheckCircle2 } from "lucide-react";
 import { submitterNameSchema, publicTextAnswerSchema } from "@/lib/validation";
+import { StateCityField } from "@/components/forms/fields/StateCityField";
+import { PartnerGroupField } from "@/components/forms/fields/PartnerGroupField";
 
-type FieldType = "short_text" | "long_text" | "select" | "multi_select" | "date" | "file";
+type FieldType =
+  | "short_text"
+  | "long_text"
+  | "select"
+  | "multi_select"
+  | "date"
+  | "file"
+  | "state_city"
+  | "partner_group";
 
 interface Form {
   id: string;
@@ -84,7 +94,7 @@ const PublicForm = () => {
         cleanValues[f.label] = r.data;
       } else if (Array.isArray(v)) {
         if (v.length > 50) return toast.error(`${f.label}: máximo 50 itens`);
-        cleanValues[f.label] = v.slice(0, 50).map((x) => (typeof x === "string" ? x.slice(0, 200) : x));
+        cleanValues[f.label] = v.slice(0, 50);
       } else {
         cleanValues[f.label] = v;
       }
@@ -223,6 +233,19 @@ const PublicForm = () => {
                     </p>
                   )}
                 </div>
+              )}
+              {f.field_type === "state_city" && (
+                <StateCityField
+                  value={v as { uf?: string; cidade?: string } | undefined}
+                  onChange={(val) => set(val)}
+                  required={f.required}
+                />
+              )}
+              {f.field_type === "partner_group" && (
+                <PartnerGroupField
+                  value={(Array.isArray(v) ? v : []) as never}
+                  onChange={(val) => set(val)}
+                />
               )}
             </div>
           );

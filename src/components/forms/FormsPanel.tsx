@@ -27,7 +27,15 @@ import { useWorkspace } from "@/hooks/useWorkspace";
 import { TEMPLATE_COLORS, colorPill, colorLeftBorder, asColor } from "@/components/processes/templateColors";
 import { cn } from "@/lib/utils";
 
-type FieldType = "short_text" | "long_text" | "select" | "multi_select" | "date" | "file";
+type FieldType =
+  | "short_text"
+  | "long_text"
+  | "select"
+  | "multi_select"
+  | "date"
+  | "file"
+  | "state_city"
+  | "partner_group";
 
 interface Form {
   id: string;
@@ -54,6 +62,8 @@ const FIELD_TYPES: { value: FieldType; label: string }[] = [
   { value: "multi_select", label: "Múltipla escolha" },
   { value: "date", label: "Data" },
   { value: "file", label: "Arquivo / Anexo" },
+  { value: "state_city", label: "Estado + Cidade" },
+  { value: "partner_group", label: "Grupo de sócios" },
 ];
 
 interface Props { userId: string }
