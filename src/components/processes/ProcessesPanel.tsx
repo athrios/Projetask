@@ -1181,9 +1181,10 @@ const ProcessDetail = ({
             <CurrentStepCard
               s={currentStep}
               index={steps.findIndex((x) => x.id === currentStep.id)}
-              draft={obsDraft[currentStep.id] ?? currentStep.notes ?? ""}
-              onDraftChange={(v) => setObsDraft((p) => ({ ...p, [currentStep.id]: v }))}
-              onSaveObservation={() => saveObservation(currentStep)}
+              onSaveObservation={(v) => {
+                setObsDraft((p) => ({ ...p, [currentStep.id]: v }));
+                return saveObservation(currentStep, v);
+              }}
               onComplete={() => completeStep(currentStep)}
               onDismiss={() => dismissStep(currentStep)}
               onRemove={() => removeStep(currentStep.id)}
