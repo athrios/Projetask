@@ -1184,6 +1184,12 @@ const ProcessDetail = ({
               onRemove={() => removeStep(currentStep.id)}
               disabled={isCancelled || currentStep.status === "pendente"}
               showStartHint={currentStep.status === "pendente"}
+              customStatuses={customStatuses}
+              onChangeStatus={(v) => changeStepStatus(currentStep, v)}
+              onAddCustomStatus={async () => {
+                const label = await addCustomStatus();
+                if (label) await changeStepStatus(currentStep, label);
+              }}
             />
           )}
 
