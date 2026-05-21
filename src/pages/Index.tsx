@@ -182,12 +182,13 @@ const Index = () => {
             {sidebarOpen && (
               <div className="flex flex-col flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-0.5">
-                  <div className="w-1.5 h-4 rounded-sm bg-[hsl(42,42%,50%)] opacity-80 shrink-0" />
-                  <h1 className="text-sm font-semibold tracking-wide text-sidebar-primary uppercase">
-                    Projetask
-                  </h1>
+                  <img
+                    src="/ambitask-logo.png"
+                    alt="Ambitask"
+                    className="h-6 w-auto object-contain shrink-0"
+                  />
                 </div>
-                <p className="text-[11px] text-sidebar-foreground/60 truncate pl-3.5">
+                <p className="text-[11px] text-sidebar-foreground/60 truncate pl-0.5">
                   {user.email}
                 </p>
               </div>

@@ -72,11 +72,12 @@ const AuthPage = () => {
       <div className="w-full max-w-md relative">
         {/* Logo / Brand */}
         <div className="text-center mb-8">
-          <div className="flex items-center justify-center gap-2 mb-2">
-            <div className="w-2 h-5 rounded-sm bg-[hsl(42,42%,50%)] opacity-85" />
-            <span className="text-lg font-semibold tracking-widest uppercase text-foreground">
-              Projetask
-            </span>
+          <div className="flex items-center justify-center mb-2">
+            <img
+              src="/ambitask-logo.png"
+              alt="Ambitask"
+              className="h-14 w-auto object-contain"
+            />
           </div>
           <div className="w-16 h-[1px] mx-auto bg-gradient-to-r from-transparent via-[hsl(42,42%,50%)] to-transparent opacity-60" />
         </div>
