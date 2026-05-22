@@ -398,6 +398,17 @@ const FormBuilder = ({
             <Textarea value={desc} onChange={(e) => setDesc(e.target.value)} onBlur={saveMeta} className="min-h-[60px]" />
           </div>
           <div>
+            <label className="text-xs font-medium">Rótulo do campo "Seu nome"</label>
+            <Input
+              value={submitterNameLabel}
+              onChange={(e) => setSubmitterNameLabel(e.target.value)}
+              onBlur={saveMeta}
+              placeholder="Seu nome"
+              maxLength={60}
+            />
+            <p className="text-[11px] text-muted-foreground mt-0.5">Texto exibido acima do campo de identificação no formulário público.</p>
+          </div>
+          <div>
             <label className="text-xs font-medium block mb-1.5">Cor</label>
             <div className="flex flex-wrap gap-1.5">
               {TEMPLATE_COLORS.map((c) => (
