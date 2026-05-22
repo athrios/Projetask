@@ -143,9 +143,10 @@ export const RequestsPanel = ({ userId }: Props) => {
   };
 
   const openProcess = (processId: string) => {
-    window.location.hash = `#processes:${processId}`;
-    toast.info("Abra a aba Processos para visualizar.");
+    window.location.hash = `processo-${processId}`;
+    toast.info("Acesse a aba Processos para visualizar.");
   };
+
 
 
   const removeResponse = async (id: string) => {
