@@ -139,6 +139,7 @@ export type Database = {
       }
       form_fields: {
         Row: {
+          add_button_label: string | null
           created_at: string
           description: string
           field_type: string
@@ -152,6 +153,7 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
+          add_button_label?: string | null
           created_at?: string
           description?: string
           field_type?: string
@@ -165,6 +167,7 @@ export type Database = {
           workspace_id: string
         }
         Update: {
+          add_button_label?: string | null
           created_at?: string
           description?: string
           field_type?: string
@@ -263,6 +266,7 @@ export type Database = {
           logo_alignment: string
           logo_path: string | null
           public_slug: string
+          submitter_name_label: string
           title: string
           updated_at: string
           user_id: string
@@ -279,6 +283,7 @@ export type Database = {
           logo_alignment?: string
           logo_path?: string | null
           public_slug?: string
+          submitter_name_label?: string
           title: string
           updated_at?: string
           user_id: string
@@ -295,6 +300,7 @@ export type Database = {
           logo_alignment?: string
           logo_path?: string | null
           public_slug?: string
+          submitter_name_label?: string
           title?: string
           updated_at?: string
           user_id?: string
@@ -959,6 +965,7 @@ export type Database = {
     Views: {
       form_fields_public: {
         Row: {
+          add_button_label: string | null
           description: string | null
           field_type: string | null
           form_id: string | null
@@ -993,6 +1000,7 @@ export type Database = {
           logo_alignment: string | null
           logo_path: string | null
           public_slug: string | null
+          submitter_name_label: string | null
           title: string | null
           user_id: string | null
           workspace_id: string | null
@@ -1004,6 +1012,7 @@ export type Database = {
           logo_alignment?: string | null
           logo_path?: string | null
           public_slug?: string | null
+          submitter_name_label?: string | null
           title?: string | null
           user_id?: string | null
           workspace_id?: string | null
@@ -1015,6 +1024,7 @@ export type Database = {
           logo_alignment?: string | null
           logo_path?: string | null
           public_slug?: string | null
+          submitter_name_label?: string | null
           title?: string | null
           user_id?: string | null
           workspace_id?: string | null
