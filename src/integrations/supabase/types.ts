@@ -250,11 +250,13 @@ export type Database = {
       }
       forms: {
         Row: {
+          auto_create_process: boolean
           color: string
           created_at: string
           description: string
           id: string
           is_published: boolean
+          linked_process_template_id: string | null
           public_slug: string
           title: string
           updated_at: string
@@ -262,11 +264,13 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
+          auto_create_process?: boolean
           color?: string
           created_at?: string
           description?: string
           id?: string
           is_published?: boolean
+          linked_process_template_id?: string | null
           public_slug?: string
           title: string
           updated_at?: string
@@ -274,11 +278,13 @@ export type Database = {
           workspace_id: string
         }
         Update: {
+          auto_create_process?: boolean
           color?: string
           created_at?: string
           description?: string
           id?: string
           is_published?: boolean
+          linked_process_template_id?: string | null
           public_slug?: string
           title?: string
           updated_at?: string
@@ -1001,6 +1007,7 @@ export type Database = {
       }
     }
     Functions: {
+      _norm_label: { Args: { t: string }; Returns: string }
       default_workspace_for: { Args: { _uid: string }; Returns: string }
       delete_email: {
         Args: { message_id: number; queue_name: string }

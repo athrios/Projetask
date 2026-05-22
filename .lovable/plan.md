@@ -1,62 +1,79 @@
-## Escopo
+# Vínculo Formulário → Modelo de Processo
 
-Ajustes pontuais no módulo **Processos** (`src/components/processes/ProcessesPanel.tsx`). Não recriar nada — só editar trechos existentes.
+Permitir que cada formulário tenha um modelo de processo associado e, quando uma resposta pública chegar, gerar automaticamente um processo derivado desse modelo, vinculado à resposta.
 
-> Observação sobre datas: como o pedido fala em "datas do programa" mas o contexto inteiro é o módulo de Processos, vou aplicar o formato `DD-MM-AA` **apenas em datas do módulo Processos** (cards, lista, modal, etapas). Se quiser estender para todo o app, é só falar depois.
+## 1. Migração de banco
 
----
+Adicionar em `forms`:
+- `auto_create_process boolean not null default false`
+- `linked_process_template_id uuid null` (sem FK declarada formal — alinhado ao padrão atual do projeto; validar no trigger)
 
-### 1. Remover botão "Marcar como concluída" do modal
+Adicionar em `form_responses`:
+- `created_process_id uuid null`
+- índice único parcial: `create unique index form_responses_one_process_per_response on public.form_responses(id) where created_process_id is not null;` (garante 1 processo por resposta — combinado com a checagem do trigger evita duplicidade)
 
-Arquivo: `ProcessesPanel.tsx`, componente `CurrentStepCard` (linhas ~1438-1441).
+Atualizar a view `forms_public` para expor `auto_create_process` e `linked_process_template_id` (necessário só se a página pública decidir mostrar algo; pode ficar oculto, mas é inócuo expor um uuid).
 
-- Remover o `<Button>` "Marcar como concluída".
-- Manter o botão "Dispensar etapa" (continua sendo ação rápida útil).
-- Remover a prop `onComplete` da assinatura de `CurrentStepCard` e do callsite (linha 1188).
-- A função `completeStep` **permanece** — ela já é chamada por `changeStepStatus` quando o status vira `"feita"` (linha 1065). Ou seja: selecionar "Concluída" no dropdown do `Select` da etapa já conclui corretamente, avança próxima etapa (`advanceNext`) e recalcula o status do processo (`persistProcessStatus`).
+Função `public.handle_form_response_autoprocess()` (SECURITY DEFINER, search_path=public) acionada por trigger `AFTER INSERT ON form_responses`:
 
-### 2. Formato de data `DD-MM-AA`
+1. Sair se `NEW.created_process_id IS NOT NULL`.
+2. Buscar `forms` por `NEW.form_id`. Se `auto_create_process=false` OU `linked_process_template_id IS NULL`, retornar.
+3. Validar que o template existe E pertence ao mesmo `workspace_id` do form. Se não, retornar silenciosamente (não bloquear o INSERT da resposta).
+4. Calcular nome do processo:
+   - Tentar extrair de `NEW.data` (jsonb) procurando chaves cujo label contenha (case-insensitive, sem acento) um de: `empresa`, `razao social`, `razão social`, `cliente`, `nome`, `email`, `e-mail`. Usar a primeira não-vazia.
+   - Fallback: `submitter_name` se não vazio.
+   - Fallback final: `to_char(now(), 'DD-MM-YY')` → `"{template.name} - Resposta de formulário - DD-MM-AA"`.
+   - Formato com nome: `"{template.name} - {nome encontrado}"`.
+5. Criar `processes` com `user_id = form.user_id`, `workspace_id = form.workspace_id`, `template_id`, `status='nao_iniciado'`, `template_type = tpl.template_type`, `table_data = tpl.table_schema` (se table) ou `'{"rows":[],"columns":[]}'`.
+6. Se `template_type='tasks'`: inserir `process_steps` a partir de `process_template_steps` (mesma lógica do `createProcess` no client — copia `title`, `position`, `status='pendente'`, `due_date` baseada em `due_offset_days` se >0 sobre `current_date`).
+7. `UPDATE form_responses SET created_process_id = <novo_id>, status='convertida_processo' WHERE id = NEW.id`.
 
-Criar helper local no topo do arquivo:
-```ts
-const fmtDate = (iso?: string | null) =>
-  iso ? format(parseISO(iso), "dd-MM-yy") : "";
-```
+Como é SECURITY DEFINER, contorna RLS — exatamente o que precisamos para que o INSERT anônimo via página pública consiga criar o processo. Toda a validação de workspace é feita dentro da função, então não há vazamento entre workspaces.
 
-Aplicar em todos os pontos onde data ISO é renderizada como texto no módulo:
-- Linha 506: `Prazo: {p.due_date}` → `Prazo: {fmtDate(p.due_date)}` (card)
-- Linha 1221: `{s.due_date && <span>{s.due_date}</span>}` → `{fmtDate(s.due_date)}` (etapas futuras)
-- Linha 1406: `Prazo: {s.due_date}` → `Prazo: {fmtDate(s.due_date)}` (CurrentStepCard)
-- Verificar também `ResolvedStepRow` e linha ~535 (ListView) se exibirem datas.
+## 2. UI — `src/components/forms/FormsPanel.tsx`
 
-Inputs nativos `<input type="date">` e o `Calendar` do popover ficam intactos (já são UI controlada pelo SO/componente).
+No editor de formulário (modal de edição):
+- Adicionar bloco "Automação":
+  - `<Switch>` "Criar processo automaticamente ao receber resposta" → atualiza `auto_create_process`.
+  - Se ativado, `<Select>` "Modelo de processo vinculado" listando `process_templates` do workspace ativo (carregar uma vez por modal). Texto de ajuda abaixo: *"Quando este formulário for respondido, um processo será criado automaticamente usando o modelo selecionado."*
+  - Persistir via `update` em `forms` (debounced ou no blur, padrão atual do arquivo).
+- Estender a interface `Form` local com `auto_create_process` e `linked_process_template_id`, e incluí-los no `select(...)` do `load()`.
 
-### 3. Status da etapa clicável no card
+Na listagem (card do formulário):
+- Quando `auto_create_process && linked_process_template_id`, mostrar uma linha discreta: `Modelo vinculado: {nome do template}` e badge "Automação ativa".
+- Caso contrário, nada (ou badge silencioso "Sem automação" — preferir não poluir).
 
-Arquivo: `ProcessesPanel.tsx`, componente `ProcessCard` (linhas ~419-510).
+## 3. UI — `src/components/requests/RequestsPanel.tsx`
 
-- Trocar o `<StatusPill>` da etapa atual (linha 489) por um `<Select>` compacto, estilizado para parecer com o pill (`h-6`, sem border visível até hover, mesma cor por status).
-- Opções: Pendente / Em andamento / Concluída / Dispensada (mesmas 4 do `defaultStatuses`).
-- Adicionar `onClick={(e) => e.stopPropagation()}` no container do select para não abrir o modal.
-- Adicionar nova prop `onChangeStepStatus(stepId, nextStatus)` ao `ProcessCard`, repassada do `ProcessesPanel` raiz.
-- No `ProcessesPanel`, criar uma função que faz o mesmo que `changeStepStatus` faz hoje no modal: update no `process_steps`, se `feita` chama lógica equivalente a `completeStep` (com `advanceNext` + `persistProcessStatus`), se `pulado` equivalente a `dismissStep`. Para evitar duplicação, **extrair** a lógica atual de `ProcessDetailDialog.changeStepStatus`/`completeStep`/`dismissStep` para funções utilitárias no escopo do módulo (recebendo `steps`, `processId`, etc.) ou aceitar pequena duplicação encapsulada num helper compartilhado.
-- Após salvar, recarregar via callback `onChanged` já existente no painel (que faz refetch dos processos).
+Estender `Response` com `created_process_id` (já presente como `converted_process_id`; usar o novo `created_process_id` em paralelo, ambos significam vínculo a processo). Ajustes:
+- No card e no modal de detalhe, se `created_process_id` existir, mostrar badge "Processo criado" + nome do processo (fetch lazy junto com responses ou via join manual).
+- Substituir botão "Converter em processo" por "Abrir processo" (que faz `setOpenProcess(id)` navegando para Processos ou abre o `ProcessDetailDialog` — manter consistente: mais simples disabilitar o botão e adicionar um link/botão "Abrir processo" que troca para a aba Processos com `?process={id}` se já houver navegação por query, ou simplesmente um toast informativo + abre nova aba — verificar se já existe navegação programática entre painéis).
+- Trate ambos os campos `converted_process_id` (conversão manual antiga) e `created_process_id` (automática) com a mesma lógica de "já tem processo".
 
-### 4. Observação copiável sem abrir modal
+## 4. PublicForm
 
-Arquivo: `ProcessesPanel.tsx`, `ProcessCard` (linhas 492-497).
+Nenhuma mudança lógica: o trigger faz todo o trabalho. Garantir apenas que após o INSERT bem-sucedido a tela continua mostrando "Recebido!" — já é o caso.
 
-- No `<div>` da observação adicionar:
-  - `onClick={(e) => e.stopPropagation()}`
-  - `onMouseDown={(e) => e.stopPropagation()}` (evita o "click" sintético no role=button do card pai durante seleção)
-  - `onKeyDown={(e) => e.stopPropagation()}`
-  - `className` ganha `cursor-text select-text`
-- Resto do card continua clicável (header, nome, progresso, etapa atual).
+## 5. Segurança
 
-### Aceite
+- A função é a única superfície privilegiada; valida `workspace_id` entre form e template.
+- RLS de `forms`/`form_responses`/`processes` permanece intacta.
+- `forms_public` segue sem expor `user_id`/template — opcionalmente expor `auto_create_process` se desejado para futuras telas; não é necessário no fluxo atual.
 
-- Modal: sem botão "Marcar concluída"; dropdown "Concluída" finaliza etapa, avança próxima, atualiza progresso.
-- Datas exibidas no módulo Processos no formato `06-05-26`. Banco intacto.
-- No card: clicar no pill de status da etapa abre apenas o dropdown (modal não abre); alteração persiste e o card atualiza.
-- No card: arrastar/clicar na observação permite selecionar e copiar; não abre o modal.
-- Sem mudanças em schema, RLS, workspace ou permissões.
+## 6. Critérios de aceite cobertos
+
+- Modelo "Abertura" + form "Perguntas" com automação ligada → ao enviar a resposta pública, o trigger cria o processo, copia etapas e vincula via `created_process_id`.
+- Templates de outros workspaces não aparecem no seletor (filtro por `workspace_id` no client) e o trigger ainda valida no servidor.
+- Reenvios não duplicam: o trigger só dispara em INSERT; cada INSERT cria 1 processo. Se o mesmo respondente clicar "Enviar" duas vezes, são duas respostas (comportamento aceitável e consistente com o atual) — não duplicação por retry do mesmo registro.
+- Tela Processos mostra o novo processo no workspace correto.
+- Tela Solicitações mostra "Processo criado: …" com botão "Abrir processo".
+
+## Notas técnicas
+
+- A migração precisa rodar **antes** das mudanças de código (types do Supabase serão regerados).
+- Manter `converted_process_id` por compatibilidade; novo campo `created_process_id` é o canônico daqui em diante. Alternativa: reusar `converted_process_id` direto no trigger e dispensar coluna nova — **preferir reuso** para evitar duplicação semântica. → **Decisão:** reusar `converted_process_id`; não criar `created_process_id`. O index único parcial passa a ser sobre `converted_process_id`.
+
+Resumo final dos campos a adicionar:
+- `forms.auto_create_process`, `forms.linked_process_template_id`
+- Index único parcial em `form_responses.converted_process_id`
+- Função + trigger `AFTER INSERT ON form_responses`

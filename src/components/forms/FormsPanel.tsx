@@ -19,7 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Trash2, Link as LinkIcon, FileText, Copy } from "lucide-react";
+import { Plus, Trash2, Link as LinkIcon, FileText, Copy, Workflow } from "lucide-react";
 import { toast } from "sonner";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { logActivity } from "@/lib/activityLog";
@@ -45,7 +45,11 @@ interface Form {
   public_slug: string;
   is_published: boolean;
   color: string;
+  auto_create_process: boolean;
+  linked_process_template_id: string | null;
 }
+interface ProcessTemplate { id: string; name: string }
+
 interface Field {
   id: string;
   form_id: string;
@@ -72,9 +76,11 @@ interface Props { userId: string }
 export const FormsPanel = ({ userId }: Props) => {
   const { workspaceId } = useWorkspace();
   const [forms, setForms] = useState<Form[]>([]);
+  const [templates, setTemplates] = useState<ProcessTemplate[]>([]);
   const [responseCounts, setResponseCounts] = useState<Record<string, number>>({});
   const [editing, setEditing] = useState<Form | null>(null);
   const [newTitle, setNewTitle] = useState("");
+
 
   const load = async () => {
     if (!workspaceId) return;
@@ -86,7 +92,14 @@ export const FormsPanel = ({ userId }: Props) => {
     if (error) return toast.error(error.message);
     const list = (data ?? []) as Form[];
     setForms(list);
+    const { data: tpls } = await supabase
+      .from("process_templates")
+      .select("id,name")
+      .eq("workspace_id", workspaceId)
+      .order("created_at", { ascending: true });
+    setTemplates((tpls ?? []) as ProcessTemplate[]);
     if (list.length) {
+
       const counts: Record<string, number> = {};
       await Promise.all(
         list.map(async (f) => {
@@ -194,6 +207,15 @@ export const FormsPanel = ({ userId }: Props) => {
                   <Switch checked={f.is_published} onCheckedChange={() => togglePub(f)} />
                 </div>
               </div>
+              {f.auto_create_process && f.linked_process_template_id && (
+                <div className="mt-2 text-[11px] text-muted-foreground flex items-center gap-1.5">
+                  <Workflow className="h-3 w-3" />
+                  <span>Modelo vinculado:</span>
+                  <span className="font-medium text-foreground truncate">
+                    {templates.find((t) => t.id === f.linked_process_template_id)?.name ?? "—"}
+                  </span>
+                </div>
+              )}
               {f.is_published && (
                 <button
                   onClick={() => copyLink(f.public_slug)}
@@ -202,6 +224,7 @@ export const FormsPanel = ({ userId }: Props) => {
                   <Copy className="h-3 w-3" /> Copiar link público
                 </button>
               )}
+
             </div>
             );
           })}
@@ -212,9 +235,11 @@ export const FormsPanel = ({ userId }: Props) => {
         <FormBuilder
           form={editing}
           userId={userId}
+          templates={templates}
           onClose={() => { setEditing(null); load(); }}
         />
       )}
+
     </div>
   );
 };
@@ -222,17 +247,22 @@ export const FormsPanel = ({ userId }: Props) => {
 const FormBuilder = ({
   form,
   userId,
+  templates,
   onClose,
 }: {
   form: Form;
   userId: string;
+  templates: ProcessTemplate[];
   onClose: () => void;
 }) => {
   const { workspaceId } = useWorkspace();
   const [title, setTitle] = useState(form.title);
   const [desc, setDesc] = useState(form.description);
   const [color, setColor] = useState(asColor(form.color));
+  const [autoCreate, setAutoCreate] = useState(form.auto_create_process);
+  const [linkedTpl, setLinkedTpl] = useState<string | null>(form.linked_process_template_id);
   const [fields, setFields] = useState<Field[]>([]);
+
 
   const load = async () => {
     const { data } = await supabase
@@ -252,6 +282,19 @@ const FormBuilder = ({
     setColor(c);
     await supabase.from("forms").update({ color: c }).eq("id", form.id);
   };
+
+  const toggleAuto = async (v: boolean) => {
+    setAutoCreate(v);
+    const patch: { auto_create_process: boolean; linked_process_template_id?: string | null } = { auto_create_process: v };
+    if (!v) { patch.linked_process_template_id = null; setLinkedTpl(null); }
+    await supabase.from("forms").update(patch).eq("id", form.id);
+  };
+
+  const setTemplate = async (id: string) => {
+    setLinkedTpl(id);
+    await supabase.from("forms").update({ linked_process_template_id: id }).eq("id", form.id);
+  };
+
 
   const addField = async (type: FieldType) => {
     if (!workspaceId) return;
@@ -306,7 +349,36 @@ const FormBuilder = ({
               ))}
             </div>
           </div>
+          <div className="rounded-lg border p-3 bg-muted/20 space-y-2">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-medium">Criar processo automaticamente</p>
+                <p className="text-xs text-muted-foreground">
+                  Quando este formulário for respondido, um processo será criado automaticamente usando o modelo selecionado.
+                </p>
+              </div>
+              <Switch checked={autoCreate} onCheckedChange={toggleAuto} />
+            </div>
+            {autoCreate && (
+              <div>
+                <label className="text-xs font-medium block mb-1">Modelo de processo vinculado</label>
+                <Select value={linkedTpl ?? ""} onValueChange={setTemplate}>
+                  <SelectTrigger className="h-9 text-sm">
+                    <SelectValue placeholder="Selecione um modelo..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {templates.length === 0 ? (
+                      <div className="px-3 py-2 text-xs text-muted-foreground">Nenhum modelo neste ambiente.</div>
+                    ) : templates.map((t) => (
+                      <SelectItem key={t.id} value={t.id} className="text-sm">{t.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+          </div>
           <div>
+
             <h4 className="text-sm font-semibold mb-2">Campos</h4>
             <div className="space-y-2">
               {fields.map((f) => (

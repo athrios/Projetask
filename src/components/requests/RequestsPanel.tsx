@@ -45,6 +45,7 @@ export const RequestsPanel = ({ userId }: Props) => {
   const { workspaceId } = useWorkspace();
   const [forms, setForms] = useState<FormRow[]>([]);
   const [responses, setResponses] = useState<Response[]>([]);
+  const [processNames, setProcessNames] = useState<Record<string, string>>({});
   const [view, setView] = useState<ViewMode>("table");
   const [open, setOpen] = useState<Response | null>(null);
 
@@ -55,9 +56,20 @@ export const RequestsPanel = ({ userId }: Props) => {
       supabase.from("form_responses").select("*").eq("workspace_id", workspaceId).order("created_at", { ascending: false }),
     ]);
     setForms((f.data ?? []) as FormRow[]);
-    setResponses((r.data ?? []) as unknown as Response[]);
+    const rs = (r.data ?? []) as unknown as Response[];
+    setResponses(rs);
+    const ids = Array.from(new Set(rs.map((x) => x.converted_process_id).filter(Boolean) as string[]));
+    if (ids.length) {
+      const { data: procs } = await supabase.from("processes").select("id,name").in("id", ids);
+      const m: Record<string, string> = {};
+      (procs ?? []).forEach((p: { id: string; name: string }) => { m[p.id] = p.name; });
+      setProcessNames(m);
+    } else {
+      setProcessNames({});
+    }
   };
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [workspaceId]);
+
 
   const formTitle = (id: string) => forms.find((f) => f.id === id)?.title ?? "—";
   const formColor = (id: string): TemplateColor => asColor(forms.find((f) => f.id === id)?.color);
@@ -125,7 +137,7 @@ export const RequestsPanel = ({ userId }: Props) => {
   const convertToProcess = async (r: Response) => {
     if (!workspaceId) return;
     if (r.converted_process_id) {
-      return toast.info("Esta solicitação já foi convertida em processo.");
+      return toast.info("Esta solicitação já está vinculada a um processo.");
     }
     const name = r.submitter_name ? `${formTitle(r.form_id)} — ${r.submitter_name}` : formTitle(r.form_id);
     const notes = `Origem: solicitação de ${formTitle(r.form_id)}\n\n${formatData(r.data)}`;
@@ -141,6 +153,13 @@ export const RequestsPanel = ({ userId }: Props) => {
     setOpen(null);
     load();
   };
+
+  const openProcess = (processId: string) => {
+    window.location.hash = `processo-${processId}`;
+    toast.info("Acesse a aba Processos para visualizar.");
+  };
+
+
 
   const removeResponse = async (id: string) => {
     if (!confirm("Excluir esta solicitação?")) return;
@@ -262,15 +281,18 @@ export const RequestsPanel = ({ userId }: Props) => {
                 Recebida em {new Date(open.created_at).toLocaleString("pt-BR")}
               </div>
               {(open.converted_task_id || open.converted_process_id) && (
-                <div className="rounded-lg border border-[hsl(var(--status-aguardando))]/40 bg-[hsl(var(--status-aguardando-bg))]/40 p-3 text-xs">
+                <div className="rounded-lg border border-[hsl(var(--status-aguardando))]/40 bg-[hsl(var(--status-aguardando-bg))]/40 p-3 text-xs space-y-1">
                   <p className="font-medium text-foreground">
-                    {open.converted_task_id ? "Já convertida em tarefa." : "Já convertida em processo."}
+                    {open.converted_task_id
+                      ? "Já convertida em tarefa."
+                      : `Processo criado: ${processNames[open.converted_process_id!] ?? "—"}`}
                   </p>
-                  <p className="text-muted-foreground mt-0.5">
+                  <p className="text-muted-foreground">
                     A rastreabilidade fica registrada nesta solicitação. Excluir esta entrada não remove o item criado.
                   </p>
                 </div>
               )}
+
               <div className="rounded-lg border p-3 bg-muted/20 space-y-3">
                 {Object.entries(open.data ?? {}).map(([k, v]) => {
                   const isFile =
@@ -339,15 +361,16 @@ export const RequestsPanel = ({ userId }: Props) => {
                 <ListChecks className="h-4 w-4" />
                 {open.converted_task_id ? "Já é tarefa" : "Converter em tarefa"}
               </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => convertToProcess(open)}
-                disabled={!!open.converted_process_id}
-              >
-                <Workflow className="h-4 w-4" />
-                {open.converted_process_id ? "Já é processo" : "Converter em processo"}
-              </Button>
+              {open.converted_process_id ? (
+                <Button variant="outline" size="sm" onClick={() => openProcess(open.converted_process_id!)}>
+                  <Workflow className="h-4 w-4" /> Abrir processo
+                </Button>
+              ) : (
+                <Button variant="outline" size="sm" onClick={() => convertToProcess(open)}>
+                  <Workflow className="h-4 w-4" /> Converter em processo
+                </Button>
+              )}
+
               <Button onClick={() => setOpen(null)}>Fechar</Button>
             </DialogFooter>
           </DialogContent>
