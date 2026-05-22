@@ -35,6 +35,8 @@ interface Form {
   title: string;
   description: string;
   is_published: boolean;
+  logo_path: string | null;
+  logo_alignment: "left" | "center" | "right" | null;
 }
 interface Field {
   id: string;
@@ -43,6 +45,7 @@ interface Field {
   field_type: FieldType;
   required: boolean;
   options: string[] | unknown;
+  description: string | null;
 }
 
 const PublicForm = () => {
