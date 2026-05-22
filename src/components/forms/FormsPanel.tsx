@@ -19,7 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Trash2, Link as LinkIcon, FileText, Copy } from "lucide-react";
+import { Plus, Trash2, Link as LinkIcon, FileText, Copy, Workflow } from "lucide-react";
 import { toast } from "sonner";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { logActivity } from "@/lib/activityLog";
