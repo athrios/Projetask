@@ -125,7 +125,7 @@ export const RequestsPanel = ({ userId }: Props) => {
   const convertToProcess = async (r: Response) => {
     if (!workspaceId) return;
     if (r.converted_process_id) {
-      return toast.info("Esta solicitação já foi convertida em processo.");
+      return toast.info("Esta solicitação já está vinculada a um processo.");
     }
     const name = r.submitter_name ? `${formTitle(r.form_id)} — ${r.submitter_name}` : formTitle(r.form_id);
     const notes = `Origem: solicitação de ${formTitle(r.form_id)}\n\n${formatData(r.data)}`;
@@ -141,6 +141,12 @@ export const RequestsPanel = ({ userId }: Props) => {
     setOpen(null);
     load();
   };
+
+  const openProcess = (processId: string) => {
+    window.location.hash = `#processes:${processId}`;
+    toast.info("Abra a aba Processos para visualizar.");
+  };
+
 
   const removeResponse = async (id: string) => {
     if (!confirm("Excluir esta solicitação?")) return;
