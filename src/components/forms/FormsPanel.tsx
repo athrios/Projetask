@@ -235,9 +235,11 @@ export const FormsPanel = ({ userId }: Props) => {
         <FormBuilder
           form={editing}
           userId={userId}
+          templates={templates}
           onClose={() => { setEditing(null); load(); }}
         />
       )}
+
     </div>
   );
 };
