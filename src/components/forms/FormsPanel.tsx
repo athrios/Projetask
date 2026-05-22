@@ -49,6 +49,7 @@ interface Form {
   linked_process_template_id: string | null;
   logo_path: string | null;
   logo_alignment: "left" | "center" | "right";
+  submitter_name_label: string | null;
 }
 interface ProcessTemplate { id: string; name: string }
 
@@ -61,6 +62,7 @@ interface Field {
   required: boolean;
   options: string[] | unknown;
   description: string;
+  add_button_label: string | null;
 }
 
 const FIELD_TYPES: { value: FieldType; label: string }[] = [
