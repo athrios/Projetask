@@ -281,15 +281,18 @@ export const RequestsPanel = ({ userId }: Props) => {
                 Recebida em {new Date(open.created_at).toLocaleString("pt-BR")}
               </div>
               {(open.converted_task_id || open.converted_process_id) && (
-                <div className="rounded-lg border border-[hsl(var(--status-aguardando))]/40 bg-[hsl(var(--status-aguardando-bg))]/40 p-3 text-xs">
+                <div className="rounded-lg border border-[hsl(var(--status-aguardando))]/40 bg-[hsl(var(--status-aguardando-bg))]/40 p-3 text-xs space-y-1">
                   <p className="font-medium text-foreground">
-                    {open.converted_task_id ? "Já convertida em tarefa." : "Já convertida em processo."}
+                    {open.converted_task_id
+                      ? "Já convertida em tarefa."
+                      : `Processo criado: ${processNames[open.converted_process_id!] ?? "—"}`}
                   </p>
-                  <p className="text-muted-foreground mt-0.5">
+                  <p className="text-muted-foreground">
                     A rastreabilidade fica registrada nesta solicitação. Excluir esta entrada não remove o item criado.
                   </p>
                 </div>
               )}
+
               <div className="rounded-lg border p-3 bg-muted/20 space-y-3">
                 {Object.entries(open.data ?? {}).map(([k, v]) => {
                   const isFile =
