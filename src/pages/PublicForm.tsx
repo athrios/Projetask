@@ -143,9 +143,22 @@ const PublicForm = () => {
     );
   }
 
+  const logoUrl = form.logo_path
+    ? supabase.storage.from("form-logos").getPublicUrl(form.logo_path).data.publicUrl
+    : null;
+  const alignClass =
+    form.logo_alignment === "left" ? "justify-start"
+    : form.logo_alignment === "right" ? "justify-end"
+    : "justify-center";
+
   return (
     <div className="min-h-screen bg-muted/20 py-10 px-4">
       <form onSubmit={submit} className="max-w-2xl mx-auto rounded-xl border bg-card p-8 space-y-5">
+        {logoUrl && (
+          <div className={`flex ${alignClass}`}>
+            <img src={logoUrl} alt="" className="max-h-20 max-w-[240px] object-contain" />
+          </div>
+        )}
         <header className="space-y-2">
           <h1 className="text-2xl font-semibold tracking-tight">{form.title}</h1>
           {form.description && (
@@ -168,6 +181,9 @@ const PublicForm = () => {
                 {f.label}
                 {f.required && <span className="text-destructive ml-0.5">*</span>}
               </label>
+              {f.description && (
+                <p className="text-xs text-muted-foreground whitespace-pre-wrap mt-0.5">{f.description}</p>
+              )}
               {f.field_type === "short_text" && (
                 <Input value={(v as string) ?? ""} onChange={(e) => set(e.target.value)} required={f.required} />
               )}
