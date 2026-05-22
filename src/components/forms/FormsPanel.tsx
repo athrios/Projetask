@@ -272,6 +272,7 @@ const FormBuilder = ({
   const { workspaceId } = useWorkspace();
   const [title, setTitle] = useState(form.title);
   const [desc, setDesc] = useState(form.description);
+  const [submitterNameLabel, setSubmitterNameLabel] = useState(form.submitter_name_label ?? "Seu nome");
   const [color, setColor] = useState(asColor(form.color));
   const [autoCreate, setAutoCreate] = useState(form.auto_create_process);
   const [linkedTpl, setLinkedTpl] = useState<string | null>(form.linked_process_template_id);
