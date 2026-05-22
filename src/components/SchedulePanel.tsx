@@ -423,7 +423,11 @@ const PlaceholderRow = ({
   useEffect(() => setStart(initialStart), [initialStart]);
 
   const commit = (t: string, taskId: string | null = null) => {
-    if (t.trim()) onCommit(start, t, duration, taskId);
+    if (t.trim()) {
+      onCommit(start, t, duration, taskId);
+      setTitle("");
+      setDuration(initialDuration);
+    }
   };
 
   return (
