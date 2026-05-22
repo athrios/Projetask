@@ -140,6 +140,7 @@ export type Database = {
       form_fields: {
         Row: {
           created_at: string
+          description: string
           field_type: string
           form_id: string
           id: string
@@ -152,6 +153,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          description?: string
           field_type?: string
           form_id: string
           id?: string
@@ -164,6 +166,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          description?: string
           field_type?: string
           form_id?: string
           id?: string
@@ -257,6 +260,8 @@ export type Database = {
           id: string
           is_published: boolean
           linked_process_template_id: string | null
+          logo_alignment: string
+          logo_path: string | null
           public_slug: string
           title: string
           updated_at: string
@@ -271,6 +276,8 @@ export type Database = {
           id?: string
           is_published?: boolean
           linked_process_template_id?: string | null
+          logo_alignment?: string
+          logo_path?: string | null
           public_slug?: string
           title: string
           updated_at?: string
@@ -285,6 +292,8 @@ export type Database = {
           id?: string
           is_published?: boolean
           linked_process_template_id?: string | null
+          logo_alignment?: string
+          logo_path?: string | null
           public_slug?: string
           title?: string
           updated_at?: string
@@ -950,6 +959,7 @@ export type Database = {
     Views: {
       form_fields_public: {
         Row: {
+          description: string | null
           field_type: string | null
           form_id: string | null
           id: string | null
@@ -980,6 +990,8 @@ export type Database = {
           description: string | null
           id: string | null
           is_published: boolean | null
+          logo_alignment: string | null
+          logo_path: string | null
           public_slug: string | null
           title: string | null
           user_id: string | null
@@ -989,6 +1001,8 @@ export type Database = {
           description?: string | null
           id?: string | null
           is_published?: boolean | null
+          logo_alignment?: string | null
+          logo_path?: string | null
           public_slug?: string | null
           title?: string | null
           user_id?: string | null
@@ -998,6 +1012,8 @@ export type Database = {
           description?: string | null
           id?: string | null
           is_published?: boolean | null
+          logo_alignment?: string | null
+          logo_path?: string | null
           public_slug?: string | null
           title?: string | null
           user_id?: string | null
