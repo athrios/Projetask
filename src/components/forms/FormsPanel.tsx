@@ -92,7 +92,14 @@ export const FormsPanel = ({ userId }: Props) => {
     if (error) return toast.error(error.message);
     const list = (data ?? []) as Form[];
     setForms(list);
+    const { data: tpls } = await supabase
+      .from("process_templates")
+      .select("id,name")
+      .eq("workspace_id", workspaceId)
+      .order("created_at", { ascending: true });
+    setTemplates((tpls ?? []) as ProcessTemplate[]);
     if (list.length) {
+
       const counts: Record<string, number> = {};
       await Promise.all(
         list.map(async (f) => {
