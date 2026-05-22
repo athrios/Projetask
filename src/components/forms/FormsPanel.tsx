@@ -273,8 +273,14 @@ const FormBuilder = ({
   const [color, setColor] = useState(asColor(form.color));
   const [autoCreate, setAutoCreate] = useState(form.auto_create_process);
   const [linkedTpl, setLinkedTpl] = useState<string | null>(form.linked_process_template_id);
+  const [logoPath, setLogoPath] = useState<string | null>(form.logo_path);
+  const [logoAlign, setLogoAlign] = useState<"left" | "center" | "right">(form.logo_alignment ?? "center");
+  const [uploadingLogo, setUploadingLogo] = useState(false);
   const [fields, setFields] = useState<Field[]>([]);
 
+  const logoUrl = logoPath
+    ? supabase.storage.from("form-logos").getPublicUrl(logoPath).data.publicUrl
+    : null;
 
   const load = async () => {
     const { data } = await supabase
@@ -306,6 +312,50 @@ const FormBuilder = ({
     setLinkedTpl(id);
     await supabase.from("forms").update({ linked_process_template_id: id }).eq("id", form.id);
   };
+
+  const onLogoFile = async (file: File | null) => {
+    if (!file) return;
+    const allowed = ["image/png", "image/jpeg", "image/webp"];
+    if (!allowed.includes(file.type)) {
+      return toast.error("Use PNG, JPG ou WEBP.");
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      return toast.error("Logo deve ter no máximo 5 MB.");
+    }
+    setUploadingLogo(true);
+    const ext = file.name.split(".").pop()?.toLowerCase().replace(/[^a-z0-9]/g, "") || "png";
+    const path = `${userId}/${form.id}/${crypto.randomUUID()}.${ext}`;
+    const { error } = await supabase.storage
+      .from("form-logos")
+      .upload(path, file, { upsert: false, contentType: file.type });
+    if (error) {
+      setUploadingLogo(false);
+      return toast.error("Falha no upload: " + error.message);
+    }
+    const old = logoPath;
+    await supabase.from("forms").update({ logo_path: path }).eq("id", form.id);
+    setLogoPath(path);
+    if (old) {
+      await supabase.storage.from("form-logos").remove([old]);
+    }
+    setUploadingLogo(false);
+    toast.success("Logo atualizado");
+  };
+
+  const removeLogo = async () => {
+    if (!logoPath) return;
+    const old = logoPath;
+    await supabase.from("forms").update({ logo_path: null }).eq("id", form.id);
+    setLogoPath(null);
+    await supabase.storage.from("form-logos").remove([old]);
+    toast.success("Logo removido");
+  };
+
+  const updateAlign = async (v: "left" | "center" | "right") => {
+    setLogoAlign(v);
+    await supabase.from("forms").update({ logo_alignment: v }).eq("id", form.id);
+  };
+
 
 
   const addField = async (type: FieldType) => {
