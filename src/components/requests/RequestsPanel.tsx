@@ -16,7 +16,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Inbox, ListChecks, Workflow, Trash2, CheckCircle2 } from "lucide-react";
+import { Inbox, ListChecks, Workflow, Trash2, CheckCircle2, Copy, Check } from "lucide-react";
 import { toast } from "sonner";
 import { StatusPill } from "@/components/shared/StatusPill";
 import { ViewSwitcher, type ViewMode } from "@/components/shared/ViewSwitcher";
@@ -41,6 +41,54 @@ interface Response {
 
 interface Props { userId: string }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+const SUBFIELD_LABELS: Record<string, string> = {
+  nome: "Nome completo",
+  nacionalidade: "Nacionalidade",
+  naturalidade: "Naturalidade (UF / Cidade)",
+  profissao: "Profissão",
+  estado_civil: "Estado civil",
+  regime_bens: "Regime de bens",
+  endereco: "Endereço residencial",
+  etnia: "Autodeclaração de etnia",
+  participacao: "Participação no capital (R$)",
+  uf: "UF",
+  cidade: "Cidade",
+};
+
+const prettySubLabel = (k: string) => SUBFIELD_LABELS[k] ?? k;
+
+const CopyButton = ({ getText, className }: { getText: () => string; className?: string }) => {
+  const [done, setDone] = useState(false);
+  const onClick = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    try {
+      await navigator.clipboard.writeText(getText());
+      setDone(true);
+      toast.success("Copiado");
+      setTimeout(() => setDone(false), 1500);
+    } catch {
+      toast.error("Não foi possível copiar");
+    }
+  };
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label="Copiar"
+      title="Copiar"
+      className={cn(
+        "inline-flex items-center justify-center h-6 w-6 rounded text-muted-foreground hover:text-foreground hover:bg-muted shrink-0",
+        className,
+      )}
+    >
+      {done ? <Check className="h-3.5 w-3.5 text-[hsl(var(--status-feita))]" /> : <Copy className="h-3.5 w-3.5" />}
+    </button>
+  );
+};
+
 export const RequestsPanel = ({ userId }: Props) => {
   const { workspaceId } = useWorkspace();
   const [forms, setForms] = useState<FormRow[]>([]);
@@ -48,6 +96,7 @@ export const RequestsPanel = ({ userId }: Props) => {
   const [processNames, setProcessNames] = useState<Record<string, string>>({});
   const [view, setView] = useState<ViewMode>("table");
   const [open, setOpen] = useState<Response | null>(null);
+  const [openFormLabels, setOpenFormLabels] = useState<Set<string>>(new Set());
 
   const load = async () => {
     if (!workspaceId) return;
@@ -70,6 +119,26 @@ export const RequestsPanel = ({ userId }: Props) => {
   };
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [workspaceId]);
 
+  // Carrega os labels reais das perguntas do formulário aberto, para validar chaves técnicas
+  useEffect(() => {
+    if (!open) { setOpenFormLabels(new Set()); return; }
+    let cancel = false;
+    (async () => {
+      const { data } = await supabase
+        .from("form_fields")
+        .select("label")
+        .eq("form_id", open.form_id);
+      if (cancel) return;
+      setOpenFormLabels(new Set((data ?? []).map((x: { label: string }) => x.label)));
+    })();
+    return () => { cancel = true; };
+  }, [open]);
+
+  const renderKey = (k: string) => {
+    if (openFormLabels.has(k)) return k;
+    if (UUID_RE.test(k)) return "Pergunta não encontrada";
+    return k;
+  };
 
   const formTitle = (id: string) => forms.find((f) => f.id === id)?.title ?? "—";
   const formColor = (id: string): TemplateColor => asColor(forms.find((f) => f.id === id)?.color);
@@ -91,7 +160,7 @@ export const RequestsPanel = ({ userId }: Props) => {
         .map((x, i) =>
           x && typeof x === "object"
             ? `\n  ${i + 1}) ${Object.entries(x as Record<string, unknown>)
-                .map(([kk, vv]) => `${kk}: ${formatValue(vv)}`)
+                .map(([kk, vv]) => `${prettySubLabel(kk)}: ${formatValue(vv)}`)
                 .join("; ")}`
             : String(x),
         )
@@ -101,7 +170,7 @@ export const RequestsPanel = ({ userId }: Props) => {
       const o = v as Record<string, unknown>;
       if ("uf" in o || "cidade" in o) return `${o.uf ?? "—"} / ${o.cidade ?? "—"}`;
       return Object.entries(o)
-        .map(([kk, vv]) => `${kk}: ${formatValue(vv)}`)
+        .map(([kk, vv]) => `${prettySubLabel(kk)}: ${formatValue(vv)}`)
         .join("; ");
     }
     return String(v);
@@ -109,7 +178,7 @@ export const RequestsPanel = ({ userId }: Props) => {
 
   const formatData = (data: Record<string, unknown>) =>
     Object.entries(data ?? {})
-      .map(([k, v]) => `${k}: ${formatValue(v)}`)
+      .map(([k, v]) => `${renderKey(k)}: ${formatValue(v)}`)
       .join("\n");
 
   const convertToTask = async (r: Response) => {
@@ -158,8 +227,6 @@ export const RequestsPanel = ({ userId }: Props) => {
     window.location.hash = `processo-${processId}`;
     toast.info("Acesse a aba Processos para visualizar.");
   };
-
-
 
   const removeResponse = async (id: string) => {
     if (!confirm("Excluir esta solicitação?")) return;
@@ -294,6 +361,24 @@ export const RequestsPanel = ({ userId }: Props) => {
               )}
 
               <div className="rounded-lg border p-3 bg-muted/20 space-y-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Respostas</p>
+                  <button
+                    type="button"
+                    onClick={async (e) => {
+                      e.stopPropagation();
+                      try {
+                        await navigator.clipboard.writeText(formatData(open.data));
+                        toast.success("Copiado");
+                      } catch {
+                        toast.error("Não foi possível copiar");
+                      }
+                    }}
+                    className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground"
+                  >
+                    <Copy className="h-3 w-3" /> Copiar tudo
+                  </button>
+                </div>
                 {Object.entries(open.data ?? {}).map(([k, v]) => {
                   const isFile =
                     v && typeof v === "object" && !Array.isArray(v) && "path" in (v as object);
@@ -308,31 +393,59 @@ export const RequestsPanel = ({ userId }: Props) => {
                     typeof v === "object" &&
                     !Array.isArray(v) &&
                     ("uf" in (v as object) || "cidade" in (v as object));
+                  const labelDisplay = renderKey(k);
+                  const isMissing = labelDisplay === "Pergunta não encontrada";
                   return (
                     <div key={k}>
-                      <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{k}</p>
+                      <p className={cn(
+                        "text-[11px] uppercase tracking-wide text-muted-foreground",
+                        isMissing && "italic",
+                      )}>
+                        {labelDisplay}
+                      </p>
                       {isFile ? (
-                        <FileLink file={v as { path: string; name: string }} />
+                        <div className="flex items-center gap-2">
+                          <FileLink file={v as { path: string; name: string }} />
+                          <CopyButton getText={() => (v as { name: string }).name} />
+                        </div>
                       ) : isStateCity ? (
-                        <p className="text-sm">
-                          {(v as { uf?: string }).uf ?? "—"} / {(v as { cidade?: string }).cidade ?? "—"}
-                        </p>
+                        <div className="flex items-start gap-2">
+                          <p className="text-sm flex-1">
+                            {(v as { uf?: string }).uf ?? "—"} / {(v as { cidade?: string }).cidade ?? "—"}
+                          </p>
+                          <CopyButton getText={() => formatValue(v)} />
+                        </div>
                       ) : isPartnerList ? (
                         <div className="space-y-2 mt-1">
                           {(v as Array<Record<string, unknown>>).map((row, i) => (
                             <div key={i} className="rounded-md border p-2 bg-background text-xs space-y-0.5">
-                              <p className="font-semibold mb-1">Sócio {i + 1}</p>
+                              <div className="flex items-center justify-between mb-1">
+                                <p className="font-semibold">Sócio {i + 1}</p>
+                                <CopyButton
+                                  getText={() =>
+                                    Object.entries(row)
+                                      .map(([kk, vv]) => `${prettySubLabel(kk)}: ${formatValue(vv)}`)
+                                      .join("\n")
+                                  }
+                                />
+                              </div>
                               {Object.entries(row).map(([kk, vv]) => (
-                                <p key={kk}>
-                                  <span className="text-muted-foreground">{kk}: </span>
-                                  {formatValue(vv)}
-                                </p>
+                                <div key={kk} className="flex items-start gap-2">
+                                  <p className="flex-1">
+                                    <span className="text-muted-foreground">{prettySubLabel(kk)}: </span>
+                                    {formatValue(vv)}
+                                  </p>
+                                  <CopyButton getText={() => formatValue(vv)} />
+                                </div>
                               ))}
                             </div>
                           ))}
                         </div>
                       ) : (
-                        <p className="text-sm whitespace-pre-wrap">{formatValue(v)}</p>
+                        <div className="flex items-start gap-2">
+                          <p className="text-sm whitespace-pre-wrap flex-1">{formatValue(v)}</p>
+                          <CopyButton getText={() => formatValue(v)} />
+                        </div>
                       )}
                     </div>
                   );
