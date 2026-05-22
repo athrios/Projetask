@@ -361,15 +361,16 @@ export const RequestsPanel = ({ userId }: Props) => {
                 <ListChecks className="h-4 w-4" />
                 {open.converted_task_id ? "Já é tarefa" : "Converter em tarefa"}
               </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => convertToProcess(open)}
-                disabled={!!open.converted_process_id}
-              >
-                <Workflow className="h-4 w-4" />
-                {open.converted_process_id ? "Já é processo" : "Converter em processo"}
-              </Button>
+              {open.converted_process_id ? (
+                <Button variant="outline" size="sm" onClick={() => openProcess(open.converted_process_id!)}>
+                  <Workflow className="h-4 w-4" /> Abrir processo
+                </Button>
+              ) : (
+                <Button variant="outline" size="sm" onClick={() => convertToProcess(open)}>
+                  <Workflow className="h-4 w-4" /> Converter em processo
+                </Button>
+              )}
+
               <Button onClick={() => setOpen(null)}>Fechar</Button>
             </DialogFooter>
           </DialogContent>
