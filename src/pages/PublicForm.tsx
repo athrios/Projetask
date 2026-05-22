@@ -37,8 +37,18 @@ interface Form {
   is_published: boolean;
   logo_path: string | null;
   logo_alignment: "left" | "center" | "right" | null;
+  submitter_name_label: string | null;
 }
 interface Field {
+  id: string;
+  position: number;
+  label: string;
+  field_type: FieldType;
+  required: boolean;
+  options: string[] | unknown;
+  description: string | null;
+  add_button_label: string | null;
+}
   id: string;
   position: number;
   label: string;
