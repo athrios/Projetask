@@ -1,65 +1,79 @@
-# Descrição por pergunta + Logo no formulário
+# Seção 1 — Respostas mais legíveis e copiáveis
 
-Duas melhorias incrementais no módulo Formulários, sem quebrar dados existentes.
+Escopo restrito: apenas o módulo de Solicitações (`RequestsPanel.tsx`). Sem migration. Sem mudanças em RLS, workspace ou permissões.
 
-## 1. Migração de banco
+## Diagnóstico
 
-`form_fields`:
-- `description text not null default ''`
+- `PublicForm.tsx` já salva `form_responses.data` usando o **label** da pergunta como chave (`cleanValues[f.label]`). Portanto, em respostas novas, o que aparece já é o nome legível.
+- Casos que ainda mostram aparência "técnica":
+  1. **Respostas antigas** salvas antes da mudança, que podem ter chaves diferentes do label atual.
+  2. **Sub-chaves do grupo de sócios / partner_group** (`nome`, `cpf`, `estado_civil`, `regime_bens`, `participacao`, etc.) — renderizadas em snake_case dentro de cada cartão "Sócio N".
+  3. **Labels de campos que foram renomeados depois** — a chave salva é o label antigo, e visualmente passa a impressão de "ID".
 
-`forms`:
-- `logo_path text null` (path no bucket de storage)
-- `logo_alignment text not null default 'center'` (valores: `left|center|right`)
+## O que será implementado
 
-Trigger de validação em `forms` para garantir `logo_alignment in ('left','center','right')`.
+### 1. Mapeamento label-amigável no diálogo de detalhes
+- Carregar `form_fields` (id, label) do `form_id` da resposta aberta, restrito ao `workspace_id` atual (RLS já garante isolamento).
+- Para cada chave em `open.data`:
+  - Se a chave bater com um label atual do formulário → mostrar esse label.
+  - Senão, mostrar a própria chave como fallback (já é label de envio, não UUID).
+  - Se a chave parecer um UUID técnico (regex), mostrar `Pergunta não encontrada` em itálico discreto.
 
-Atualizar views públicas:
-- `form_fields_public`: expor `description`.
-- `forms_public`: expor `logo_path` e `logo_alignment`.
+### 2. Dicionário pt-BR para chaves internas conhecidas do `partner_group`
+Mapa local em `RequestsPanel.tsx`:
+```
+nome → "Nome completo"
+nacionalidade → "Nacionalidade"
+naturalidade → "Naturalidade (UF / Cidade)"
+profissao → "Profissão"
+estado_civil → "Estado civil"
+regime_bens → "Regime de bens"
+endereco → "Endereço residencial"
+etnia → "Autodeclaração de etnia"
+participacao → "Participação no capital (R$)"
+uf → "UF"
+cidade → "Cidade"
+```
+Aplicado apenas ao renderizar sub-itens de sócios e `state_city`, sem alterar o que está salvo no banco.
 
-Storage:
-- Reusar bucket `form-uploads` (já existe, privado). Criar bucket público novo `form-logos` para servir logos via URL pública (mais simples que signed URLs no fluxo público anônimo).
-- Policies em `storage.objects` para `form-logos`:
-  - SELECT público (`bucket_id='form-logos'`).
-  - INSERT/UPDATE/DELETE somente autenticados, restrito a `auth.uid()::text = (storage.foldername(name))[1]` (estrutura: `{user_id}/{form_id}/{uuid}.ext`).
-- Limite de 5 MB e tipos `image/png`, `image/jpeg`, `image/webp` validados no client antes do upload. SVG bloqueado.
+### 3. Botão "Copiar" por resposta
+- Ícone `Copy` (lucide) ao lado de cada valor renderizado no diálogo (pergunta principal + cada linha de sócio + arquivo).
+- Ao clicar:
+  - `navigator.clipboard.writeText(textoFormatado)` usando o mesmo `formatValue` já existente, ou o `file.name` no caso de anexo.
+  - Toast `sonner` "Copiado".
+  - Troca momentânea do ícone para `Check` por ~1,5s como feedback visual inline.
+- O botão **não** abre modal, não chama o backend, não altera a resposta.
+- `stopPropagation` para não interferir com cliques do diálogo.
 
-## 2. UI — `src/components/forms/FormsPanel.tsx`
+### 4. Botão "Copiar tudo" no cabeçalho do bloco de dados (bônus pequeno)
+- Copia o resultado de `formatData(open.data)` já existente, agora com labels mapeados.
+- Mesmo padrão de feedback.
 
-**Editor de cada campo (`fields.map`):**
-- Adicionar `<Textarea>` "Descrição / Instruções (opcional)" abaixo do título da pergunta. Persistência no `onBlur` via `updateField(id, { description })`.
-- Incluir `description` no `select(...)` do load e na interface `Field`.
+## Arquivos alterados
 
-**Editor do formulário — nova seção "Identidade visual":**
-- Botão "Enviar logo" (input file accept `image/png,image/jpeg,image/webp`, max 5 MB).
-- Pré-visualização atual (max-h-20).
-- Botão "Remover logo".
-- `<Select>` Alinhamento: Esquerda / Centro / Direita (default Centro).
-- Upload via `supabase.storage.from('form-logos').upload({user_id}/{form_id}/{uuid}.{ext}, file, { upsert:false, contentType })`. Salvar `logo_path` e gerar URL via `getPublicUrl`.
-- Ao trocar/remover, deletar o arquivo antigo do bucket.
+- `src/components/requests/RequestsPanel.tsx` (única mudança).
 
-**Listagem (card do formulário):**
-- Se `logo_path`, mostrar miniatura `h-8 w-8 object-contain` à esquerda do título; caso contrário, layout atual sem placeholder.
+## Sem migration
 
-## 3. UI — `src/pages/PublicForm.tsx`
+Nenhuma alteração de schema, RLS, views, storage ou edge function.
 
-- Estender interface `Form` com `logo_path`, `logo_alignment`; `Field` com `description`.
-- No header, antes do `<h1>`, se `logo_path`, renderizar `<img>` com `getPublicUrl(logo_path)`, classes `max-h-20 max-w-[240px] object-contain` e wrapper com `justify-{start|center|end}` conforme alinhamento.
-- Para cada campo, abaixo do `<label>` exibir, se `f.description`, `<p className="text-xs text-muted-foreground mt-0.5 whitespace-pre-wrap">{f.description}</p>`. Nada renderizado quando vazio.
+## Garantias
 
-## 4. Validação
+- `workspace_id` continua sendo o filtro nas queries existentes.
+- RLS de `forms`, `form_fields` e `form_responses` inalteradas.
+- Não muda nada em `FormsPanel.tsx`, `PublicForm.tsx`, vínculo com modelo de processo, ou conversão em tarefa/processo.
 
-- Client: `description` opcional, max 500 chars (adicionar `fieldDescriptionSchema` em `src/lib/validation.ts`).
-- Logo: validar mime e size antes do upload; toast de erro se inválido.
+## Testes que você deve fazer
 
-## 5. Compatibilidade
+1. **Resposta nova**: Publicar/abrir um formulário existente, responder e abrir em Solicitações → cada campo aparece com o label da pergunta (ex.: "CNPJ", não chave técnica).
+2. **Cópia simples**: Clicar no ícone de copiar de um campo → colar em outro lugar → confere o valor; aparece o toast "Copiado" e o ícone vira `Check` brevemente.
+3. **Cópia de sócios**: Em formulário com `partner_group`, cada sub-campo do sócio mostra label em PT-BR ("Nome completo", "Estado civil", etc.) e copia individualmente.
+4. **Anexo**: Botão copiar ao lado de arquivo copia o nome do arquivo (sem tentar baixar).
+5. **Resposta antiga**: Abrir uma solicitação anterior à mudança e confirmar que ainda renderiza (fallback usa a própria chave salva, sem quebrar).
+6. **Isolamento**: Trocar de workspace → solicitações de outro ambiente não aparecem (sem regressão).
+7. **Conversão**: Converter em tarefa e em processo continuam funcionando como antes.
 
-- Defaults garantem que formulários e campos antigos seguem funcionando: `description=''`, sem logo, alinhamento centro.
-- RLS de `forms`/`form_fields` inalteradas; views públicas apenas ganham colunas adicionais não sensíveis.
+## Pendente para próximas seções
 
-## Ordem de execução
-
-1. Rodar migração (schema + views + bucket + policies de storage).
-2. Atualizar `FormsPanel.tsx` (editor de campo, seção logo, miniatura no card).
-3. Atualizar `PublicForm.tsx` (logo no topo + descrição abaixo de cada label).
-4. Adicionar schema de validação para descrição.
+- Seção 2: rótulo customizável do campo "Seu nome" e do botão "Adicionar sócio".
+- Seções 3–10: conforme lista, somente após sua confirmação.
