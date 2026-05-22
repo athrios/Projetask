@@ -45,7 +45,11 @@ interface Form {
   public_slug: string;
   is_published: boolean;
   color: string;
+  auto_create_process: boolean;
+  linked_process_template_id: string | null;
 }
+interface ProcessTemplate { id: string; name: string }
+
 interface Field {
   id: string;
   form_id: string;
