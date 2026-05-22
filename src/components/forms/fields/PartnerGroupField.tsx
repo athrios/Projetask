@@ -51,11 +51,14 @@ const Field = ({ label, children }: { label: string; children: React.ReactNode }
 export const PartnerGroupField = ({
   value,
   onChange,
+  addButtonLabel,
 }: {
   value: Partner[] | undefined;
   onChange: (v: Partner[]) => void;
+  addButtonLabel?: string;
 }) => {
   const partners = Array.isArray(value) ? value : [];
+  const buttonLabel = addButtonLabel?.trim() || "Adicionar sócio";
   const update = (i: number, patch: Partial<Partner>) => {
     const next = partners.map((p, idx) => (idx === i ? { ...p, ...patch } : p));
     onChange(next);
@@ -67,7 +70,7 @@ export const PartnerGroupField = ({
     <div className="space-y-3">
       {partners.length === 0 && (
         <p className="text-xs text-muted-foreground">
-          Nenhum sócio adicionado. Clique em "Adicionar sócio".
+          Nenhum sócio adicionado. Clique em "{buttonLabel}".
         </p>
       )}
       {partners.map((p, i) => {
