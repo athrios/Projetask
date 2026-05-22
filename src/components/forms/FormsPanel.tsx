@@ -296,7 +296,8 @@ const FormBuilder = ({
   useEffect(() => { load(); }, [form.id]);
 
   const saveMeta = async () => {
-    await supabase.from("forms").update({ title, description: desc, color }).eq("id", form.id);
+    const label = submitterNameLabel.trim().slice(0, 60) || "Seu nome";
+    await supabase.from("forms").update({ title, description: desc, color, submitter_name_label: label }).eq("id", form.id);
   };
 
   const updateColor = async (c: ReturnType<typeof asColor>) => {
