@@ -49,14 +49,6 @@ interface Field {
   description: string | null;
   add_button_label: string | null;
 }
-  id: string;
-  position: number;
-  label: string;
-  field_type: FieldType;
-  required: boolean;
-  options: string[] | unknown;
-  description: string | null;
-}
 
 const PublicForm = () => {
   const { slug } = useParams<{ slug: string }>();
