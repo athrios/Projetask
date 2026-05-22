@@ -283,6 +283,19 @@ const FormBuilder = ({
     await supabase.from("forms").update({ color: c }).eq("id", form.id);
   };
 
+  const toggleAuto = async (v: boolean) => {
+    setAutoCreate(v);
+    const patch: { auto_create_process: boolean; linked_process_template_id?: string | null } = { auto_create_process: v };
+    if (!v) { patch.linked_process_template_id = null; setLinkedTpl(null); }
+    await supabase.from("forms").update(patch).eq("id", form.id);
+  };
+
+  const setTemplate = async (id: string) => {
+    setLinkedTpl(id);
+    await supabase.from("forms").update({ linked_process_template_id: id }).eq("id", form.id);
+  };
+
+
   const addField = async (type: FieldType) => {
     if (!workspaceId) return;
     await supabase.from("form_fields").insert({
