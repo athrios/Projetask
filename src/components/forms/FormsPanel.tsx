@@ -412,6 +412,48 @@ const FormBuilder = ({
             </div>
           </div>
           <div className="rounded-lg border p-3 bg-muted/20 space-y-2">
+            <p className="text-sm font-medium">Identidade visual</p>
+            <p className="text-xs text-muted-foreground">Logo aparece no topo do formulário público. PNG, JPG ou WEBP, até 5 MB.</p>
+            <div className="flex items-center gap-3">
+              {logoUrl ? (
+                <img src={logoUrl} alt="Logo" className="h-16 max-w-[160px] object-contain rounded border bg-background p-1" />
+              ) : (
+                <div className="h-16 w-16 rounded border border-dashed grid place-items-center text-[10px] text-muted-foreground">sem logo</div>
+              )}
+              <div className="flex flex-col gap-1.5">
+                <label className="inline-flex items-center gap-1.5 text-xs h-8 px-3 rounded-md border cursor-pointer hover:bg-muted/40">
+                  <Plus className="h-3.5 w-3.5" />
+                  {uploadingLogo ? "Enviando..." : (logoPath ? "Trocar logo" : "Enviar logo")}
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    className="hidden"
+                    disabled={uploadingLogo}
+                    onChange={(e) => { onLogoFile(e.target.files?.[0] ?? null); e.target.value = ""; }}
+                  />
+                </label>
+                {logoPath && (
+                  <button type="button" onClick={removeLogo} className="text-xs text-destructive hover:underline w-fit">
+                    Remover logo
+                  </button>
+                )}
+              </div>
+            </div>
+            {logoPath && (
+              <div>
+                <label className="text-xs font-medium block mb-1">Alinhamento</label>
+                <Select value={logoAlign} onValueChange={(v) => updateAlign(v as "left" | "center" | "right")}>
+                  <SelectTrigger className="h-8 w-[160px] text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="left" className="text-xs">Esquerda</SelectItem>
+                    <SelectItem value="center" className="text-xs">Centro</SelectItem>
+                    <SelectItem value="right" className="text-xs">Direita</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+          </div>
+          <div className="rounded-lg border p-3 bg-muted/20 space-y-2">
             <div className="flex items-center justify-between gap-3">
               <div>
                 <p className="text-sm font-medium">Criar processo automaticamente</p>
