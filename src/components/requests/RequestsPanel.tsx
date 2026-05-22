@@ -45,6 +45,7 @@ export const RequestsPanel = ({ userId }: Props) => {
   const { workspaceId } = useWorkspace();
   const [forms, setForms] = useState<FormRow[]>([]);
   const [responses, setResponses] = useState<Response[]>([]);
+  const [processNames, setProcessNames] = useState<Record<string, string>>({});
   const [view, setView] = useState<ViewMode>("table");
   const [open, setOpen] = useState<Response | null>(null);
 
@@ -55,9 +56,20 @@ export const RequestsPanel = ({ userId }: Props) => {
       supabase.from("form_responses").select("*").eq("workspace_id", workspaceId).order("created_at", { ascending: false }),
     ]);
     setForms((f.data ?? []) as FormRow[]);
-    setResponses((r.data ?? []) as unknown as Response[]);
+    const rs = (r.data ?? []) as unknown as Response[];
+    setResponses(rs);
+    const ids = Array.from(new Set(rs.map((x) => x.converted_process_id).filter(Boolean) as string[]));
+    if (ids.length) {
+      const { data: procs } = await supabase.from("processes").select("id,name").in("id", ids);
+      const m: Record<string, string> = {};
+      (procs ?? []).forEach((p: { id: string; name: string }) => { m[p.id] = p.name; });
+      setProcessNames(m);
+    } else {
+      setProcessNames({});
+    }
   };
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [workspaceId]);
+
 
   const formTitle = (id: string) => forms.find((f) => f.id === id)?.title ?? "—";
   const formColor = (id: string): TemplateColor => asColor(forms.find((f) => f.id === id)?.color);
