@@ -545,6 +545,15 @@ const FormBuilder = ({
                       })}
                     />
                   )}
+                  {f.field_type === "partner_group" && (
+                    <Input
+                      defaultValue={f.add_button_label ?? ""}
+                      placeholder='Rótulo do botão (padrão: "Adicionar sócio")'
+                      className="text-xs h-8"
+                      maxLength={60}
+                      onBlur={(e) => updateField(f.id, { add_button_label: e.target.value.trim() || null } as Partial<Field>)}
+                    />
+                  )}
                 </div>
               ))}
             </div>
