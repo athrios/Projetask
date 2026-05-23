@@ -63,6 +63,7 @@ interface Field {
   options: string[] | unknown;
   description: string;
   add_button_label: string | null;
+  conditional_logic: FieldCondition | null;
 }
 
 const FIELD_TYPES: { value: FieldType; label: string }[] = [
