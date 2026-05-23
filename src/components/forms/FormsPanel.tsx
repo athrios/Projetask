@@ -656,18 +656,20 @@ const ConditionEditor = ({
   const update = (patch: Partial<FieldCondition>) => {
     const base: FieldCondition = cond ?? {
       field_id: sources[0].id,
-      operator: "equals",
+      operator: sources[0].field_type === "multi_select" ? "contains" : "equals",
       value: "",
     };
     const next = { ...base, ...patch };
     if (patch.field_id) {
-      // reset value when source changes
+      // reset value/operator when source changes to keep a valid combo
       next.value = "";
       const s = allFields.find((x) => x.id === patch.field_id);
       next.operator = s?.field_type === "multi_select" ? "contains" : "equals";
     }
     onChange(next);
   };
+
+  const isMulti = source?.field_type === "multi_select";
 
   return (
     <div className="rounded-md border bg-muted/20 p-2 space-y-2">
@@ -698,15 +700,21 @@ const ConditionEditor = ({
           </SelectContent>
         </Select>
         <Select
-          value={cond?.operator ?? "equals"}
+          value={cond?.operator ?? (isMulti ? "contains" : "equals")}
           onValueChange={(v) => update({ operator: v as ConditionOperator })}
         >
           <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="equals" className="text-xs">é igual a</SelectItem>
-            <SelectItem value="not_equals" className="text-xs">é diferente de</SelectItem>
-            {source?.field_type === "multi_select" && (
-              <SelectItem value="contains" className="text-xs">contém</SelectItem>
+            {isMulti ? (
+              <>
+                <SelectItem value="contains" className="text-xs">contém</SelectItem>
+                <SelectItem value="not_contains" className="text-xs">não contém</SelectItem>
+              </>
+            ) : (
+              <>
+                <SelectItem value="equals" className="text-xs">é igual a</SelectItem>
+                <SelectItem value="not_equals" className="text-xs">é diferente de</SelectItem>
+              </>
             )}
           </SelectContent>
         </Select>
