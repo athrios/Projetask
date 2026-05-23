@@ -685,7 +685,7 @@ const ConditionEditor = ({
           Remover condição
         </button>
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+      <div className={`grid grid-cols-1 ${isMulti ? "sm:grid-cols-2" : "sm:grid-cols-3"} gap-2`}>
         <Select
           value={cond?.field_id ?? ""}
           onValueChange={(v) => update({ field_id: v })}
@@ -699,31 +699,28 @@ const ConditionEditor = ({
             ))}
           </SelectContent>
         </Select>
-        <Select
-          value={cond?.operator ?? (isMulti ? "contains" : "equals")}
-          onValueChange={(v) => update({ operator: v as ConditionOperator })}
-        >
-          <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            {isMulti ? (
-              <>
-                <SelectItem value="contains" className="text-xs">contém</SelectItem>
-                <SelectItem value="not_contains" className="text-xs">não contém</SelectItem>
-              </>
-            ) : (
-              <>
-                <SelectItem value="equals" className="text-xs">é igual a</SelectItem>
-                <SelectItem value="not_equals" className="text-xs">é diferente de</SelectItem>
-              </>
-            )}
-          </SelectContent>
-        </Select>
+        {!isMulti && (
+          <Select
+            value={cond?.operator ?? "equals"}
+            onValueChange={(v) => update({ operator: v as ConditionOperator })}
+          >
+            <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="equals" className="text-xs">é igual a</SelectItem>
+              <SelectItem value="not_equals" className="text-xs">é diferente de</SelectItem>
+            </SelectContent>
+          </Select>
+        )}
         {sourceOpts.length > 0 ? (
           <Select
             value={cond?.value ?? ""}
-            onValueChange={(v) => update({ value: v })}
+            onValueChange={(v) =>
+              update(isMulti ? { value: v, operator: "contains" as ConditionOperator } : { value: v })
+            }
           >
-            <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Valor…" /></SelectTrigger>
+            <SelectTrigger className="h-8 text-xs">
+              <SelectValue placeholder={isMulti ? "Aparece quando marcar…" : "Valor…"} />
+            </SelectTrigger>
             <SelectContent>
               {sourceOpts.map((o) => (
                 <SelectItem key={o} value={o} className="text-xs">{o}</SelectItem>
@@ -739,6 +736,11 @@ const ConditionEditor = ({
           />
         )}
       </div>
+      {isMulti && (
+        <p className="text-[10px] text-muted-foreground">
+          A pergunta aparece somente quando a opção acima estiver marcada na pergunta de origem.
+        </p>
+      )}
     </div>
   );
 };
