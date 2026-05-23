@@ -49,6 +49,7 @@ interface Field {
   options: string[] | unknown;
   description: string | null;
   add_button_label: string | null;
+  conditional_logic: FieldCondition | null;
 }
 
 const PublicForm = () => {
