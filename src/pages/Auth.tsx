@@ -22,6 +22,27 @@ const AuthPage = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
+  const [recovering, setRecovering] = useState(false);
+
+  const sendRecovery = async () => {
+    const emailParsed = z.string().trim().email().max(255).safeParse(email);
+    if (!emailParsed.success) {
+      toast.error("Digite um email válido para receber o link de recuperação.");
+      return;
+    }
+    setRecovering(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(emailParsed.data, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+      if (error) throw error;
+      toast.success("Se houver uma conta com esse email, enviaremos um link de recuperação.");
+    } catch (err: any) {
+      toast.error(err.message ?? "Erro ao enviar email de recuperação");
+    } finally {
+      setRecovering(false);
+    }
+  };
 
   useEffect(() => {
     if (user) nav(redirect, { replace: true });
@@ -119,9 +140,21 @@ const AuthPage = () => {
                 />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="pw" className="text-xs font-medium tracking-wide uppercase text-muted-foreground">
-                  Senha
-                </Label>
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="pw" className="text-xs font-medium tracking-wide uppercase text-muted-foreground">
+                    Senha
+                  </Label>
+                  {mode === "login" && (
+                    <button
+                      type="button"
+                      onClick={sendRecovery}
+                      disabled={recovering}
+                      className="text-[11px] text-muted-foreground hover:text-[hsl(96,24%,27%)] transition-colors disabled:opacity-50"
+                    >
+                      {recovering ? "Enviando..." : "Esqueci a senha?"}
+                    </button>
+                  )}
+                </div>
                 <Input
                   id="pw"
                   type="password"

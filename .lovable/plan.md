@@ -1,79 +1,40 @@
-# Seção 1 — Respostas mais legíveis e copiáveis
+Sim, confirmando: paramos na Seção 3 do módulo Formulários/Respostas (descrição individual por pergunta) — ela continua pendente e não será tocada agora.
 
-Escopo restrito: apenas o módulo de Solicitações (`RequestsPanel.tsx`). Sem migration. Sem mudanças em RLS, workspace ou permissões.
+# Plano: Recuperação de senha
 
-## Diagnóstico
+Implementar fluxo padrão de "Esqueci minha senha" via email, sem mexer em nada do módulo de formulários.
 
-- `PublicForm.tsx` já salva `form_responses.data` usando o **label** da pergunta como chave (`cleanValues[f.label]`). Portanto, em respostas novas, o que aparece já é o nome legível.
-- Casos que ainda mostram aparência "técnica":
-  1. **Respostas antigas** salvas antes da mudança, que podem ter chaves diferentes do label atual.
-  2. **Sub-chaves do grupo de sócios / partner_group** (`nome`, `cpf`, `estado_civil`, `regime_bens`, `participacao`, etc.) — renderizadas em snake_case dentro de cada cartão "Sócio N".
-  3. **Labels de campos que foram renomeados depois** — a chave salva é o label antigo, e visualmente passa a impressão de "ID".
+## Escopo
 
-## O que será implementado
+1. **Link "Esqueci a senha?"** na tela `/auth` (modo login), abaixo do campo de senha.
+2. **Modal/tela para solicitar o email** de recuperação. Ao enviar, chama `supabase.auth.resetPasswordForEmail(email, { redirectTo: ${window.location.origin}/reset-password })` e mostra toast de confirmação ("Se o email existir, enviamos um link").
+3. **Nova página pública `/reset-password`** que:
+   - Detecta o token de recuperação no hash da URL (Supabase já cria a sessão temporária de recovery).
+   - Mostra formulário com "Nova senha" + "Confirmar senha" (validação Zod, mínimo 6, máximo 72, iguais).
+   - Chama `supabase.auth.updateUser({ password })`.
+   - Em sucesso, faz `signOut` e redireciona para `/auth` com toast "Senha atualizada, faça login".
+4. **Rota** adicionada em `src/App.tsx` (`/reset-password`), pública (fora de qualquer guard).
 
-### 1. Mapeamento label-amigável no diálogo de detalhes
-- Carregar `form_fields` (id, label) do `form_id` da resposta aberta, restrito ao `workspace_id` atual (RLS já garante isolamento).
-- Para cada chave em `open.data`:
-  - Se a chave bater com um label atual do formulário → mostrar esse label.
-  - Senão, mostrar a própria chave como fallback (já é label de envio, não UUID).
-  - Se a chave parecer um UUID técnico (regex), mostrar `Pergunta não encontrada` em itálico discreto.
+## Detalhes técnicos
 
-### 2. Dicionário pt-BR para chaves internas conhecidas do `partner_group`
-Mapa local em `RequestsPanel.tsx`:
-```
-nome → "Nome completo"
-nacionalidade → "Nacionalidade"
-naturalidade → "Naturalidade (UF / Cidade)"
-profissao → "Profissão"
-estado_civil → "Estado civil"
-regime_bens → "Regime de bens"
-endereco → "Endereço residencial"
-etnia → "Autodeclaração de etnia"
-participacao → "Participação no capital (R$)"
-uf → "UF"
-cidade → "Cidade"
-```
-Aplicado apenas ao renderizar sub-itens de sócios e `state_city`, sem alterar o que está salvo no banco.
+- Reaproveitar o visual do `Auth.tsx` (mesmo card, logo, gradientes dourados) para consistência.
+- Não alterar `useAuth`, `WorkspaceProvider` nem rotas existentes.
+- Não habilitar auto-confirm nem mudar configurações de auth.
+- Emails de recuperação usarão o template padrão do Lovable (já funciona). Não vou configurar domínio/templates customizados a menos que você peça.
+- Sem mudanças de banco, RLS ou edge functions.
 
-### 3. Botão "Copiar" por resposta
-- Ícone `Copy` (lucide) ao lado de cada valor renderizado no diálogo (pergunta principal + cada linha de sócio + arquivo).
-- Ao clicar:
-  - `navigator.clipboard.writeText(textoFormatado)` usando o mesmo `formatValue` já existente, ou o `file.name` no caso de anexo.
-  - Toast `sonner` "Copiado".
-  - Troca momentânea do ícone para `Check` por ~1,5s como feedback visual inline.
-- O botão **não** abre modal, não chama o backend, não altera a resposta.
-- `stopPropagation` para não interferir com cliques do diálogo.
+## Arquivos
 
-### 4. Botão "Copiar tudo" no cabeçalho do bloco de dados (bônus pequeno)
-- Copia o resultado de `formatData(open.data)` já existente, agora com labels mapeados.
-- Mesmo padrão de feedback.
+- editar: `src/pages/Auth.tsx` (adicionar link + estado para abrir diálogo de recuperação)
+- criar: `src/pages/ResetPassword.tsx`
+- editar: `src/App.tsx` (registrar rota `/reset-password`)
 
-## Arquivos alterados
+## Testes manuais
 
-- `src/components/requests/RequestsPanel.tsx` (única mudança).
+1. Em `/auth`, clicar "Esqueci a senha?", digitar email, ver toast.
+2. Receber email, clicar no link → cair em `/reset-password` autenticado em modo recovery.
+3. Definir nova senha → redirecionado a `/auth` → login com nova senha funciona.
+4. Senha antiga não funciona mais.
+5. Acessar `/reset-password` sem token → mostra mensagem "Link inválido ou expirado".
 
-## Sem migration
-
-Nenhuma alteração de schema, RLS, views, storage ou edge function.
-
-## Garantias
-
-- `workspace_id` continua sendo o filtro nas queries existentes.
-- RLS de `forms`, `form_fields` e `form_responses` inalteradas.
-- Não muda nada em `FormsPanel.tsx`, `PublicForm.tsx`, vínculo com modelo de processo, ou conversão em tarefa/processo.
-
-## Testes que você deve fazer
-
-1. **Resposta nova**: Publicar/abrir um formulário existente, responder e abrir em Solicitações → cada campo aparece com o label da pergunta (ex.: "CNPJ", não chave técnica).
-2. **Cópia simples**: Clicar no ícone de copiar de um campo → colar em outro lugar → confere o valor; aparece o toast "Copiado" e o ícone vira `Check` brevemente.
-3. **Cópia de sócios**: Em formulário com `partner_group`, cada sub-campo do sócio mostra label em PT-BR ("Nome completo", "Estado civil", etc.) e copia individualmente.
-4. **Anexo**: Botão copiar ao lado de arquivo copia o nome do arquivo (sem tentar baixar).
-5. **Resposta antiga**: Abrir uma solicitação anterior à mudança e confirmar que ainda renderiza (fallback usa a própria chave salva, sem quebrar).
-6. **Isolamento**: Trocar de workspace → solicitações de outro ambiente não aparecem (sem regressão).
-7. **Conversão**: Converter em tarefa e em processo continuam funcionando como antes.
-
-## Pendente para próximas seções
-
-- Seção 2: rótulo customizável do campo "Seu nome" e do botão "Adicionar sócio".
-- Seções 3–10: conforme lista, somente após sua confirmação.
+Quer que eu pergunte o email antes de enviar via modal simples, ou prefere uma página dedicada `/forgot-password`?
