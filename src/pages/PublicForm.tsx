@@ -87,6 +87,24 @@ const PublicForm = () => {
     })();
   }, [slug]);
 
+  const visibility = useMemo(() => {
+    const labelById: Record<string, string> = {};
+    fields.forEach((f) => { labelById[f.id] = f.label; });
+    // Iterate in position order so a dependent field can read the visibility
+    // of fields declared before it. Single-pass is enough because conditions
+    // can only reference earlier fields (enforced in the editor).
+    const visibleById: Record<string, boolean> = {};
+    for (const f of fields) {
+      if (!f.conditional_logic) { visibleById[f.id] = true; continue; }
+      visibleById[f.id] = evaluateCondition(f.conditional_logic, {
+        labelById,
+        visibleById,
+        answers: values,
+      });
+    }
+    return visibleById;
+  }, [fields, values]);
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form) return;
@@ -94,6 +112,7 @@ const PublicForm = () => {
     if (!nameParsed.success) return toast.error(nameParsed.error.issues[0]?.message ?? "Nome inválido");
     const cleanValues: Record<string, unknown> = {};
     for (const f of fields) {
+      if (!visibility[f.id]) continue; // skip hidden fields entirely
       const v = values[f.label];
       const empty = v === undefined || v === null || v === "" || (Array.isArray(v) && v.length === 0);
       if (f.required && empty) {
@@ -106,7 +125,7 @@ const PublicForm = () => {
       } else if (Array.isArray(v)) {
         if (v.length > 50) return toast.error(`${f.label}: máximo 50 itens`);
         cleanValues[f.label] = v.slice(0, 50);
-      } else {
+      } else if (v !== undefined) {
         cleanValues[f.label] = v;
       }
     }
@@ -123,6 +142,7 @@ const PublicForm = () => {
     if (error) return toast.error("Não foi possível enviar. O formulário pode ter sido despublicado.");
     setSubmitted(true);
   };
+
 
   if (loading) return <div className="min-h-screen grid place-items-center text-sm text-muted-foreground">Carregando…</div>;
   if (!form) {
