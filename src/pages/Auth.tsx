@@ -140,9 +140,21 @@ const AuthPage = () => {
                 />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="pw" className="text-xs font-medium tracking-wide uppercase text-muted-foreground">
-                  Senha
-                </Label>
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="pw" className="text-xs font-medium tracking-wide uppercase text-muted-foreground">
+                    Senha
+                  </Label>
+                  {mode === "login" && (
+                    <button
+                      type="button"
+                      onClick={sendRecovery}
+                      disabled={recovering}
+                      className="text-[11px] text-muted-foreground hover:text-[hsl(96,24%,27%)] transition-colors disabled:opacity-50"
+                    >
+                      {recovering ? "Enviando..." : "Esqueci a senha?"}
+                    </button>
+                  )}
+                </div>
                 <Input
                   id="pw"
                   type="password"
