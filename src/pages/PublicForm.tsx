@@ -200,6 +200,7 @@ const PublicForm = () => {
         </div>
 
         {fields.map((f) => {
+          if (!visibility[f.id]) return null;
           const opts = (Array.isArray(f.options) ? f.options : []) as string[];
           const v = values[f.label];
           const set = (val: unknown) => setValues((p) => ({ ...p, [f.label]: val }));
