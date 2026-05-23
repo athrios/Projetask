@@ -21,7 +21,7 @@ export const parseCondition = (raw: unknown): FieldCondition | null => {
   if (!raw || typeof raw !== "object") return null;
   const c = raw as Partial<FieldCondition>;
   if (!c.field_id || !c.operator || typeof c.value !== "string") return null;
-  if (!["equals", "not_equals", "contains"].includes(c.operator)) return null;
+  if (!["equals", "not_equals", "contains", "not_contains"].includes(c.operator)) return null;
   return { field_id: c.field_id, operator: c.operator, value: c.value };
 };
 
@@ -38,12 +38,12 @@ export const evaluateCondition = (
   const answer = ctx.answers[label];
   const target = norm(cond.value);
 
-  if (cond.operator === "contains") {
-    if (Array.isArray(answer)) {
-      return answer.some((x) => norm(x) === target);
-    }
-    return norm(answer).includes(target);
-  }
+  const contains = Array.isArray(answer)
+    ? answer.some((x) => norm(x) === target)
+    : norm(answer).includes(target);
+
+  if (cond.operator === "contains") return contains;
+  if (cond.operator === "not_contains") return !contains;
   const a = norm(answer);
   if (cond.operator === "equals") return a === target;
   return a !== target;
