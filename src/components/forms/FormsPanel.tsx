@@ -556,6 +556,11 @@ const FormBuilder = ({
                       onBlur={(e) => updateField(f.id, { add_button_label: e.target.value.trim() || null } as Partial<Field>)}
                     />
                   )}
+                  <ConditionEditor
+                    field={f}
+                    allFields={fields}
+                    onChange={(cond) => updateField(f.id, { conditional_logic: cond } as Partial<Field>)}
+                  />
                 </div>
               ))}
             </div>
