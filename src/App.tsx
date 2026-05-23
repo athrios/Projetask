@@ -8,6 +8,7 @@ import Index from "./pages/Index.tsx";
 import NotFound from "./pages/NotFound.tsx";
 import Auth from "./pages/Auth.tsx";
 import PublicForm from "./pages/PublicForm.tsx";
+import ResetPassword from "./pages/ResetPassword.tsx";
 import AcceptInvite from "./pages/AcceptInvite.tsx";
 import Unsubscribe from "./pages/Unsubscribe.tsx";
 import { AuthProvider } from "./hooks/useAuth";
