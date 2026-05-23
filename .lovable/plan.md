@@ -1,52 +1,34 @@
-# Evolução: condição por opção de múltipla escolha
+# Investigar: condições em multipla escolha aparentemente ignoradas
 
-Hoje a engine de condições (`src/lib/formConditions.ts`) já suporta o operador `contains` em arrays, mas o editor no `FormsPanel.tsx` não expõe isso de forma clara quando a pergunta de origem é `multi_select`. Esta mudança é só de UX no editor — o runtime (`PublicForm.tsx`) e o schema do banco não precisam mudar.
+## O que eu já verifiquei
 
-## O que muda no editor (`FormsPanel.tsx`)
+- Os dados estão salvos certo no banco. As 3 perguntas condicionais têm condições válidas (`contains`/`not_contains` apontando para o multi_select "Deseja incluir alterações?").
+- A view `form_fields_public` expõe `conditional_logic` e o anon consegue ler (confirmado por `curl` direto na API).
+- A engine `evaluateCondition` em `src/lib/formConditions.ts` trata `contains`/`not_contains` corretamente (array + case-insensitive).
+- `PublicForm.tsx` carrega `conditional_logic`, parseia, monta `visibility` em ordem de `position` e usa `if (!visibility[f.id]) return null;` no render.
 
-No bloco "Mostrar somente se…":
+Pela leitura, o caso "Quais serão as novas atividades?" (`contains "Atividades exercidas"`) deveria ficar **oculto** até o usuário marcar essa opção. Os outros dois (`not_contains`) deveriam aparecer só enquanto a opção correspondente **não** estiver marcada.
 
-1. **Origem `multi_select`**
-   - Operadores disponíveis: `contém` (`contains`) e `não contém` (novo: `not_contains`).
-   - Campo de valor: **dropdown com as opções daquela pergunta** (uma opção por vez — v1 simples).
-   - Default ao selecionar uma origem multi_select: operador `contains` + primeira opção.
+## Hipótese principal
 
-2. **Origem `select`**
-   - Mantém `é igual a` / `é diferente de` com dropdown das opções (já existe).
+O formulário aberto pelo usuário está sendo servido por uma versão publicada antiga, anterior à introdução da visibilidade condicional. A URL preview (`/f/<slug>` no domínio `id-preview--…lovable.app`) carrega o código atual; a URL publicada (`ambitask.com.br` / `ambitask.lovable.app`) só atualiza após um novo Publish.
 
-3. **Origem `short_text` / `long_text`**
-   - Mantém `é igual a` / `é diferente de` com input de texto.
+## Passos da investigação (em build mode)
 
-4. **Migração suave**: se o usuário trocar a pergunta de origem, resetar `operator` e `value` para valores válidos do novo tipo, para não deixar condição quebrada.
+1. Abrir `/f/<slug>` da preview no browser via ferramenta interna e marcar/desmarcar opções no multi_select para confirmar o comportamento esperado:
+   - "Quais serão as novas atividades?" oculto até marcar "Atividades exercidas".
+   - "Endereço novo" some quando "Endereço Comercial" é marcado.
+   - "Novo capital social" some quando "Capital Social" é marcado.
+2. Capturar `console.log` temporário do `visibility` map para validar (remover depois).
+3. **Se preview estiver OK:** confirmar que o bug só acontece no domínio publicado e orientar o usuário a republicar. Não há fix de código.
+4. **Se preview também falhar:** então há bug real. Próximos suspeitos a checar:
+   - `parseCondition` rejeitando silenciosamente (logar valor recebido).
+   - `values[f.label]` divergindo da chave esperada (e.g. label com espaços trailing).
+   - Ordem do `fields` quebrada quando duas perguntas têm a mesma `position`.
 
-## Engine de condições (`src/lib/formConditions.ts`)
+## Não escopo
 
-- Adicionar `"not_contains"` ao tipo `ConditionOperator` e ao `parseCondition`.
-- Em `evaluateCondition`, `not_contains` = inverso de `contains` (case-insensitive, funciona para array e string).
+- Múltiplas opções por condição (E/OU) — fica para depois conforme decidido na seção anterior.
+- Migração de dados antigos.
 
-## Formulário público (`PublicForm.tsx`)
-
-Nenhuma mudança. A avaliação já é reativa ao `values` e usa o helper.
-
-## Exemplo coberto
-
-- Pergunta A (multi_select): "O que você deseja alterar?" — opções: endereço, capital, atividade.
-- Pergunta B (texto): "Qual o novo endereço?" — condição: A `contém` `endereço`.
-- No formulário público: B só aparece quando o usuário marca "endereço" em A. Desmarcou → some, valor não é enviado, `required` não bloqueia.
-
-## Fora de escopo (posso fazer depois se pedir)
-
-- Múltiplas opções na mesma condição com lógica E/OU (ex.: aparece se marcar "endereço" **ou** "capital"). Hoje precisaria criar uma condição por opção, mas v1 ainda é 1 condição por campo.
-- Combinar condições de campos diferentes.
-
-## Testes manuais
-
-1. Criar form com multi_select A (3 opções) + texto B condicionado a A `contém` "endereço". Publicar.
-2. No `/f/:slug`: sem marcar nada → B oculto. Marcar "endereço" → B aparece. Desmarcar → B some.
-3. Marcar "capital" sozinho → B continua oculto.
-4. B obrigatório + oculto → envio funciona sem preencher B.
-5. Resposta salva em `form_responses.data` não contém a chave de B quando ele estava oculto.
-6. Trocar origem de B de multi_select para select → operador/valor resetam para combinação válida (sem condição inválida persistida).
-7. Condições antigas com `contains` continuam funcionando (compatibilidade).
-
-Confirma que sigo com essa abordagem (1 opção por condição, com operador `não contém` incluso)?
+Confirma que sigo investigar dessa forma?
