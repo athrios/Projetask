@@ -27,6 +27,7 @@ import { useWorkspace } from "@/hooks/useWorkspace";
 import { TEMPLATE_COLORS, colorPill, colorLeftBorder, asColor } from "@/components/processes/templateColors";
 import { cn } from "@/lib/utils";
 import { buildAppUrl } from "@/lib/appUrl";
+import type { FieldCondition, ConditionOperator } from "@/lib/formConditions";
 
 type FieldType =
   | "short_text"
