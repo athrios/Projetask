@@ -140,6 +140,7 @@ export type Database = {
       form_fields: {
         Row: {
           add_button_label: string | null
+          conditional_logic: Json | null
           created_at: string
           description: string
           field_type: string
@@ -154,6 +155,7 @@ export type Database = {
         }
         Insert: {
           add_button_label?: string | null
+          conditional_logic?: Json | null
           created_at?: string
           description?: string
           field_type?: string
@@ -168,6 +170,7 @@ export type Database = {
         }
         Update: {
           add_button_label?: string | null
+          conditional_logic?: Json | null
           created_at?: string
           description?: string
           field_type?: string
@@ -966,6 +969,7 @@ export type Database = {
       form_fields_public: {
         Row: {
           add_button_label: string | null
+          conditional_logic: Json | null
           description: string | null
           field_type: string | null
           form_id: string | null
