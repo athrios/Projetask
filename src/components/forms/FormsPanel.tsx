@@ -568,69 +568,24 @@ const FormBuilder = ({
           <div>
 
             <h4 className="text-sm font-semibold mb-2">Campos</h4>
-            <div className="space-y-2">
-              {fields.map((f) => (
-                <div key={f.id} className="rounded-lg border p-3 space-y-2 group">
-                  <div className="flex items-center gap-2">
-                    <Input
-                      value={f.label}
-                      onChange={(e) => setFields((p) => p.map((x) => x.id === f.id ? { ...x, label: e.target.value } : x))}
-                      onBlur={(e) => updateField(f.id, { label: e.target.value })}
-                      className="h-8 text-sm flex-1"
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+              <SortableContext items={fields.map((f) => f.id)} strategy={verticalListSortingStrategy}>
+                <div className="space-y-2">
+                  {fields.map((f) => (
+                    <SortableFieldCard
+                      key={f.id}
+                      field={f}
+                      allFields={fields}
+                      onLabelChangeLocal={(v) =>
+                        setFields((p) => p.map((x) => (x.id === f.id ? { ...x, label: v } : x)))
+                      }
+                      onUpdate={(patch) => updateField(f.id, patch)}
+                      onRemove={() => removeField(f.id)}
                     />
-                    <Select value={f.field_type} onValueChange={(v) => updateField(f.id, { field_type: v as FieldType })}>
-                      <SelectTrigger className="h-8 w-[160px] text-xs"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {FIELD_TYPES.map((t) => (
-                          <SelectItem key={t.value} value={t.value} className="text-xs">{t.label}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <button
-                      onClick={() => removeField(f.id)}
-                      className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                  <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer w-fit select-none">
-                    <Switch checked={f.required} onCheckedChange={(v) => updateField(f.id, { required: v })} />
-                    <span>Resposta obrigatória</span>
-                  </label>
-                  <Textarea
-                    defaultValue={f.description ?? ""}
-                    placeholder="Descrição / instruções (opcional) — aparece abaixo da pergunta no formulário público"
-                    className="text-xs min-h-[50px]"
-                    maxLength={500}
-                    onBlur={(e) => updateField(f.id, { description: e.target.value.trim() } as Partial<Field>)}
-                  />
-                  {(f.field_type === "select" || f.field_type === "multi_select") && (
-                    <Textarea
-                      defaultValue={Array.isArray(f.options) ? (f.options as string[]).join("\n") : ""}
-                      placeholder="Uma opção por linha"
-                      className="text-xs min-h-[60px]"
-                      onBlur={(e) => updateField(f.id, {
-                        options: e.target.value.split("\n").map((s) => s.trim()).filter(Boolean) as never,
-                      })}
-                    />
-                  )}
-                  {f.field_type === "partner_group" && (
-                    <Input
-                      defaultValue={f.add_button_label ?? ""}
-                      placeholder='Rótulo do botão (padrão: "Adicionar sócio")'
-                      className="text-xs h-8"
-                      maxLength={60}
-                      onBlur={(e) => updateField(f.id, { add_button_label: e.target.value.trim() || null } as Partial<Field>)}
-                    />
-                  )}
-                  <ConditionEditor
-                    field={f}
-                    allFields={fields}
-                    onChange={(cond) => updateField(f.id, { conditional_logic: cond } as Partial<Field>)}
-                  />
+                  ))}
                 </div>
-              ))}
-            </div>
+              </SortableContext>
+            </DndContext>
             <div className="flex flex-wrap gap-2 mt-3">
               {FIELD_TYPES.map((t) => (
                 <Button key={t.value} variant="outline" size="sm" onClick={() => addField(t.value)}>
