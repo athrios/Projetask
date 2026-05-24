@@ -97,6 +97,7 @@ export const RequestsPanel = ({ userId }: Props) => {
   const [view, setView] = useState<ViewMode>("table");
   const [open, setOpen] = useState<Response | null>(null);
   const [openFormLabels, setOpenFormLabels] = useState<Set<string>>(new Set());
+  const [openFieldOrder, setOpenFieldOrder] = useState<Map<string, number>>(new Map());
 
   const load = async () => {
     if (!workspaceId) return;
@@ -121,18 +122,32 @@ export const RequestsPanel = ({ userId }: Props) => {
 
   // Carrega os labels reais das perguntas do formulário aberto, para validar chaves técnicas
   useEffect(() => {
-    if (!open) { setOpenFormLabels(new Set()); return; }
+    if (!open) { setOpenFormLabels(new Set()); setOpenFieldOrder(new Map()); return; }
     let cancel = false;
     (async () => {
       const { data } = await supabase
         .from("form_fields")
-        .select("label")
-        .eq("form_id", open.form_id);
+        .select("label,position")
+        .eq("form_id", open.form_id)
+        .order("position", { ascending: true });
       if (cancel) return;
-      setOpenFormLabels(new Set((data ?? []).map((x: { label: string }) => x.label)));
+      const rows = (data ?? []) as Array<{ label: string; position: number }>;
+      setOpenFormLabels(new Set(rows.map((x) => x.label)));
+      const ord = new Map<string, number>();
+      rows.forEach((x, i) => ord.set(x.label, i));
+      setOpenFieldOrder(ord);
     })();
     return () => { cancel = true; };
   }, [open]);
+
+  const orderedEntries = (data: Record<string, unknown> | null | undefined) => {
+    const entries = Object.entries(data ?? {});
+    return entries.sort(([a], [b]) => {
+      const ai = openFieldOrder.has(a) ? (openFieldOrder.get(a) as number) : Number.MAX_SAFE_INTEGER;
+      const bi = openFieldOrder.has(b) ? (openFieldOrder.get(b) as number) : Number.MAX_SAFE_INTEGER;
+      return ai - bi;
+    });
+  };
 
   const renderKey = (k: string) => {
     if (openFormLabels.has(k)) return k;
@@ -177,7 +192,7 @@ export const RequestsPanel = ({ userId }: Props) => {
   };
 
   const formatData = (data: Record<string, unknown>) =>
-    Object.entries(data ?? {})
+    orderedEntries(data)
       .map(([k, v]) => `${renderKey(k)}: ${formatValue(v)}`)
       .join("\n");
 
@@ -379,7 +394,7 @@ export const RequestsPanel = ({ userId }: Props) => {
                     <Copy className="h-3 w-3" /> Copiar tudo
                   </button>
                 </div>
-                {Object.entries(open.data ?? {}).map(([k, v]) => {
+                {orderedEntries(open.data).map(([k, v]) => {
                   const isFile =
                     v && typeof v === "object" && !Array.isArray(v) && "path" in (v as object);
                   const isPartnerList =

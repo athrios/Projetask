@@ -19,7 +19,24 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Trash2, Link as LinkIcon, FileText, Copy, Workflow } from "lucide-react";
+import { Plus, Trash2, Link as LinkIcon, FileText, Copy, Workflow, GripVertical } from "lucide-react";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  arrayMove,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { toast } from "sonner";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { logActivity } from "@/lib/activityLog";
@@ -384,6 +401,56 @@ const FormBuilder = ({
     load();
   };
 
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIndex = fields.findIndex((f) => f.id === active.id);
+    const newIndex = fields.findIndex((f) => f.id === over.id);
+    if (oldIndex < 0 || newIndex < 0) return;
+    const reordered = arrayMove(fields, oldIndex, newIndex).map((f, i) => ({ ...f, position: i }));
+
+    // Detect conditions that now reference a field positioned at/after the dependent
+    let brokenCount = 0;
+    const cleaned = reordered.map((f, selfIdx) => {
+      const cond = f.conditional_logic;
+      if (!cond) return f;
+      const srcIdx = reordered.findIndex((x) => x.id === cond.field_id);
+      if (srcIdx === -1) return f;
+      if (srcIdx >= selfIdx) {
+        brokenCount += 1;
+        return { ...f, conditional_logic: null };
+      }
+      return f;
+    });
+
+    setFields(cleaned);
+
+    try {
+      await Promise.all(
+        cleaned.map((f, i) => {
+          const original = fields.find((x) => x.id === f.id);
+          const positionChanged = !original || original.position !== i;
+          const conditionCleared = original?.conditional_logic && !f.conditional_logic;
+          if (!positionChanged && !conditionCleared) return Promise.resolve();
+          const patch: Record<string, unknown> = { position: i };
+          if (conditionCleared) patch.conditional_logic = null;
+          return supabase.from("form_fields").update(patch as never).eq("id", f.id);
+        }),
+      );
+      if (brokenCount > 0) {
+        toast.warning(`${brokenCount} condição(ões) removida(s) porque a pergunta de origem ficou abaixo.`);
+      }
+    } catch {
+      toast.error("Não foi possível salvar a nova ordem");
+      load();
+    }
+  };
+
   return (
     <Dialog open onOpenChange={(o) => { if (!o) { saveMeta(); onClose(); } }}>
       <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
@@ -501,69 +568,24 @@ const FormBuilder = ({
           <div>
 
             <h4 className="text-sm font-semibold mb-2">Campos</h4>
-            <div className="space-y-2">
-              {fields.map((f) => (
-                <div key={f.id} className="rounded-lg border p-3 space-y-2 group">
-                  <div className="flex items-center gap-2">
-                    <Input
-                      value={f.label}
-                      onChange={(e) => setFields((p) => p.map((x) => x.id === f.id ? { ...x, label: e.target.value } : x))}
-                      onBlur={(e) => updateField(f.id, { label: e.target.value })}
-                      className="h-8 text-sm flex-1"
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+              <SortableContext items={fields.map((f) => f.id)} strategy={verticalListSortingStrategy}>
+                <div className="space-y-2">
+                  {fields.map((f) => (
+                    <SortableFieldCard
+                      key={f.id}
+                      field={f}
+                      allFields={fields}
+                      onLabelChangeLocal={(v) =>
+                        setFields((p) => p.map((x) => (x.id === f.id ? { ...x, label: v } : x)))
+                      }
+                      onUpdate={(patch) => updateField(f.id, patch)}
+                      onRemove={() => removeField(f.id)}
                     />
-                    <Select value={f.field_type} onValueChange={(v) => updateField(f.id, { field_type: v as FieldType })}>
-                      <SelectTrigger className="h-8 w-[160px] text-xs"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {FIELD_TYPES.map((t) => (
-                          <SelectItem key={t.value} value={t.value} className="text-xs">{t.label}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <button
-                      onClick={() => removeField(f.id)}
-                      className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                  <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer w-fit select-none">
-                    <Switch checked={f.required} onCheckedChange={(v) => updateField(f.id, { required: v })} />
-                    <span>Resposta obrigatória</span>
-                  </label>
-                  <Textarea
-                    defaultValue={f.description ?? ""}
-                    placeholder="Descrição / instruções (opcional) — aparece abaixo da pergunta no formulário público"
-                    className="text-xs min-h-[50px]"
-                    maxLength={500}
-                    onBlur={(e) => updateField(f.id, { description: e.target.value.trim() } as Partial<Field>)}
-                  />
-                  {(f.field_type === "select" || f.field_type === "multi_select") && (
-                    <Textarea
-                      defaultValue={Array.isArray(f.options) ? (f.options as string[]).join("\n") : ""}
-                      placeholder="Uma opção por linha"
-                      className="text-xs min-h-[60px]"
-                      onBlur={(e) => updateField(f.id, {
-                        options: e.target.value.split("\n").map((s) => s.trim()).filter(Boolean) as never,
-                      })}
-                    />
-                  )}
-                  {f.field_type === "partner_group" && (
-                    <Input
-                      defaultValue={f.add_button_label ?? ""}
-                      placeholder='Rótulo do botão (padrão: "Adicionar sócio")'
-                      className="text-xs h-8"
-                      maxLength={60}
-                      onBlur={(e) => updateField(f.id, { add_button_label: e.target.value.trim() || null } as Partial<Field>)}
-                    />
-                  )}
-                  <ConditionEditor
-                    field={f}
-                    allFields={fields}
-                    onChange={(cond) => updateField(f.id, { conditional_logic: cond } as Partial<Field>)}
-                  />
+                  ))}
                 </div>
-              ))}
-            </div>
+              </SortableContext>
+            </DndContext>
             <div className="flex flex-wrap gap-2 mt-3">
               {FIELD_TYPES.map((t) => (
                 <Button key={t.value} variant="outline" size="sm" onClick={() => addField(t.value)}>
@@ -596,6 +618,97 @@ const FormBuilder = ({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+};
+
+const SortableFieldCard = ({
+  field: f,
+  allFields,
+  onLabelChangeLocal,
+  onUpdate,
+  onRemove,
+}: {
+  field: Field;
+  allFields: Field[];
+  onLabelChangeLocal: (v: string) => void;
+  onUpdate: (patch: Partial<Field>) => void;
+  onRemove: () => void;
+}) => {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: f.id });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.6 : 1,
+  };
+  return (
+    <div ref={setNodeRef} style={style} className="rounded-lg border bg-card p-3 space-y-2 group">
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          {...attributes}
+          {...listeners}
+          aria-label="Reordenar pergunta"
+          className="p-1 -ml-1 text-muted-foreground hover:text-foreground cursor-grab active:cursor-grabbing touch-none"
+        >
+          <GripVertical className="h-4 w-4" />
+        </button>
+        <Input
+          value={f.label}
+          onChange={(e) => onLabelChangeLocal(e.target.value)}
+          onBlur={(e) => onUpdate({ label: e.target.value })}
+          className="h-8 text-sm flex-1"
+        />
+        <Select value={f.field_type} onValueChange={(v) => onUpdate({ field_type: v as FieldType })}>
+          <SelectTrigger className="h-8 w-[160px] text-xs"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {FIELD_TYPES.map((t) => (
+              <SelectItem key={t.value} value={t.value} className="text-xs">{t.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <button
+          onClick={onRemove}
+          className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </button>
+      </div>
+      <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer w-fit select-none">
+        <Switch checked={f.required} onCheckedChange={(v) => onUpdate({ required: v })} />
+        <span>Resposta obrigatória</span>
+      </label>
+      <Textarea
+        defaultValue={f.description ?? ""}
+        placeholder="Descrição / instruções (opcional) — aparece abaixo da pergunta no formulário público"
+        className="text-xs min-h-[50px]"
+        maxLength={500}
+        onBlur={(e) => onUpdate({ description: e.target.value.trim() } as Partial<Field>)}
+      />
+      {(f.field_type === "select" || f.field_type === "multi_select") && (
+        <Textarea
+          defaultValue={Array.isArray(f.options) ? (f.options as string[]).join("\n") : ""}
+          placeholder="Uma opção por linha"
+          className="text-xs min-h-[60px]"
+          onBlur={(e) => onUpdate({
+            options: e.target.value.split("\n").map((s) => s.trim()).filter(Boolean) as never,
+          })}
+        />
+      )}
+      {f.field_type === "partner_group" && (
+        <Input
+          defaultValue={f.add_button_label ?? ""}
+          placeholder='Rótulo do botão (padrão: "Adicionar sócio")'
+          className="text-xs h-8"
+          maxLength={60}
+          onBlur={(e) => onUpdate({ add_button_label: e.target.value.trim() || null } as Partial<Field>)}
+        />
+      )}
+      <ConditionEditor
+        field={f}
+        allFields={allFields}
+        onChange={(cond) => onUpdate({ conditional_logic: cond } as Partial<Field>)}
+      />
+    </div>
   );
 };
 

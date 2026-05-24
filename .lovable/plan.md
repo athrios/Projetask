@@ -1,34 +1,41 @@
-# Investigar: condições em multipla escolha aparentemente ignoradas
+# Reordenar perguntas por arrastar
 
-## O que eu já verifiquei
+Permitir reordenar as perguntas no editor de formulário arrastando-as para cima/baixo. A nova ordem persiste e passa a valer no formulário público e na visualização de respostas.
 
-- Os dados estão salvos certo no banco. As 3 perguntas condicionais têm condições válidas (`contains`/`not_contains` apontando para o multi_select "Deseja incluir alterações?").
-- A view `form_fields_public` expõe `conditional_logic` e o anon consegue ler (confirmado por `curl` direto na API).
-- A engine `evaluateCondition` em `src/lib/formConditions.ts` trata `contains`/`not_contains` corretamente (array + case-insensitive).
-- `PublicForm.tsx` carrega `conditional_logic`, parseia, monta `visibility` em ordem de `position` e usa `if (!visibility[f.id]) return null;` no render.
+## Mudanças
 
-Pela leitura, o caso "Quais serão as novas atividades?" (`contains "Atividades exercidas"`) deveria ficar **oculto** até o usuário marcar essa opção. Os outros dois (`not_contains`) deveriam aparecer só enquanto a opção correspondente **não** estiver marcada.
+### 1. Biblioteca de drag-and-drop
+- Adicionar `@dnd-kit/core`, `@dnd-kit/sortable`, `@dnd-kit/utilities` (mesma stack já recomendada para shadcn, leve e acessível).
 
-## Hipótese principal
+### 2. Editor de formulário (`src/components/forms/FormsPanel.tsx`)
+- Envolver a lista de campos (linha ~505) em `DndContext` + `SortableContext` com estratégia vertical.
+- Cada card de campo vira um `SortableItem`:
+  - Adicionar um handle visível à esquerda (ícone `GripVertical` do lucide) com cursor `grab` / `grabbing`.
+  - Apenas o handle inicia o drag — inputs e selects dentro do card seguem funcionando normalmente.
+- Ao soltar (`onDragEnd`):
+  - Reordenar localmente (`arrayMove`) para feedback imediato.
+  - Recalcular `position` (0..n-1) e persistir em lote: `UPDATE form_fields SET position=… WHERE id=…` para cada item alterado.
+  - Em caso de erro, recarregar do banco e mostrar toast.
 
-O formulário aberto pelo usuário está sendo servido por uma versão publicada antiga, anterior à introdução da visibilidade condicional. A URL preview (`/f/<slug>` no domínio `id-preview--…lovable.app`) carrega o código atual; a URL publicada (`ambitask.com.br` / `ambitask.lovable.app`) só atualiza após um novo Publish.
+### 3. Lógica condicional
+- A regra atual ("uma pergunta só pode condicionar-se a uma anterior") continua válida. Após reordenar:
+  - Detectar condições que passaram a referenciar um campo posicionado depois e limpá-las (setar `conditional_logic = null`), avisando com toast: "Algumas condições foram removidas porque a pergunta de origem ficou abaixo."
+  - Já existe helper de avaliação em `src/lib/formConditions.ts`; só usar para localizar quebras.
 
-## Passos da investigação (em build mode)
+### 4. Formulário público (`src/pages/PublicForm.tsx`)
+- Já ordena por `position` ascendente — nada a mudar. Confirmar comportamento após reorder.
 
-1. Abrir `/f/<slug>` da preview no browser via ferramenta interna e marcar/desmarcar opções no multi_select para confirmar o comportamento esperado:
-   - "Quais serão as novas atividades?" oculto até marcar "Atividades exercidas".
-   - "Endereço novo" some quando "Endereço Comercial" é marcado.
-   - "Novo capital social" some quando "Capital Social" é marcado.
-2. Capturar `console.log` temporário do `visibility` map para validar (remover depois).
-3. **Se preview estiver OK:** confirmar que o bug só acontece no domínio publicado e orientar o usuário a republicar. Não há fix de código.
-4. **Se preview também falhar:** então há bug real. Próximos suspeitos a checar:
-   - `parseCondition` rejeitando silenciosamente (logar valor recebido).
-   - `values[f.label]` divergindo da chave esperada (e.g. label com espaços trailing).
-   - Ordem do `fields` quebrada quando duas perguntas têm a mesma `position`.
+### 5. Visualização de respostas (`src/components/requests/RequestsPanel.tsx`)
+- Hoje renderiza `Object.entries(open.data)` na ordem do JSON. Carregar `label` + `position` dos `form_fields` do formulário aberto e renderizar as respostas seguindo a ordem das perguntas (chaves desconhecidas vão ao final).
+- Aplicar a mesma ordem em `formatData` (cópia/clipboard).
 
-## Não escopo
+## Detalhes técnicos
+- IDs estáveis para `SortableContext`: `fields.map(f => f.id)`.
+- Animação curta (`transition: transform 150ms`).
+- Handle com `aria-label="Reordenar pergunta"` e suporte a teclado (dnd-kit já cobre setas + espaço).
+- Persistência: usar `Promise.all` apenas para os IDs cuja `position` mudou.
+- Sem migrações de banco; coluna `position` já existe em `form_fields`.
 
-- Múltiplas opções por condição (E/OU) — fica para depois conforme decidido na seção anterior.
-- Migração de dados antigos.
-
-Confirma que sigo investigar dessa forma?
+## Fora de escopo
+- Reordenar opções dentro de um campo select/multi-select.
+- Reordenar respostas individualmente (a ordem segue as perguntas).
