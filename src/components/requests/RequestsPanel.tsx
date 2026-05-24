@@ -445,6 +445,13 @@ export const RequestsPanel = ({ userId }: Props) => {
                           <FileLink file={v as { path: string; name: string }} />
                           <CopyButton getText={() => (v as { name: string }).name} />
                         </div>
+                      ) : isAddress ? (
+                        <div className="flex items-start gap-2">
+                          <p className="text-sm flex-1 whitespace-pre-wrap">
+                            {formatAddress(v as Record<string, unknown>)}
+                          </p>
+                          <CopyButton getText={() => formatAddress(v as Record<string, unknown>)} />
+                        </div>
                       ) : isStateCity ? (
                         <div className="flex items-start gap-2">
                           <p className="text-sm flex-1">
