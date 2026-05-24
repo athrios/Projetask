@@ -192,7 +192,7 @@ export const RequestsPanel = ({ userId }: Props) => {
   };
 
   const formatData = (data: Record<string, unknown>) =>
-    Object.entries(data ?? {})
+    orderedEntries(data)
       .map(([k, v]) => `${renderKey(k)}: ${formatValue(v)}`)
       .join("\n");
 
