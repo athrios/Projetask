@@ -749,30 +749,76 @@ export const TasksPanel = ({
 
   return (
     <TooltipProvider delayDuration={200}>
-      <section className="space-y-5">
-        {/* Toolbar */}
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="relative w-[220px]">
+      <section className="space-y-4">
+        {/* New task — destaque */}
+        <form onSubmit={add} className="flex items-center gap-2 rounded-lg border bg-card px-3 py-2 shadow-sm">
+          <Plus className="h-4 w-4 text-muted-foreground" />
+          <Input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="Nova tarefa  (Enter para adicionar)"
+            maxLength={200}
+            className="border-0 shadow-none focus-visible:ring-0 px-0 h-8 text-sm"
+          />
+          {title && (
+            <Button type="submit" size="sm" variant="ghost" className="h-7">
+              Adicionar
+            </Button>
+          )}
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-7 gap-1.5"
+            onClick={() => setNewDialogOpen(true)}
+          >
+            <Settings2 className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Configurar</span>
+          </Button>
+        </form>
+
+        {workspaceId && (
+          <NewTaskDialog
+            open={newDialogOpen}
+            onOpenChange={setNewDialogOpen}
+            userId={userId}
+            workspaceId={workspaceId}
+            defaultDate={dateFilter ?? today}
+            initialTitle={title}
+            positionHint={tasks.length}
+            onCreated={() => { setTitle(""); load(); }}
+          />
+        )}
+
+        {/* Filtros compactos */}
+        <div className="flex flex-wrap items-center gap-1.5">
+          <div className="relative w-full sm:w-[220px]">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Buscar tarefa..."
+              placeholder="Buscar..."
               className="h-9 pl-8"
             />
           </div>
+
+          {/* Data */}
           <Popover>
             <PopoverTrigger asChild>
-              <Button
-                variant="outline"
-                size="sm"
-                className={cn("h-9 gap-1.5", dateFilter && "border-foreground/40")}
-              >
-                <CalendarIcon className="h-3.5 w-3.5" />
-                {dateFilter
-                  ? new Date(dateFilter + "T00:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "short" })
-                  : "Data"}
-              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className={cn("h-9 w-9 p-0 relative", dateFilter && "border-foreground/40 bg-secondary/60")}
+                    aria-label="Filtrar por data"
+                  >
+                    <CalendarIcon className="h-4 w-4" />
+                    {dateFilter && <span className="absolute top-1 right-1 h-1.5 w-1.5 rounded-full bg-foreground" />}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Filtrar por data</TooltipContent>
+              </Tooltip>
             </PopoverTrigger>
             <PopoverContent className="w-auto p-0" align="start">
               <Calendar
@@ -781,34 +827,137 @@ export const TasksPanel = ({
                 onSelect={(d) => setDateFilter(d ? d.toISOString().slice(0, 10) : null)}
                 className={cn("p-3 pointer-events-auto")}
               />
+              {dateFilter && (
+                <div className="p-2 border-t">
+                  <Button variant="ghost" size="sm" className="w-full h-8 text-xs" onClick={() => setDateFilter(null)}>
+                    <X className="h-3 w-3" /> Limpar data
+                  </Button>
+                </div>
+              )}
             </PopoverContent>
           </Popover>
-          <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as TaskStatus | "todos")}>
-            <SelectTrigger className="h-9 w-[140px] text-xs">
-              <SelectValue placeholder="Status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="todos">Todos os status</SelectItem>
-              {TASK_STATUS.map((o) => (
-                <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+
+          {/* Status */}
           <Popover>
             <PopoverTrigger asChild>
-              <Button
-                variant="outline"
-                size="sm"
-                className={cn("h-9 gap-1.5", hiddenStatuses.length > 0 && "border-foreground/40")}
-              >
-                <EyeOff className="h-3.5 w-3.5" />
-                Ocultar status
-                {hiddenStatuses.length > 0 && (
-                  <span className="rounded-full bg-foreground text-background text-[10px] h-4 min-w-4 px-1 inline-flex items-center justify-center tabular-nums">
-                    {hiddenStatuses.length}
-                  </span>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className={cn("h-9 w-9 p-0 relative", statusFilter !== "todos" && "border-foreground/40 bg-secondary/60")}
+                    aria-label="Filtrar por status"
+                  >
+                    <Circle className="h-4 w-4" />
+                    {statusFilter !== "todos" && (
+                      <span className={cn("absolute top-1 right-1 h-2 w-2 rounded-full", statusPill[statusFilter as TaskStatus])} />
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Filtrar por status</TooltipContent>
+              </Tooltip>
+            </PopoverTrigger>
+            <PopoverContent align="start" className="w-56 space-y-1">
+              <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground px-1">
+                Filtrar por status
+              </p>
+              <button
+                onClick={() => setStatusFilter("todos")}
+                className={cn(
+                  "w-full text-left text-xs px-2 py-1.5 rounded-md hover:bg-secondary transition",
+                  statusFilter === "todos" && "bg-secondary font-medium",
                 )}
-              </Button>
+              >
+                Todos os status
+              </button>
+              {TASK_STATUS.map((o) => (
+                <button
+                  key={o.value}
+                  onClick={() => setStatusFilter(o.value)}
+                  className={cn(
+                    "w-full text-left text-xs px-2 py-1.5 rounded-md hover:bg-secondary transition flex items-center gap-2",
+                    statusFilter === o.value && "bg-secondary font-medium",
+                  )}
+                >
+                  <span className={cn("px-1.5 py-0.5 rounded-full text-[11px]", statusPill[o.value])}>
+                    {o.label}
+                  </span>
+                </button>
+              ))}
+            </PopoverContent>
+          </Popover>
+
+          {/* Prioridade */}
+          <Popover>
+            <PopoverTrigger asChild>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className={cn("h-9 w-9 p-0 relative", priorityFilter !== "todos" && "border-foreground/40 bg-secondary/60")}
+                    aria-label="Filtrar por prioridade"
+                  >
+                    <Flag className="h-4 w-4" />
+                    {priorityFilter !== "todos" && (
+                      <span className={cn("absolute top-1 right-1 h-2 w-2 rounded-full", priorityPill[priorityFilter as Priority])} />
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Filtrar por prioridade</TooltipContent>
+              </Tooltip>
+            </PopoverTrigger>
+            <PopoverContent align="start" className="w-56 space-y-1">
+              <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground px-1">
+                Filtrar por prioridade
+              </p>
+              <button
+                onClick={() => setPriorityFilter("todos")}
+                className={cn(
+                  "w-full text-left text-xs px-2 py-1.5 rounded-md hover:bg-secondary transition",
+                  priorityFilter === "todos" && "bg-secondary font-medium",
+                )}
+              >
+                Todas as prioridades
+              </button>
+              {PRIORITIES.map((o) => (
+                <button
+                  key={o.value}
+                  onClick={() => setPriorityFilter(o.value)}
+                  className={cn(
+                    "w-full text-left text-xs px-2 py-1.5 rounded-md hover:bg-secondary transition flex items-center gap-2",
+                    priorityFilter === o.value && "bg-secondary font-medium",
+                  )}
+                >
+                  <span className={cn("px-1.5 py-0.5 rounded-full text-[11px]", priorityPill[o.value])}>
+                    {o.label}
+                  </span>
+                </button>
+              ))}
+            </PopoverContent>
+          </Popover>
+
+          {/* Ocultar por status */}
+          <Popover>
+            <PopoverTrigger asChild>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className={cn("h-9 w-9 p-0 relative", hiddenStatuses.length > 0 && "border-foreground/40 bg-secondary/60")}
+                    aria-label="Ocultar tarefas por status"
+                  >
+                    <EyeOff className="h-4 w-4" />
+                    {hiddenStatuses.length > 0 && (
+                      <span className="absolute -top-1 -right-1 rounded-full bg-foreground text-background text-[10px] h-4 min-w-4 px-1 inline-flex items-center justify-center tabular-nums">
+                        {hiddenStatuses.length}
+                      </span>
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Ocultar tarefas por status</TooltipContent>
+              </Tooltip>
             </PopoverTrigger>
             <PopoverContent align="end" className="w-56 space-y-2">
               <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
@@ -844,23 +993,14 @@ export const TasksPanel = ({
                   className="w-full h-8 text-xs"
                   onClick={() => setHiddenStatuses([])}
                 >
-                  <X className="h-3 w-3" /> Mostrar todos
+                  <X className="h-3 w-3" /> Limpar ocultações
                 </Button>
               )}
             </PopoverContent>
           </Popover>
-          <Select value={priorityFilter} onValueChange={(v) => setPriorityFilter(v as Priority | "todos")}>
-            <SelectTrigger className="h-9 w-[140px] text-xs">
-              <SelectValue placeholder="Prioridade" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="todos">Todas prioridades</SelectItem>
-              {PRIORITIES.map((o) => (
-                <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <div className="flex rounded-md border overflow-hidden bg-card">
+
+          {/* View switcher */}
+          <div className="flex rounded-md border overflow-hidden bg-card ml-auto">
             {([
               ["list", List, "Lista"],
               ["table", TableIcon, "Tabela"],
@@ -902,47 +1042,7 @@ export const TasksPanel = ({
           </div>
         )}
 
-        {/* New task */}
-        <form onSubmit={add} className="flex items-center gap-2 rounded-lg border bg-card px-3 py-2">
-          <Plus className="h-4 w-4 text-muted-foreground" />
-          <Input
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="Nova tarefa  (Enter para adicionar)"
-            maxLength={200}
-            className="border-0 shadow-none focus-visible:ring-0 px-0 h-8 text-sm"
-          />
-          {title && (
-            <Button type="submit" size="sm" variant="ghost" className="h-7">
-              Adicionar
-            </Button>
-          )}
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            className="h-7 gap-1.5"
-            onClick={() => setNewDialogOpen(true)}
-          >
-            <Settings2 className="h-3.5 w-3.5" />
-            Configurar
-          </Button>
-        </form>
 
-        {workspaceId && (
-          <NewTaskDialog
-            open={newDialogOpen}
-            onOpenChange={setNewDialogOpen}
-            userId={userId}
-            workspaceId={workspaceId}
-            defaultDate={dateFilter ?? today}
-            initialTitle={title}
-            positionHint={tasks.length}
-            onCreated={() => { setTitle(""); load(); }}
-          />
-        )}
-
-        {filtered.length === 0 && (
           tasks.length === 0 ? (
             <EmptyState
               icon={ListChecks}
