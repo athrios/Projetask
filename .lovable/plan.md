@@ -1,33 +1,70 @@
-## Novo tipo de campo: Endereço (com busca por CEP)
+# Tela Tarefas — Topo mais clean
 
-Adicionar um novo tipo de campo no construtor de formulários chamado **Endereço**, que pede o CEP, busca automaticamente os dados via API pública dos Correios (ViaCEP) e pede ao respondente apenas **número** e **complemento**.
+Reorganizar apenas a área superior do `TasksPanel.tsx`. Sem mexer em RLS, queries, lógica de filtros ou agrupamento por data — toda a lógica já existe e continua respeitando `workspace_id` e permissões.
 
-### Comportamento do respondente (PublicForm)
-1. Campo CEP com máscara `00000-000`.
-2. Ao completar 8 dígitos, busca em `https://viacep.com.br/ws/{cep}/json/`.
-3. Preenche e exibe (em modo leitura) **Logradouro, Bairro, Cidade, UF**.
-4. Pede ao usuário: **Número** (obrigatório se o campo for obrigatório) e **Complemento** (opcional).
-5. Tratamento de erro: CEP inválido / não encontrado mostra mensagem inline e permite tentar novamente. Sem internet → toast.
-6. Caso raro (CEP genérico sem logradouro), permite edição manual de logradouro/bairro.
+## 1. Nova ordem do topo
 
-### Estrutura do dado salvo
-`form_responses.data["Endereço"]` recebe objeto:
-```json
-{ "cep": "01310-100", "logradouro": "Av. Paulista", "numero": "1000",
-  "complemento": "Sala 5", "bairro": "Bela Vista",
-  "cidade": "São Paulo", "uf": "SP" }
+```
+┌────────────────────────────────────────────┐
+│  Header (vem do Index.tsx — já existe)     │
+├────────────────────────────────────────────┤
+│  ➕  Nova tarefa..............  [Configurar]│  ← destaque
+├────────────────────────────────────────────┤
+│  🔍 Buscar   📅  ●  🚩  👁‍🗨   │ ▦ ▤ ▣ ▥     │  ← filtros compactos
+├────────────────────────────────────────────┤
+│  Lista agrupada por data (inalterada)      │
+└────────────────────────────────────────────┘
 ```
 
-### Mudanças técnicas
+- Mover o bloco "New task" (linhas 900–925) para **logo abaixo do header**, antes da toolbar.
+- Mover a toolbar de filtros (linhas 749–883) para **logo abaixo** do input.
+- Lista agrupada por data permanece igual.
 
-1. **Banco** (`supabase--migration`): atualizar `validate_form_field_type` para aceitar `'address'` no enum de tipos permitidos.
-2. **`src/components/forms/fields/AddressField.tsx`** (novo): componente reutilizável com lookup ViaCEP, cache local por CEP, loading state, e callbacks `onChange`.
-3. **`src/pages/PublicForm.tsx`**: adicionar `"address"` ao tipo `FieldType`, importar e renderizar `AddressField`. Validação de obrigatório checa `cep` + `numero` preenchidos.
-4. **`src/components/forms/FormsPanel.tsx`**: incluir `"address"` na lista de tipos selecionáveis ao criar/editar campos (label "Endereço (CEP)"). O construtor não precisa de configuração extra.
-5. **`src/components/requests/RequestsPanel.tsx`**: na exibição de respostas, formatar valor `address` como string legível: `"Av. Paulista, 1000 – Sala 5, Bela Vista, São Paulo/SP – 01310-100"`. Conversão para tarefa/processo usa a mesma string.
-6. **`src/lib/validation.ts`**: novo schema `addressAnswerSchema` (CEP no formato `00000-000`, número ≤ 20 chars, complemento ≤ 120 chars, demais campos ≤ 200).
+## 2. Filtros em ícones (somente ícones + tooltip)
 
-### Fora do escopo
-- Validação de existência real do endereço além do que o ViaCEP retorna.
-- Geocoding / mapa.
-- Reordenação ou edição de endereços já submetidos.
+Substituir os `<Select>` de Status e Prioridade por botões-ícone com `Popover`, mantendo o mesmo estado (`statusFilter`, `priorityFilter`) e mesma lógica de filtragem:
+
+| Filtro | Ícone (lucide) | Tooltip |
+|---|---|---|
+| Status | `Circle` | "Filtrar por status" |
+| Data | `Calendar` (já existe) | "Filtrar por data" |
+| Prioridade | `Flag` | "Filtrar por prioridade" |
+| Ocultar por status | `EyeOff` (já existe) | "Ocultar tarefas por status" |
+
+- Todos os botões: mesmo tamanho (`h-9 w-9`, ícone `h-4 w-4`), `variant="outline"`.
+- Estado ativo (filtro aplicado): borda mais forte (`border-foreground/40`) + badge contador quando aplicável.
+- Busca permanece como input (foi pedido para manter integrada, só compactar visual).
+- View switcher (lista/tabela/cards/kanban) permanece à direita.
+
+## 3. Popover "Ocultar por status"
+
+Já existe e funciona (linhas 792–846). Apenas:
+- Trocar o botão por ícone puro (`EyeOff`, sem texto "Ocultar status").
+- Manter checkboxes para `pendente`, `fazendo`, `aguardando`, `feita`, `cancelada` (já vem de `TASK_STATUS`).
+- Manter botão "Mostrar todos" como "Limpar ocultações".
+- Manter badge com contador quando `hiddenStatuses.length > 0`.
+
+## 4. Popover novo "Filtrar por status" (Circle)
+
+- Lista de status com radio/itens clicáveis: `Todos` + cada item de `TASK_STATUS` com pill colorida.
+- Seta `statusFilter`. Quando ≠ `"todos"`, botão fica com borda destacada e mostra a pill do status escolhido no canto (mini bolinha colorida) — sem texto longo.
+
+## 5. Popover novo "Filtrar por prioridade" (Flag)
+
+- Mesmo padrão: `Todas` + itens de `PRIORITIES` com cor.
+- Estado ativo idem.
+
+## 6. Layout / responsividade
+
+- Toolbar com `flex flex-wrap gap-1.5` para quebrar em telas pequenas.
+- Input "Nova tarefa" mantém `rounded-lg border bg-card` para ficar como bloco com destaque maior que a linha de filtros.
+- Linha de filtros usa botões `h-9` discretos para não competir visualmente com o input.
+
+## Aspectos técnicos
+
+- Arquivo único: `src/components/TasksPanel.tsx`.
+- Sem mudanças em schema, RLS, hooks, `useWorkspace`, ou em qualquer outra tela.
+- Estados reutilizados como estão: `search`, `statusFilter`, `priorityFilter`, `dateFilter`, `hiddenStatuses`.
+- `useMemo filtered` (linhas 211–221) não muda — todos os filtros já operam em conjunto.
+- Persistência de `hiddenStatuses` em localStorage permanece.
+- Imports a adicionar: `Circle`, `Flag` de `lucide-react`.
