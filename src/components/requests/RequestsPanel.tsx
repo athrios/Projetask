@@ -64,6 +64,16 @@ const SUBFIELD_LABELS: Record<string, string> = {
 
 const prettySubLabel = (k: string) => SUBFIELD_LABELS[k] ?? k;
 
+const formatAddress = (o: Record<string, unknown>): string => {
+  const s = (k: string) => (typeof o[k] === "string" ? (o[k] as string).trim() : "");
+  const line1 = [s("logradouro"), s("numero")].filter(Boolean).join(", ");
+  const withCompl = s("complemento") ? `${line1} – ${s("complemento")}` : line1;
+  const cityUf = [s("cidade"), s("uf")].filter(Boolean).join("/");
+  const tail = [s("bairro"), cityUf].filter(Boolean).join(", ");
+  const cep = s("cep") ? ` – CEP ${s("cep")}` : "";
+  return [withCompl, tail].filter(Boolean).join(", ") + cep || "—";
+};
+
 const CopyButton = ({ getText, className }: { getText: () => string; className?: string }) => {
   const [done, setDone] = useState(false);
   const onClick = async (e: React.MouseEvent) => {
