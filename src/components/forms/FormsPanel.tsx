@@ -401,6 +401,62 @@ const FormBuilder = ({
     load();
   };
 
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIndex = fields.findIndex((f) => f.id === active.id);
+    const newIndex = fields.findIndex((f) => f.id === over.id);
+    if (oldIndex < 0 || newIndex < 0) return;
+    const reordered = arrayMove(fields, oldIndex, newIndex).map((f, i) => ({ ...f, position: i }));
+
+    // Detect conditions that now reference a field that ended up after the dependent
+    const labelById: Record<string, string> = {};
+    reordered.forEach((f) => { labelById[f.id] = f.label; });
+    const idByLabel: Record<string, string> = {};
+    reordered.forEach((f) => { idByLabel[f.label] = f.id; });
+    let brokenCount = 0;
+    const cleaned = reordered.map((f) => {
+      const cond = f.conditional_logic;
+      if (!cond) return f;
+      const srcId = idByLabel[cond.sourceLabel];
+      if (!srcId) return f;
+      const srcIdx = reordered.findIndex((x) => x.id === srcId);
+      const selfIdx = reordered.findIndex((x) => x.id === f.id);
+      if (srcIdx >= selfIdx) {
+        brokenCount += 1;
+        return { ...f, conditional_logic: null };
+      }
+      return f;
+    });
+
+    setFields(cleaned);
+
+    try {
+      await Promise.all(
+        cleaned.map((f, i) => {
+          const original = fields.find((x) => x.id === f.id);
+          const positionChanged = !original || original.position !== i;
+          const conditionCleared = original?.conditional_logic && !f.conditional_logic;
+          if (!positionChanged && !conditionCleared) return Promise.resolve();
+          const patch: Record<string, unknown> = { position: i };
+          if (conditionCleared) patch.conditional_logic = null;
+          return supabase.from("form_fields").update(patch as never).eq("id", f.id);
+        }),
+      );
+      if (brokenCount > 0) {
+        toast.warning(`${brokenCount} condição(ões) removida(s) porque a pergunta de origem ficou abaixo.`);
+      }
+    } catch {
+      toast.error("Não foi possível salvar a nova ordem");
+      load();
+    }
+  };
+
   return (
     <Dialog open onOpenChange={(o) => { if (!o) { saveMeta(); onClose(); } }}>
       <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
