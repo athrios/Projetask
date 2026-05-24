@@ -1041,8 +1041,7 @@ export const TasksPanel = ({
             </button>
           </div>
         )}
-
-
+        {filtered.length === 0 && (
           tasks.length === 0 ? (
             <EmptyState
               icon={ListChecks}
@@ -1055,6 +1054,7 @@ export const TasksPanel = ({
             </div>
           )
         )}
+
 
         {/* List view — grouped by date */}
         {view === "list" && filtered.length > 0 && (
