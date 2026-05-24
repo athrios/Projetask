@@ -621,6 +621,97 @@ const FormBuilder = ({
   );
 };
 
+const SortableFieldCard = ({
+  field: f,
+  allFields,
+  onLabelChangeLocal,
+  onUpdate,
+  onRemove,
+}: {
+  field: Field;
+  allFields: Field[];
+  onLabelChangeLocal: (v: string) => void;
+  onUpdate: (patch: Partial<Field>) => void;
+  onRemove: () => void;
+}) => {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: f.id });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.6 : 1,
+  };
+  return (
+    <div ref={setNodeRef} style={style} className="rounded-lg border bg-card p-3 space-y-2 group">
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          {...attributes}
+          {...listeners}
+          aria-label="Reordenar pergunta"
+          className="p-1 -ml-1 text-muted-foreground hover:text-foreground cursor-grab active:cursor-grabbing touch-none"
+        >
+          <GripVertical className="h-4 w-4" />
+        </button>
+        <Input
+          value={f.label}
+          onChange={(e) => onLabelChangeLocal(e.target.value)}
+          onBlur={(e) => onUpdate({ label: e.target.value })}
+          className="h-8 text-sm flex-1"
+        />
+        <Select value={f.field_type} onValueChange={(v) => onUpdate({ field_type: v as FieldType })}>
+          <SelectTrigger className="h-8 w-[160px] text-xs"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {FIELD_TYPES.map((t) => (
+              <SelectItem key={t.value} value={t.value} className="text-xs">{t.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <button
+          onClick={onRemove}
+          className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </button>
+      </div>
+      <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer w-fit select-none">
+        <Switch checked={f.required} onCheckedChange={(v) => onUpdate({ required: v })} />
+        <span>Resposta obrigatória</span>
+      </label>
+      <Textarea
+        defaultValue={f.description ?? ""}
+        placeholder="Descrição / instruções (opcional) — aparece abaixo da pergunta no formulário público"
+        className="text-xs min-h-[50px]"
+        maxLength={500}
+        onBlur={(e) => onUpdate({ description: e.target.value.trim() } as Partial<Field>)}
+      />
+      {(f.field_type === "select" || f.field_type === "multi_select") && (
+        <Textarea
+          defaultValue={Array.isArray(f.options) ? (f.options as string[]).join("\n") : ""}
+          placeholder="Uma opção por linha"
+          className="text-xs min-h-[60px]"
+          onBlur={(e) => onUpdate({
+            options: e.target.value.split("\n").map((s) => s.trim()).filter(Boolean) as never,
+          })}
+        />
+      )}
+      {f.field_type === "partner_group" && (
+        <Input
+          defaultValue={f.add_button_label ?? ""}
+          placeholder='Rótulo do botão (padrão: "Adicionar sócio")'
+          className="text-xs h-8"
+          maxLength={60}
+          onBlur={(e) => onUpdate({ add_button_label: e.target.value.trim() || null } as Partial<Field>)}
+        />
+      )}
+      <ConditionEditor
+        field={f}
+        allFields={allFields}
+        onChange={(cond) => onUpdate({ conditional_logic: cond } as Partial<Field>)}
+      />
+    </div>
+  );
+};
+
 const ELIGIBLE_SOURCE_TYPES: FieldType[] = [
   "short_text",
   "long_text",
