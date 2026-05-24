@@ -394,7 +394,7 @@ export const RequestsPanel = ({ userId }: Props) => {
                     <Copy className="h-3 w-3" /> Copiar tudo
                   </button>
                 </div>
-                {Object.entries(open.data ?? {}).map(([k, v]) => {
+                {orderedEntries(open.data).map(([k, v]) => {
                   const isFile =
                     v && typeof v === "object" && !Array.isArray(v) && "path" in (v as object);
                   const isPartnerList =
