@@ -303,6 +303,12 @@ const PublicForm = () => {
                   onChange={(val) => set(val)}
                   addButtonLabel={f.add_button_label?.trim() || undefined}
                 />
+              {f.field_type === "address" && (
+                <AddressField
+                  value={v as AddressValue | undefined}
+                  onChange={(val) => set(val)}
+                  required={f.required}
+                />
               )}
             </div>
           );
