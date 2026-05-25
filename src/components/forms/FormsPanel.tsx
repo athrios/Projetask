@@ -746,7 +746,44 @@ const SortableFieldCard = ({
           maxLength={60}
           onBlur={(e) => onUpdate({ add_button_label: e.target.value.trim() || null } as Partial<Field>)}
         />
+      {f.field_type === "cnpj" && (
+        <div className="rounded-md border border-border bg-muted/30 p-3 space-y-2">
+          <div className="text-xs font-medium text-foreground">Preenchimento automático</div>
+          <p className="text-[11px] text-muted-foreground">
+            Quando o respondente digitar um CNPJ válido, os dados consultados serão preenchidos nos campos abaixo.
+          </p>
+          <div className="space-y-1.5">
+            {CNPJ_AUTOFILL_KEYS.map((k) => {
+              const map = getCnpjAutofillMap(f.options);
+              const targets = eligibleTargetsFor(k.key, allFields, f.id);
+              const current = map[k.key] ?? "";
+              return (
+                <div key={k.key} className="grid grid-cols-[140px_1fr] items-center gap-2">
+                  <span className="text-[11px] text-muted-foreground">{k.label}</span>
+                  <Select
+                    value={current || "__none__"}
+                    onValueChange={(v) => {
+                      const next = { ...map };
+                      if (v === "__none__") delete next[k.key];
+                      else next[k.key] = v;
+                      onUpdate({ options: { autofill: next } as never });
+                    }}
+                  >
+                    <SelectTrigger className="h-7 text-xs"><SelectValue placeholder="— Não preencher —" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__" className="text-xs">— Não preencher —</SelectItem>
+                      {targets.map((t) => (
+                        <SelectItem key={t.id} value={t.label} className="text-xs">{t.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              );
+            })}
+          </div>
+        </div>
       )}
+
       <ConditionEditor
         field={f}
         allFields={allFields}
