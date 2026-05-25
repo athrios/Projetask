@@ -183,7 +183,7 @@ export const NewTaskDialog = ({
 
   return (
     <Dialog open={open} onOpenChange={(v) => !saving && onOpenChange(v)}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Nova tarefa</DialogTitle>
         </DialogHeader>
