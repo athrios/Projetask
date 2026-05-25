@@ -76,19 +76,9 @@ function maskCep(v: string): string {
   return d.length > 5 ? `${d.slice(0, 5)}-${d.slice(5)}` : d;
 }
 
-function getCnpjAutofillMap(options: unknown): Record<string, string> {
-  if (options && typeof options === "object" && !Array.isArray(options)) {
-    const a = (options as { autofill?: unknown }).autofill;
-    if (a && typeof a === "object" && !Array.isArray(a)) {
-      const out: Record<string, string> = {};
-      for (const [k, val] of Object.entries(a as Record<string, unknown>)) {
-        if (typeof val === "string" && val.trim()) out[k] = val;
-      }
-      return out;
-    }
-  }
-  return {};
-}
+type CnpjErrorKind = "invalid" | "not_found" | "generic";
+
+
 
 type CnpjLookupData = {
   cnpj: string;
