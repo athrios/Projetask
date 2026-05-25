@@ -1,70 +1,64 @@
-# Tela Tarefas — Topo mais clean
+# CNPJ autofill — backend & cache (etapa 1)
 
-Reorganizar apenas a área superior do `TasksPanel.tsx`. Sem mexer em RLS, queries, lógica de filtros ou agrupamento por data — toda a lógica já existe e continua respeitando `workspace_id` e permissões.
+Objetivo: criar a infraestrutura de consulta de CNPJ (edge function + cache) sem mexer na UI dos formulários ainda.
 
-## 1. Nova ordem do topo
+## 1. Tabela de cache
 
-```
-┌────────────────────────────────────────────┐
-│  Header (vem do Index.tsx — já existe)     │
-├────────────────────────────────────────────┤
-│  ➕  Nova tarefa..............  [Configurar]│  ← destaque
-├────────────────────────────────────────────┤
-│  🔍 Buscar   📅  ●  🚩  👁‍🗨   │ ▦ ▤ ▣ ▥     │  ← filtros compactos
-├────────────────────────────────────────────┤
-│  Lista agrupada por data (inalterada)      │
-└────────────────────────────────────────────┘
-```
+Migration para criar `public.cnpj_lookup_cache`:
 
-- Mover o bloco "New task" (linhas 900–925) para **logo abaixo do header**, antes da toolbar.
-- Mover a toolbar de filtros (linhas 749–883) para **logo abaixo** do input.
-- Lista agrupada por data permanece igual.
+- `cnpj` text PK (apenas 14 dígitos, sem máscara)
+- `provider` text — `cnpja_open` | `brasilapi`
+- `data` jsonb — payload normalizado
+- `raw` jsonb — resposta original do provedor
+- `fetched_at` timestamptz not null default now()
+- `created_at` timestamptz not null default now()
+- Índice em `fetched_at` para futura expiração
 
-## 2. Filtros em ícones (somente ícones + tooltip)
+RLS: habilitada. Sem políticas para usuários (acesso apenas via service role na edge function). Isso protege a tabela e ainda permite a function gravar/ler usando `SUPABASE_SERVICE_ROLE_KEY`.
 
-Substituir os `<Select>` de Status e Prioridade por botões-ícone com `Popover`, mantendo o mesmo estado (`statusFilter`, `priorityFilter`) e mesma lógica de filtragem:
+## 2. Edge function `lookup-cnpj`
 
-| Filtro | Ícone (lucide) | Tooltip |
-|---|---|---|
-| Status | `Circle` | "Filtrar por status" |
-| Data | `Calendar` (já existe) | "Filtrar por data" |
-| Prioridade | `Flag` | "Filtrar por prioridade" |
-| Ocultar por status | `EyeOff` (já existe) | "Ocultar tarefas por status" |
+Arquivo: `supabase/functions/lookup-cnpj/index.ts`. Config em `supabase/config.toml` com `verify_jwt = true` (só usuários autenticados podem consultar — evita uso abusivo do endpoint público).
 
-- Todos os botões: mesmo tamanho (`h-9 w-9`, ícone `h-4 w-4`), `variant="outline"`.
-- Estado ativo (filtro aplicado): borda mais forte (`border-foreground/40`) + badge contador quando aplicável.
-- Busca permanece como input (foi pedido para manter integrada, só compactar visual).
-- View switcher (lista/tabela/cards/kanban) permanece à direita.
+Fluxo:
 
-## 3. Popover "Ocultar por status"
+1. CORS + valida método `POST`.
+2. Lê `{ cnpj: string }` do body com Zod.
+3. Sanitiza: remove tudo que não é dígito, exige 14 dígitos, valida DV (algoritmo padrão de CNPJ). Rejeita sequências repetidas (`00000000000000` etc.).
+4. Consulta `cnpj_lookup_cache` pelo CNPJ sanitizado. Se existir e `fetched_at` < 30 dias, retorna `{ source: "cache", data, provider }`.
+5. Senão chama provedores em ordem:
+   - **CNPJá Open** (primário): `https://open.cnpja.com/office/{cnpj}` — gratuito, sem chave.
+   - **BrasilAPI** (fallback): `https://brasilapi.com.br/api/cnpj/v1/{cnpj}`.
+   Timeout de ~6s por chamada via `AbortController`. Em erro/timeout/404 do primário, tenta o fallback.
+6. Normaliza para o shape comum:
+   ```ts
+   {
+     cnpj, company_name, trade_name, status,
+     address: { street, number, complement, neighborhood },
+     city, state, zip_code,
+     main_cnae: { code, description },
+     secondary_cnaes: [{ code, description }],
+     phone, email
+   }
+   ```
+   Mapeamento por provedor documentado dentro do arquivo (campos diferem: CNPJá usa `company.name`/`alias`/`address.*`/`mainActivity`; BrasilAPI usa `razao_social`/`nome_fantasia`/`logradouro`/`cnae_fiscal*`).
+7. Faz `upsert` em `cnpj_lookup_cache` com `provider`, `data` (normalizado), `raw` (resposta crua), `fetched_at = now()`.
+8. Retorna `{ source: "provider", provider, data }`.
 
-Já existe e funciona (linhas 792–846). Apenas:
-- Trocar o botão por ícone puro (`EyeOff`, sem texto "Ocultar status").
-- Manter checkboxes para `pendente`, `fazendo`, `aguardando`, `feita`, `cancelada` (já vem de `TASK_STATUS`).
-- Manter botão "Mostrar todos" como "Limpar ocultações".
-- Manter badge com contador quando `hiddenStatuses.length > 0`.
+Erros retornam JSON com `error` e status apropriado (400 inválido, 404 não encontrado nos dois provedores, 502 falha de upstream, 401 sem auth).
 
-## 4. Popover novo "Filtrar por status" (Circle)
+## 3. Fora de escopo nesta etapa
 
-- Lista de status com radio/itens clicáveis: `Todos` + cada item de `TASK_STATUS` com pill colorida.
-- Seta `statusFilter`. Quando ≠ `"todos"`, botão fica com borda destacada e mostra a pill do status escolhido no canto (mini bolinha colorida) — sem texto longo.
+- Sem alterações em `AddressField`, `PublicForm`, editor de formulários ou qualquer outra tela.
+- Sem novo tipo de campo `cnpj` no schema do formulário (fica para a próxima etapa, junto com a UI).
+- Sem cron de limpeza da cache (TTL é aplicado em leitura).
 
-## 5. Popover novo "Filtrar por prioridade" (Flag)
+## Detalhes técnicos
 
-- Mesmo padrão: `Todas` + itens de `PRIORITIES` com cor.
-- Estado ativo idem.
+- Migration cria tabela + RLS habilitada + comentário explicando que o acesso é só via service role.
+- Function usa `createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)` para escrever na cache contornando RLS.
+- Validação CNPJ implementada inline (sem dependência nova).
+- Zod via `npm:zod`.
+- CORS via `npm:@supabase/supabase-js@2/cors`.
 
-## 6. Layout / responsividade
-
-- Toolbar com `flex flex-wrap gap-1.5` para quebrar em telas pequenas.
-- Input "Nova tarefa" mantém `rounded-lg border bg-card` para ficar como bloco com destaque maior que a linha de filtros.
-- Linha de filtros usa botões `h-9` discretos para não competir visualmente com o input.
-
-## Aspectos técnicos
-
-- Arquivo único: `src/components/TasksPanel.tsx`.
-- Sem mudanças em schema, RLS, hooks, `useWorkspace`, ou em qualquer outra tela.
-- Estados reutilizados como estão: `search`, `statusFilter`, `priorityFilter`, `dateFilter`, `hiddenStatuses`.
-- `useMemo filtered` (linhas 211–221) não muda — todos os filtros já operam em conjunto.
-- Persistência de `hiddenStatuses` em localStorage permanece.
-- Imports a adicionar: `Circle`, `Flag` de `lucide-react`.
+Confirma que posso seguir com a migration + edge function?

@@ -50,6 +50,33 @@ export type Database = {
         }
         Relationships: []
       }
+      cnpj_lookup_cache: {
+        Row: {
+          cnpj: string
+          created_at: string
+          data: Json
+          fetched_at: string
+          provider: string
+          raw: Json
+        }
+        Insert: {
+          cnpj: string
+          created_at?: string
+          data: Json
+          fetched_at?: string
+          provider: string
+          raw: Json
+        }
+        Update: {
+          cnpj?: string
+          created_at?: string
+          data?: Json
+          fetched_at?: string
+          provider?: string
+          raw?: Json
+        }
+        Relationships: []
+      }
       email_send_log: {
         Row: {
           created_at: string
