@@ -518,6 +518,9 @@ export const RequestsPanel = ({ userId }: Props) => {
                 {Object.keys(open.data ?? {}).length === 0 && (
                   <p className="text-xs text-muted-foreground">Sem campos preenchidos.</p>
                 )}
+                {open.cnpj_lookup_snapshot && (
+                  <CnpjSnapshotBlock snapshot={open.cnpj_lookup_snapshot} />
+                )}
               </div>
             </div>
             <DialogFooter className="flex-wrap gap-2">
