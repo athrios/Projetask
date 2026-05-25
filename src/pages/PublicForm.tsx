@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
-import { CheckCircle2, Loader2 } from "lucide-react";
+import { CheckCircle2, Loader2, Building2, Sparkles, MapPin, Activity, ListChecks } from "lucide-react";
 import { submitterNameSchema, publicTextAnswerSchema } from "@/lib/validation";
 import { StateCityField } from "@/components/forms/fields/StateCityField";
 import { PartnerGroupField } from "@/components/forms/fields/PartnerGroupField";
