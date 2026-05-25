@@ -55,7 +55,8 @@ type FieldType =
   | "file"
   | "state_city"
   | "partner_group"
-  | "address";
+  | "address"
+  | "cnpj";
 
 interface Form {
   id: string;
@@ -95,7 +96,48 @@ const FIELD_TYPES: { value: FieldType; label: string }[] = [
   { value: "state_city", label: "Estado + Cidade" },
   { value: "address", label: "Endereço (CEP)" },
   { value: "partner_group", label: "Grupo de sócios" },
+  { value: "cnpj", label: "CNPJ com preenchimento" },
 ];
+
+const CNPJ_AUTOFILL_KEYS: { key: string; label: string }[] = [
+  { key: "company_name", label: "Razão social" },
+  { key: "trade_name", label: "Nome fantasia" },
+  { key: "status", label: "Status" },
+  { key: "address", label: "Endereço" },
+  { key: "city", label: "Cidade" },
+  { key: "state", label: "Estado (UF)" },
+  { key: "zip_code", label: "CEP" },
+  { key: "main_cnae", label: "CNAE principal" },
+  { key: "secondary_cnaes", label: "CNAEs secundários" },
+  { key: "phone", label: "Telefone" },
+  { key: "email", label: "E-mail" },
+];
+
+function getCnpjAutofillMap(options: unknown): Record<string, string> {
+  if (options && typeof options === "object" && !Array.isArray(options)) {
+    const a = (options as { autofill?: unknown }).autofill;
+    if (a && typeof a === "object" && !Array.isArray(a)) {
+      const out: Record<string, string> = {};
+      for (const [k, v] of Object.entries(a as Record<string, unknown>)) {
+        if (typeof v === "string" && v.trim()) out[k] = v;
+      }
+      return out;
+    }
+  }
+  return {};
+}
+
+// Allowed target field types for each CNPJ autofill property
+function eligibleTargetsFor(key: string, allFields: Field[], selfId: string): Field[] {
+  return allFields.filter((f) => {
+    if (f.id === selfId) return false;
+    if (key === "address") return f.field_type === "address";
+    if (key === "city" || key === "state") {
+      return f.field_type === "state_city" || f.field_type === "short_text";
+    }
+    return f.field_type === "short_text" || f.field_type === "long_text";
+  });
+}
 
 interface Props { userId: string }
 
