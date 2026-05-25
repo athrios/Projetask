@@ -229,6 +229,7 @@ export type Database = {
       }
       form_responses: {
         Row: {
+          cnpj_lookup_snapshot: Json | null
           converted_process_id: string | null
           converted_task_id: string | null
           created_at: string
@@ -242,6 +243,7 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
+          cnpj_lookup_snapshot?: Json | null
           converted_process_id?: string | null
           converted_task_id?: string | null
           created_at?: string
@@ -255,6 +257,7 @@ export type Database = {
           workspace_id: string
         }
         Update: {
+          cnpj_lookup_snapshot?: Json | null
           converted_process_id?: string | null
           converted_task_id?: string | null
           created_at?: string

@@ -1,0 +1,1 @@
+ALTER TABLE public.form_responses ADD COLUMN IF NOT EXISTS cnpj_lookup_snapshot jsonb;
