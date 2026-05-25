@@ -16,7 +16,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Inbox, ListChecks, Workflow, Trash2, CheckCircle2, Copy, Check } from "lucide-react";
+import { Inbox, ListChecks, Workflow, Trash2, CheckCircle2, Copy, Check, Building2, Sparkles, MapPin, Activity } from "lucide-react";
 import { toast } from "sonner";
 import { StatusPill } from "@/components/shared/StatusPill";
 import { ViewSwitcher, type ViewMode } from "@/components/shared/ViewSwitcher";
