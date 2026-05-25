@@ -462,6 +462,38 @@ const PublicForm = () => {
                   required={f.required}
                 />
               )}
+              {f.field_type === "cnpj" && (
+                <div className="space-y-1">
+                  <div className="relative">
+                    <Input
+                      inputMode="numeric"
+                      placeholder="00.000.000/0000-00"
+                      value={maskCnpj((v as string) ?? "")}
+                      maxLength={18}
+                      onChange={(e) => {
+                        set(maskCnpj(e.target.value));
+                        if (cnpjError[f.id]) setCnpjError((p) => ({ ...p, [f.id]: false }));
+                      }}
+                      onBlur={(e) => {
+                        const digits = e.target.value.replace(/\D/g, "");
+                        if (digits.length === 14) runCnpjLookup(f, digits);
+                      }}
+                      required={f.required}
+                    />
+                    {cnpjLoading[f.id] && (
+                      <span className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1 text-[11px] text-muted-foreground">
+                        <Loader2 className="h-3 w-3 animate-spin" /> Consultando…
+                      </span>
+                    )}
+                  </div>
+                  {cnpjError[f.id] && !cnpjLoading[f.id] && (
+                    <p className="text-[11px] text-muted-foreground">
+                      Não foi possível consultar este CNPJ. Você pode preencher os campos manualmente.
+                    </p>
+                  )}
+                </div>
+              )}
+
             </div>
           );
         })}
