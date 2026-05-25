@@ -475,8 +475,12 @@ const PublicForm = () => {
                       value={maskCnpj((v as string) ?? "")}
                       maxLength={18}
                       onChange={(e) => {
-                        set(maskCnpj(e.target.value));
+                        const masked = maskCnpj(e.target.value);
+                        set(masked);
                         if (cnpjError[f.id]) setCnpjError((p) => ({ ...p, [f.id]: false }));
+                        if (cnpjData[f.id] && masked.replace(/\D/g, "") !== cnpjData[f.id].cnpj) {
+                          setCnpjData((p) => { const n = { ...p }; delete n[f.id]; return n; });
+                        }
                       }}
                       onBlur={(e) => {
                         const digits = e.target.value.replace(/\D/g, "");
@@ -494,6 +498,12 @@ const PublicForm = () => {
                     <p className="text-[11px] text-muted-foreground">
                       Não foi possível consultar este CNPJ. Você pode preencher os campos manualmente.
                     </p>
+                  )}
+                  {cnpjData[f.id] && !cnpjLoading[f.id] && (
+                    <CnpjPreviewCard
+                      data={cnpjData[f.id]}
+                      hasAutofill={Object.keys(getCnpjAutofillMap(f.options)).length > 0}
+                    />
                   )}
                 </div>
               )}
