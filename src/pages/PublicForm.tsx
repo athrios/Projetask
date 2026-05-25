@@ -298,6 +298,7 @@ const PublicForm = () => {
       if (Object.keys(updates).length) setValues((p) => ({ ...p, ...updates }));
     } catch {
       setCnpjError((p) => ({ ...p, [field.id]: true }));
+      setCnpjData((p) => { const n = { ...p }; delete n[field.id]; return n; });
     } finally {
       setCnpjLoading((p) => ({ ...p, [field.id]: false }));
     }
