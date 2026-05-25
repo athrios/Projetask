@@ -99,14 +99,21 @@ type CnpjLookupData = {
 
 const Dash = () => <span className="text-muted-foreground">—</span>;
 
-const CnpjPreviewCard = ({ data, hasAutofill }: { data: CnpjLookupData; hasAutofill: boolean }) => {
+const CnpjPreviewCard = ({ data }: { data: CnpjLookupData }) => {
   const cep = data.zip_code ? maskCep(data.zip_code) : null;
   const addrLine = [data.address.street, data.address.number, data.address.complement]
     .filter(Boolean)
     .join(" ");
   return (
     <div className="mt-2 rounded-lg border bg-card p-4 text-sm space-y-3">
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <div className="space-y-0.5">
+        <div className="text-xs font-medium text-foreground">Dados públicos encontrados para conferência</div>
+        <p className="text-[11px] text-muted-foreground">
+          Revise as informações antes de continuar. Esses dados não preenchem o formulário automaticamente.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 border-t pt-3">
         <div>
           <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-wide text-muted-foreground">
             <Building2 className="h-3 w-3" /> Razão Social
@@ -172,12 +179,6 @@ const CnpjPreviewCard = ({ data, hasAutofill }: { data: CnpjLookupData; hasAutof
             ))}
           </ul>
         </div>
-      )}
-
-      {hasAutofill && (
-        <p className="text-[11px] text-muted-foreground border-t pt-2">
-          Os campos abaixo foram preenchidos automaticamente. Você pode editar à vontade.
-        </p>
       )}
     </div>
   );
