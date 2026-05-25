@@ -218,9 +218,11 @@ const PublicForm = () => {
       });
       if (error || !res || (res as { error?: string }).error) {
         setCnpjError((p) => ({ ...p, [field.id]: true }));
+        setCnpjData((p) => { const n = { ...p }; delete n[field.id]; return n; });
         return;
       }
       const data = (res as { data: CnpjLookupData }).data;
+      setCnpjData((p) => ({ ...p, [field.id]: data }));
       const map = getCnpjAutofillMap(field.options);
       const updates: Record<string, unknown> = {};
       const targetField = (label: string) => fields.find((x) => x.label === label);
