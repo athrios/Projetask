@@ -1,53 +1,58 @@
-## CNPJ autofill — UI integration (form builder + public form)
+## Card de pré-visualização do CNPJ no formulário público
 
-The backend (edge function `lookup-cnpj` + cache table) is already in place. This step only wires the UI.
+Depois que o respondente digita um CNPJ válido e a consulta retorna com sucesso, exibir **logo abaixo do input** um card com o resumo dos dados retornados — no estilo da referência (Razão Social, Nome Fantasia, Status, Endereço, Atividade Principal, Atividades Secundárias).
 
-### 1. Database — add new field type to validation
+Esse card é **apenas visual** (preview). O autopreenchimento dos demais campos do formulário continua funcionando exatamente como hoje.
 
-The `validate_form_field_type` trigger currently rejects unknown types. Add `'cnpj'` to the allowed list (migration). No new tables; mapping config is stored inside the existing `form_fields.options` jsonb column.
+### Escopo
 
-### 2. Form builder (`src/components/forms/FormsPanel.tsx`)
+Arquivo único: `src/pages/PublicForm.tsx`.
 
-- Extend `FieldType` union and `FIELD_TYPES` list with `{ value: "cnpj", label: "CNPJ com preenchimento automático" }`.
-- When a field of type `cnpj` is selected, render a new config block (similar to the `partner_group` block) titled "Preenchimento automático" with one row per autofillable property:
-  - Razão social, Nome fantasia, Status, Endereço (logradouro+nº+complemento+bairro), Cidade, Estado, CEP, CNAE principal, CNAEs secundários, Telefone, E‑mail.
-  - Each row has a `Select` listing the other fields of the form (by label, filtered by sensible target types: `short_text`/`long_text`/`state_city`/`address`) plus an "— Não preencher —" option.
-- Persist the mapping as `options = { autofill: { company_name: "<label>", trade_name: "<label>", ... } }` in the field row. The view `form_fields_public` already exposes `options`, so the public form reads it without schema changes.
-- Hide the existing "options textarea" block for `cnpj` (it's not a select).
+Nada muda no backend, na edge function `lookup-cnpj`, no cache, no builder, na tabela `form_fields`, ou nos `options.autofill`.
 
-### 3. Public form (`src/pages/PublicForm.tsx`)
+### Mudanças
 
-- Extend the `FieldType` union with `"cnpj"`.
-- Render the CNPJ field as a masked input `00.000.000/0000-00` (formatting on each keystroke, max 18 chars).
-- On `blur`, if the raw digits length === 14:
-  - Set a per-field `loading` state (subtle inline spinner + "Consultando CNPJ…" muted text right of the input).
-  - Call the existing edge function via `supabase.functions.invoke("lookup-cnpj", { body: { cnpj: digits } })`.
-  - On success: read `data` and the field's `options.autofill` mapping; for each mapped property write into `values[targetLabel]`:
-    - Text fields → string (e.g. razão social, status, telefone, e‑mail, CEP formatted, CNAE as `"<code> - <description>"`, secondary CNAEs joined with `; `).
-    - `address` target → `{ cep, logradouro, numero, complemento, bairro }` matching `AddressValue`.
-    - `state_city` target → `{ uf, cidade }`.
-  - Existing user-typed values are overwritten only on a successful lookup (so the respondent can still edit afterwards — every field stays editable).
-  - On failure (invalid CNPJ, 404, network): show a small muted line below the input — "Não foi possível consultar este CNPJ. Você pode preencher manualmente." No toast spam.
-- No change to required-field/validation logic beyond accepting `cnpj` as a string type.
+1. **Novo estado** ao lado de `cnpjLoading` / `cnpjError`:
+   - `cnpjData: Record<string, CnpjLookupData>` — guarda o último resultado bem-sucedido por field id.
 
-### 4. Out of scope
+2. **Em `runCnpjLookup`**:
+   - Em caso de sucesso: `setCnpjData((p) => ({ ...p, [field.id]: data }))`.
+   - Em caso de erro / digitação nova: limpar `cnpjData[field.id]` (no `onChange` do input, quando o usuário alterar o valor, e em erro).
 
-- No backend changes (function, cache, schema columns).
-- No visual identity changes; reuse existing tokens, `Input`, muted text and `Loader2` icon already used elsewhere.
-- No new field validations beyond accepting the new type.
+3. **Renderização**: dentro do bloco `f.field_type === "cnpj"`, depois da mensagem de erro, renderizar (se `cnpjData[f.id]` existir):
 
-### Technical notes
+   ```text
+   ┌───────────────────────────────────────────────┐
+   │ ● Razão Social         ● Nome Fantasia        │
+   │   SONIA LIMA COM…        —                    │
+   │ ● Status                                      │
+   │   ATIVA                                       │
+   ├───────────────────────────────────────────────┤
+   │ ● Endereço                                    │
+   │   AV TIRADENTES 746 FRENTE                    │
+   │   Bairro: JARDIM GUARULHOS — CEP 07.090-000   │
+   │   Cidade: GUARULHOS / SP                      │
+   ├───────────────────────────────────────────────┤
+   │ ● Atividade Principal                         │
+   │   47.89-0-99 — Comércio varejista…            │
+   │ ● Atividades Secundárias                      │
+   │   • 82.11-3-00 — Serviços combinados…         │
+   └───────────────────────────────────────────────┘
+   ```
 
-- Mapping shape stored in `form_fields.options`:
-  ```json
-  { "autofill": { "company_name": "Razão social", "address": "Endereço", "city": "Cidade", ... } }
-  ```
-- Public form keeps `options` typed as `unknown`; we cast with a narrow helper `getAutofillMap(options)`.
-- CNPJ mask helper lives inline in `PublicForm.tsx` (small, no new file).
-- Loading + error state stored in two local maps keyed by field id: `cnpjLoading: Record<string, boolean>`, `cnpjError: Record<string, boolean>`.
+   - Card usando tokens do design system: `rounded-lg border bg-card p-4 text-sm space-y-3`.
+   - Ícones discretos do `lucide-react` já existentes no projeto (`Building2`, `MapPin`, `Activity`, `CheckCircle2`) à esquerda de cada label, em `text-muted-foreground`.
+   - Labels em `text-xs uppercase tracking-wide text-muted-foreground`; valores em `text-foreground`.
+   - Grid de 2 colunas em telas ≥ `sm` para Razão social / Nome fantasia / Status; bloco de endereço e atividades em coluna única.
+   - Campos ausentes (null) renderizam `—`.
+   - CEP formatado com `maskCep` (helper já existente no arquivo).
 
-### Files touched
+4. **Texto sutil de rodapé do card**: "Os campos abaixo foram preenchidos automaticamente. Você pode editar à vontade." — apenas quando há mapeamento `autofill` configurado para o campo; caso contrário ocultar essa linha.
 
-- migration (add `'cnpj'` to `validate_form_field_type`)
-- `src/components/forms/FormsPanel.tsx`
-- `src/pages/PublicForm.tsx`
+### Fora do escopo
+
+- Sem alterações no edge function, na tabela `cnpj_lookup_cache` ou em `form_fields`.
+- Sem novos campos no banco.
+- Sem mudanças no builder (`FormsPanel.tsx`).
+- Sem alteração da identidade visual; reutiliza tokens existentes (`--card`, `--border`, `--muted-foreground`, etc.).
+- Sem QSA / sócios (a edge function atual não retorna sócios).
