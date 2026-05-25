@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
 import {
   Dialog,
   DialogContent,
@@ -18,1664 +19,855 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Trash2, Settings2, Workflow, ChevronRight, Check, AlertCircle, Play, SkipForward, ChevronDown, CalendarIcon } from "lucide-react";
+import { Plus, Trash2, Link as LinkIcon, FileText, Copy, Workflow, GripVertical } from "lucide-react";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  arrayMove,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
-import { StatusPill } from "@/components/shared/StatusPill";
-import { NoteField } from "@/components/shared/NoteField";
-import { ViewSwitcher, type ViewMode } from "@/components/shared/ViewSwitcher";
 import { EmptyState } from "@/components/shared/EmptyState";
-import { PROCESS_STATUS, type ProcessStatus } from "@/lib/taskTokens";
 import { logActivity } from "@/lib/activityLog";
 import { useWorkspace } from "@/hooks/useWorkspace";
-import { addDaysISO } from "@/lib/recurrence";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Calendar } from "@/components/ui/calendar";
-import { format, parseISO } from "date-fns";
-import { ptBR } from "date-fns/locale";
+import { TEMPLATE_COLORS, colorPill, colorLeftBorder, asColor } from "@/components/processes/templateColors";
+import { cn } from "@/lib/utils";
+import { buildAppUrl } from "@/lib/appUrl";
+import type { FieldCondition, ConditionOperator } from "@/lib/formConditions";
 
-const fmtDate = (iso?: string | null) => {
-  if (!iso) return "";
-  try {
-    return format(parseISO(iso), "dd-MM-yy");
-  } catch {
-    return iso;
-  }
-};
-import {
-  TEMPLATE_COLORS,
-  asColor,
-  colorPill,
-  colorLeftBorder,
-  type TemplateColor,
-} from "./templateColors";
+type FieldType =
+  | "short_text"
+  | "long_text"
+  | "select"
+  | "multi_select"
+  | "date"
+  | "file"
+  | "state_city"
+  | "partner_group"
+  | "address"
+  | "cnpj";
 
-import { SheetEditor, emptyTable } from "./SheetEditor";
-import type { TableData } from "@/lib/sheetFormula";
-
-type TemplateKind = "tasks" | "table";
-
-interface Template {
+interface Form {
   id: string;
-  name: string;
+  title: string;
   description: string;
-  color?: string;
-  template_type?: TemplateKind;
-  table_schema?: TableData;
-  steps?: TmplStep[];
-}
-interface TmplStep {
-  id: string;
-  template_id: string;
-  position: number;
-  title: string;
-  due_offset_days?: number;
-}
-interface Process {
-  id: string;
-  template_id: string | null;
-  name: string;
-  client_name: string;
-  status: ProcessStatus;
-  due_date: string | null;
-  notes: string;
-  created_at?: string;
-  template_type?: TemplateKind;
-  table_data?: TableData;
-}
-interface Step {
-  id: string;
-  process_id: string;
-  position: number;
-  title: string;
-  status: string;
-  notes: string;
-  due_date?: string | null;
-  started_at?: string | null;
-  completed_at?: string | null;
-  dismissed_at?: string | null;
-}
-
-interface CustomStepStatus {
-  id: string;
-  label: string;
+  public_slug: string;
+  is_published: boolean;
   color: string;
+  auto_create_process: boolean;
+  linked_process_template_id: string | null;
+  logo_path: string | null;
+  logo_alignment: "left" | "center" | "right";
+  submitter_name_label: string | null;
+}
+interface ProcessTemplate { id: string; name: string }
+
+interface Field {
+  id: string;
+  form_id: string;
+  position: number;
+  label: string;
+  field_type: FieldType;
+  required: boolean;
+  options: string[] | unknown;
+  description: string;
+  add_button_label: string | null;
+  conditional_logic: FieldCondition | null;
 }
 
-interface Props {
-  userId: string;
-}
+const FIELD_TYPES: { value: FieldType; label: string }[] = [
+  { value: "short_text", label: "Texto curto" },
+  { value: "long_text", label: "Texto longo" },
+  { value: "select", label: "Seleção" },
+  { value: "multi_select", label: "Múltipla escolha" },
+  { value: "date", label: "Data" },
+  { value: "file", label: "Arquivo / Anexo" },
+  { value: "state_city", label: "Estado + Cidade" },
+  { value: "address", label: "Endereço (CEP)" },
+  { value: "partner_group", label: "Grupo de sócios" },
+  { value: "cnpj", label: "CNPJ (consulta informativa)" },
+];
 
-export const ProcessesPanel = ({ userId }: Props) => {
+interface Props { userId: string }
+
+export const FormsPanel = ({ userId }: Props) => {
   const { workspaceId } = useWorkspace();
-  const [templates, setTemplates] = useState<Template[]>([]);
-  const [processes, setProcesses] = useState<Process[]>([]);
-  const [stepsByProc, setStepsByProc] = useState<Record<string, Step[]>>({});
-  const [view, setView] = useState<ViewMode>("cards");
-  const [openProc, setOpenProc] = useState<Process | null>(null);
+  const [forms, setForms] = useState<Form[]>([]);
+  const [templates, setTemplates] = useState<ProcessTemplate[]>([]);
+  const [responseCounts, setResponseCounts] = useState<Record<string, number>>({});
+  const [editing, setEditing] = useState<Form | null>(null);
+  const [newTitle, setNewTitle] = useState("");
+
 
   const load = async () => {
     if (!workspaceId) return;
-    const [t, p] = await Promise.all([
-      supabase.from("process_templates").select("*").eq("workspace_id", workspaceId).order("created_at", { ascending: true }),
-      supabase.from("processes").select("*").eq("workspace_id", workspaceId).order("created_at", { ascending: false }),
-    ]);
-    if (t.error) return toast.error(t.error.message);
-    if (p.error) return toast.error(p.error.message);
-    setTemplates((t.data ?? []) as unknown as Template[]);
-    const procs = (p.data ?? []) as unknown as Process[];
-    let grouped: Record<string, Step[]> = {};
-    if (procs.length) {
-      const { data: s } = await supabase
-        .from("process_steps")
-        .select("*")
-        .eq("workspace_id", workspaceId)
-        .in("process_id", procs.map((x) => x.id))
-        .order("position", { ascending: true });
-      (s ?? []).forEach((row) => {
-        (grouped[row.process_id] ||= []).push(row as unknown as Step);
-      });
-      setStepsByProc(grouped);
-    } else setStepsByProc({});
+    const { data, error } = await supabase
+      .from("forms")
+      .select("*")
+      .eq("workspace_id", workspaceId)
+      .order("created_at", { ascending: false });
+    if (error) return toast.error(error.message);
+    const list = (data ?? []) as Form[];
+    setForms(list);
+    const { data: tpls } = await supabase
+      .from("process_templates")
+      .select("id,name")
+      .eq("workspace_id", workspaceId)
+      .order("created_at", { ascending: true });
+    setTemplates((tpls ?? []) as ProcessTemplate[]);
+    if (list.length) {
 
-    const normalized = procs.map((proc) => ({
-      ...proc,
-      status: proc.template_type === "table"
-        ? proc.status
-        : computeProcessStatus(proc.status, grouped[proc.id] ?? []),
-    }));
-    setProcesses(normalized);
-    if (openProc) {
-      const updatedOpen = normalized.find((proc) => proc.id === openProc.id);
-      if (updatedOpen) setOpenProc(updatedOpen);
+      const counts: Record<string, number> = {};
+      await Promise.all(
+        list.map(async (f) => {
+          const { count } = await supabase
+            .from("form_responses")
+            .select("id", { count: "exact", head: true })
+            .eq("workspace_id", workspaceId)
+            .eq("form_id", f.id);
+          counts[f.id] = count ?? 0;
+        }),
+      );
+      setResponseCounts(counts);
     }
-
-    await Promise.all(
-      normalized
-        .filter((proc, index) => proc.status !== procs[index].status)
-        .map((proc) => supabase.from("processes").update({ status: proc.status }).eq("id", proc.id)),
-    );
   };
 
-  useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workspaceId]);
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, [workspaceId]);
 
-  const createProcess = async (templateId: string | null, name: string, dueDate: string | null) => {
-    if (!workspaceId) return toast.error("Selecione um ambiente");
-    const tpl = templates.find((t) => t.id === templateId);
-    const isTable = tpl?.template_type === "table";
-    const tableData = isTable
-      ? JSON.parse(JSON.stringify(tpl?.table_schema ?? emptyTable()))
-      : emptyTable();
-    const { data: proc, error } = await supabase
-      .from("processes")
-      .insert({
-        user_id: userId,
-        workspace_id: workspaceId,
-        name,
-        template_id: templateId,
-        status: "nao_iniciado",
-        due_date: dueDate,
-        template_type: isTable ? "table" : "tasks",
-        table_data: tableData,
-      } as never)
+  const create = async () => {
+    const t = newTitle.trim();
+    if (!t || !workspaceId) return;
+    const { data, error } = await supabase
+      .from("forms")
+      .insert({ title: t, user_id: userId, workspace_id: workspaceId })
       .select()
       .single();
-    if (error || !proc) return toast.error(error?.message ?? "Erro");
-
-    if (templateId && !isTable) {
-      const { data: tmplSteps, error: stepsError } = await supabase
-        .from("process_template_steps")
-        .select("*")
-        .eq("workspace_id", workspaceId)
-        .eq("template_id", templateId)
-        .order("position", { ascending: true });
-      if (stepsError) return toast.error(stepsError.message);
-      const baseISO = (dueDate ?? proc.created_at?.slice(0, 10) ?? new Date().toISOString().slice(0, 10));
-      const rows = (tmplSteps ?? []).map((s, i) => {
-        const offset = (s as { due_offset_days?: number }).due_offset_days ?? 0;
-        return {
-          process_id: proc.id,
-          user_id: userId,
-          workspace_id: workspaceId,
-          position: i,
-          title: s.title,
-          status: "pendente" as const,
-          due_date: offset > 0 ? addDaysISO(baseISO, offset) : null,
-        };
-      });
-      if (rows.length) {
-        const { error: insertStepsError } = await supabase.from("process_steps").insert(rows as never);
-        if (insertStepsError) return toast.error(insertStepsError.message);
-      }
-    }
-    await logActivity(userId, "process", proc.id, "created", `Processo criado: "${name}"`);
-    toast.success(tpl ? `Processo criado a partir de ${tpl.name}` : "Processo criado");
+    if (error) return toast.error(error.message);
+    setNewTitle("");
+    setEditing(data as Form);
+    toast.success("Formulário criado");
     load();
   };
 
-  const removeProcess = async (id: string) => {
-    if (!confirm("Excluir processo e todas as etapas?")) return;
-    const proc = processes.find((p) => p.id === id);
-    const { error } = await supabase.from("processes").delete().eq("id", id);
+  const remove = async (id: string) => {
+    if (!confirm("Excluir formulário e todas as respostas vinculadas?")) return;
+    const { error } = await supabase.from("forms").delete().eq("id", id);
     if (error) return toast.error(error.message);
-    await logActivity(userId, "process", id, "deleted", `Processo excluÃ­do: "${proc?.name ?? ""}"`);
-    toast.success("Processo excluÃ­do");
+    toast.success("Formulário excluído");
     load();
   };
 
-  const changeStepStatusFromCard = async (processId: string, stepId: string, next: string) => {
-    const procSteps = stepsByProc[processId] ?? [];
-    const proc = processes.find((p) => p.id === processId);
-    const s = procSteps.find((x) => x.id === stepId);
-    if (!s || !proc || s.status === next) return;
-    const now = new Date().toISOString();
-    const patch: Record<string, unknown> = { status: next };
-    if (next === "feita") {
-      patch.completed_at = now;
-    } else if (next === "pulado") {
-      patch.dismissed_at = now;
-    } else {
-      patch.completed_at = null;
-      patch.dismissed_at = null;
-      if (next !== "pendente" && !s.started_at) patch.started_at = now;
-    }
-    const { error } = await supabase.from("process_steps").update(patch as never).eq("id", stepId);
+  const togglePub = async (f: Form) => {
+    const next = !f.is_published;
+    const { error } = await supabase.from("forms").update({ is_published: next }).eq("id", f.id);
     if (error) return toast.error(error.message);
-    let after: Step[] = procSteps.map((x) =>
-      x.id === stepId ? ({ ...x, ...patch, status: next } as Step) : x,
-    );
-    if (next === "feita" || next === "pulado") {
-      const nextPending = [...after].sort((a, b) => a.position - b.position).find((x) => x.status === "pendente");
-      if (nextPending) {
-        const startedAt = new Date().toISOString();
-        const { error: e2 } = await supabase
-          .from("process_steps")
-          .update({ status: "fazendo", started_at: startedAt })
-          .eq("id", nextPending.id);
-        if (e2) {
-          toast.error(e2.message);
-          return;
-        }
-        after = after.map((x) =>
-          x.id === nextPending.id ? { ...x, status: "fazendo", started_at: startedAt } : x,
-        );
-      }
-    }
-    const nextProcStatus = computeProcessStatus(
-      proc.status === "cancelado" ? "cancelado" : proc.status,
-      after,
-    );
-    if (nextProcStatus !== proc.status) {
-      await supabase.from("processes").update({ status: nextProcStatus }).eq("id", proc.id);
-      if (nextProcStatus === "concluido") {
-        await logActivity(userId, "process", proc.id, "completed", `Processo concluÃ­do: "${proc.name}"`);
-        toast.success("Processo concluÃ­do");
-      }
-    }
-    toast.success("Status da etapa atualizado");
+    await logActivity(userId, "form", f.id, next ? "published" : "unpublished",
+      next ? `Formulário publicado: "${f.title}"` : `Formulário despublicado: "${f.title}"`);
+    toast.success(next ? "Formulário publicado" : "Formulário despublicado");
     load();
+  };
+
+  const copyLink = (slug: string) => {
+    const url = buildAppUrl(`/f/${slug}`);
+    navigator.clipboard.writeText(url);
+    toast.success("Link copiado");
   };
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between gap-3">
-        <ViewSwitcher value={view} onChange={setView} views={["cards", "list", "kanban"]} />
-        <div className="flex items-center gap-2">
-          <TemplateManager userId={userId} workspaceId={workspaceId} templates={templates} reload={load} />
-          <NewProcessButton templates={templates} onCreate={createProcess} />
-        </div>
-      </div>
+      <form
+        className="flex gap-2 max-w-md"
+        onSubmit={(e) => { e.preventDefault(); create(); }}
+      >
+        <Input
+          value={newTitle}
+          onChange={(e) => setNewTitle(e.target.value)}
+          placeholder="Novo formulário..."
+        />
+        <Button type="submit" size="sm">
+          <Plus className="h-4 w-4" /> Criar
+        </Button>
+      </form>
 
-      {processes.length === 0 ? (
+      {forms.length === 0 ? (
         <EmptyState
-          icon={Workflow}
-          title="Nenhum processo ainda"
-          description="Crie um modelo com etapas e depois inicie processos a partir dele."
-        />
-      ) : view === "kanban" ? (
-        <KanbanView
-          processes={processes}
-          stepsByProc={stepsByProc}
-          templates={templates}
-          onOpen={setOpenProc}
-          onRemove={removeProcess}
-        />
-      ) : view === "list" ? (
-        <ListView
-          processes={processes}
-          stepsByProc={stepsByProc}
-          onOpen={setOpenProc}
-          onRemove={removeProcess}
+          icon={FileText}
+          title="Nenhum formulário"
+          description="Crie um formulário para receber solicitações via link público."
         />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-          {processes.map((p) => {
-            const tpl = templates.find((t) => t.id === p.template_id);
+          {forms.map((f) => {
+            const c = asColor(f.color);
             return (
-              <ProcessCard
-                key={p.id}
-                p={p}
-                steps={stepsByProc[p.id] ?? []}
-                templateName={tpl?.name ?? null}
-                templateColor={asColor(tpl?.color)}
-                onOpen={() => setOpenProc(p)}
-                onRemove={() => removeProcess(p.id)}
-                onChangeStepStatus={(stepId, next) => {
-                  void changeStepStatusFromCard(p.id, stepId, next);
-                }}
-              />
+            <div key={f.id} className={cn("rounded-xl border-l-4 border bg-card p-4 group hover:shadow-sm transition", colorLeftBorder[c])}>
+              <div className="flex items-start justify-between gap-2">
+                <button onClick={() => setEditing(f)} className="text-left flex-1 min-w-0 flex items-start gap-2">
+                  {f.logo_path && (
+                    <img
+                      src={supabase.storage.from("form-logos").getPublicUrl(f.logo_path).data.publicUrl}
+                      alt=""
+                      className="h-8 w-8 object-contain rounded shrink-0"
+                    />
+                  )}
+                  <div className="min-w-0">
+                    <span className={cn("inline-block text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full border mb-1.5", colorPill[c])}>
+                      {f.title}
+                    </span>
+                    {f.description && (
+                      <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">{f.description}</p>
+                    )}
+                  </div>
+                </button>
+                <button
+                  onClick={() => remove(f.id)}
+                  className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </div>
+              <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
+                <span>{responseCounts[f.id] ?? 0} resposta(s)</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px]">Publicado</span>
+                  <Switch checked={f.is_published} onCheckedChange={() => togglePub(f)} />
+                </div>
+              </div>
+              {f.auto_create_process && f.linked_process_template_id && (
+                <div className="mt-2 text-[11px] text-muted-foreground flex items-center gap-1.5">
+                  <Workflow className="h-3 w-3" />
+                  <span>Modelo vinculado:</span>
+                  <span className="font-medium text-foreground truncate">
+                    {templates.find((t) => t.id === f.linked_process_template_id)?.name ?? "—"}
+                  </span>
+                </div>
+              )}
+              {f.is_published && (
+                <button
+                  onClick={() => copyLink(f.public_slug)}
+                  className="mt-2 w-full inline-flex items-center justify-center gap-1.5 text-xs h-8 rounded-md border hover:bg-muted/40"
+                >
+                  <Copy className="h-3 w-3" /> Copiar link público
+                </button>
+              )}
+
+            </div>
             );
           })}
         </div>
       )}
 
-      {openProc && openProc.template_type === "table" ? (
-        <ProcessTableDetail
-          process={openProc}
-          templateName={templates.find((t) => t.id === openProc.template_id)?.name ?? null}
+      {editing && (
+        <FormBuilder
+          form={editing}
           userId={userId}
-          onClose={() => setOpenProc(null)}
-          onChanged={() => load()}
+          templates={templates}
+          onClose={() => { setEditing(null); load(); }}
         />
-      ) : openProc ? (
-        <ProcessDetail
-          process={openProc}
-          steps={stepsByProc[openProc.id] ?? []}
-          userId={userId}
-          onClose={() => setOpenProc(null)}
-          onChanged={() => load()}
-        />
-      ) : null}
-    </div>
-  );
-};
-
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€ Date picker (popover) â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
-
-const toLocalISO = (d: Date) => {
-  const tz = d.getTimezoneOffset() * 60000;
-  return new Date(d.getTime() - tz).toISOString().slice(0, 10);
-};
-
-const DateField = ({
-  value,
-  onChange,
-  placeholder = "Selecionar data",
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  placeholder?: string;
-}) => {
-  const [open, setOpen] = useState(false);
-  const selected = value
-    ? (() => {
-        const [y, m, d] = value.split("-").map(Number);
-        return new Date(y, m - 1, d);
-      })()
-    : undefined;
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          type="button"
-          variant="outline"
-          className={cn(
-            "w-full justify-start font-normal gap-2 h-9",
-            !selected && "text-muted-foreground",
-          )}
-        >
-          <CalendarIcon className="h-4 w-4 opacity-70 shrink-0" />
-          <span className="truncate">
-            {selected ? format(selected, "PPP", { locale: ptBR }) : placeholder}
-          </span>
-          {value && (
-            <span
-              role="button"
-              tabIndex={0}
-              onClick={(e) => {
-                e.stopPropagation();
-                onChange("");
-              }}
-              className="ml-auto text-xs text-muted-foreground hover:text-foreground"
-            >
-              limpar
-            </span>
-          )}
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent
-        className="w-auto p-0 max-w-[calc(100vw-2rem)]"
-        align="start"
-        collisionPadding={12}
-      >
-        <Calendar
-          mode="single"
-          selected={selected}
-          onSelect={(d) => {
-            if (d) {
-              onChange(toLocalISO(d));
-              setOpen(false);
-            }
-          }}
-          locale={ptBR}
-          initialFocus
-          className="p-3 pointer-events-auto"
-        />
-      </PopoverContent>
-    </Popover>
-  );
-};
-
-const ColorSwatchPicker = ({
-  value,
-  onChange,
-}: {
-  value: TemplateColor;
-  onChange: (c: TemplateColor) => void;
-}) => (
-  <div className="flex items-center gap-1.5 flex-wrap">
-    {TEMPLATE_COLORS.map((c) => (
-      <button
-        key={c.key}
-        type="button"
-        onClick={() => onChange(c.key)}
-        title={c.label}
-        aria-label={c.label}
-        className={cn(
-          "h-5 w-5 rounded-full border transition",
-          c.swatch,
-          value === c.key
-            ? "ring-2 ring-offset-2 ring-foreground/60 ring-offset-background"
-            : "opacity-80 hover:opacity-100",
-        )}
-      />
-    ))}
-  </div>
-);
-
-
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€ Sub-components â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
-
-const CARD_STEP_STATUSES: { value: string; label: string }[] = [
-  { value: "pendente", label: "Pendente" },
-  { value: "fazendo", label: "Em andamento" },
-  { value: "feita", label: "ConcluÃ­da" },
-  { value: "pulado", label: "Dispensada" },
-];
-
-const ProcessCard = ({
-  p,
-  steps,
-  templateName,
-  templateColor = "gray",
-  onOpen,
-  onRemove,
-  onChangeStepStatus,
-}: {
-  p: Process;
-  steps: Step[];
-  templateName?: string | null;
-  templateColor?: TemplateColor;
-  onOpen: () => void;
-  onRemove?: () => void;
-  onChangeStepStatus?: (stepId: string, next: string) => void | Promise<void>;
-}) => {
-  const done = steps.filter((s) => s.status === "feita" || s.status === "pulado").length;
-  const total = steps.length;
-  const pct = total ? Math.round((done / total) * 100) : 0;
-  const sorted = [...steps].sort((a, b) => a.position - b.position);
-  const current = sorted.find((s) => s.status !== "pendente" && s.status !== "feita" && s.status !== "pulado") ?? sorted.find((s) => s.status === "pendente");
-  const currentNote = current?.notes?.trim() ?? "";
-  return (
-    <div
-      role="button"
-      tabIndex={0}
-      onClick={onOpen}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          onOpen();
-        }
-      }}
-      className={cn(
-        "rounded-xl border bg-card p-4 hover:shadow-sm transition group cursor-pointer text-left border-l-4 relative",
-        colorLeftBorder[templateColor],
       )}
-    >
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex-1 min-w-0 space-y-1.5">
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <span
-              className={cn(
-                "inline-flex items-center max-w-full truncate rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide",
-                colorPill[templateColor],
-              )}
-            >
-              {templateName ?? "Processo avulso"}
-            </span>
-            {p.template_type === "table" && (
-              <span className="inline-flex items-center rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                Tabela
-              </span>
-            )}
-          </div>
-          <h4 className="text-sm font-semibold truncate">{p.name}</h4>
-          {p.client_name && (
-            <p className="text-xs text-muted-foreground truncate">{p.client_name}</p>
-          )}
-        </div>
-        <div className="flex items-center gap-1 shrink-0">
-          <StatusPill domain="process" value={p.status} size="xs" />
-          {onRemove && (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                if (confirm("Excluir processo?")) onRemove();
-              }}
-              className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition"
-              aria-label="Excluir processo"
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </button>
-          )}
-        </div>
-      </div>
-      <div className="mt-3 space-y-2">
-        {p.template_type !== "table" && (
-          <>
-            <div className="flex items-center gap-2">
-              <div className="h-1.5 flex-1 rounded-full bg-muted overflow-hidden">
-                <div className="h-full bg-foreground/70" style={{ width: `${pct}%` }} />
-              </div>
-              <span className="text-[11px] text-muted-foreground tabular-nums">
-                {done}/{total}
-              </span>
-            </div>
-            {current && (
-              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                <ChevronRight className="h-3 w-3 shrink-0" />
-                <span className="shrink-0">Etapa atual:</span>
-                <span className="truncate flex-1">{current.title}</span>
-                {onChangeStepStatus ? (
-                  <div
-                    onClick={(e) => e.stopPropagation()}
-                    onKeyDown={(e) => e.stopPropagation()}
-                    onPointerDown={(e) => e.stopPropagation()}
-                    className="shrink-0"
-                  >
-                    <Select
-                      value={CARD_STEP_STATUSES.some((o) => o.value === current.status) ? current.status : "__other__"}
-                      onValueChange={(v) => {
-                        if (v === "__other__") return;
-                        onChangeStepStatus(current.id, v);
-                      }}
-                    >
-                      <SelectTrigger
-                        className="h-6 px-2 py-0 text-[11px] gap-1 border-muted-foreground/20 hover:border-foreground/40 transition w-auto min-w-[110px]"
-                      >
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {CARD_STEP_STATUSES.map((o) => (
-                          <SelectItem key={o.value} value={o.value} className="text-xs">
-                            {o.label}
-                          </SelectItem>
-                        ))}
-                        {!CARD_STEP_STATUSES.some((o) => o.value === current.status) && (
-                          <SelectItem value="__other__" className="text-xs" disabled>
-                            {current.status}
-                          </SelectItem>
-                        )}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                ) : (
-                  <StatusPill domain="process_step" value={current.status} size="xs" className="shrink-0" />
-                )}
-              </div>
-            )}
-            {currentNote && (
-              <div
-                className="rounded-md bg-muted/40 px-2 py-1.5 cursor-text select-text"
-                onClick={(e) => e.stopPropagation()}
-                onMouseDown={(e) => e.stopPropagation()}
-                onPointerDown={(e) => e.stopPropagation()}
-                onKeyDown={(e) => e.stopPropagation()}
-              >
-                <p className="text-[10px] uppercase tracking-wide text-muted-foreground">ObservaÃ§Ã£o</p>
-                <p className="text-xs text-foreground/80 line-clamp-2 break-words">{currentNote}</p>
-              </div>
-            )}
-          </>
-        )}
-        {p.template_type === "table" && (
-          <p className="text-[11px] text-muted-foreground">
-            {p.table_data?.rows?.length ?? 0} linha(s) Â· {p.table_data?.columns?.length ?? 0} coluna(s)
-          </p>
-        )}
-        {p.due_date && (
-          <p className="text-[11px] text-muted-foreground">Prazo: {fmtDate(p.due_date)}</p>
-        )}
-      </div>
+
     </div>
   );
 };
 
-const ListView = ({
-  processes,
-  stepsByProc,
-  onOpen,
-  onRemove,
-}: {
-  processes: Process[];
-  stepsByProc: Record<string, Step[]>;
-  onOpen: (p: Process) => void;
-  onRemove: (id: string) => void;
-}) => (
-  <div className="rounded-xl border bg-card divide-y">
-    {processes.map((p) => {
-      const steps = stepsByProc[p.id] ?? [];
-      const done = steps.filter((s) => s.status === "feita" || s.status === "pulado").length;
-      const sorted = [...steps].sort((a, b) => a.position - b.position);
-      const current = sorted.find((s) => s.status !== "pendente" && s.status !== "feita" && s.status !== "pulado") ?? sorted.find((s) => s.status === "pendente");
-      return (
-        <div key={p.id} className="px-4 py-3 flex items-center gap-3 group hover:bg-muted/30">
-          <button onClick={() => onOpen(p)} className="flex-1 min-w-0 text-left">
-            <p className="text-sm font-medium truncate">{p.name}</p>
-            <p className="text-xs text-muted-foreground truncate">
-              {p.client_name || "â€”"} Â· {done}/{steps.length} etapas{current ? ` Â· ${current.title}` : ""}
-            </p>
-          </button>
-          <StatusPill domain="process" value={p.status} size="xs" />
-          <button
-            onClick={() => onRemove(p.id)}
-            className="p-1.5 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100"
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-          </button>
-        </div>
-      );
-    })}
-  </div>
-);
-
-const KanbanView = ({
-  processes,
-  stepsByProc,
-  templates,
-  onOpen,
-  onRemove,
-}: {
-  processes: Process[];
-  stepsByProc: Record<string, Step[]>;
-  templates: Template[];
-  onOpen: (p: Process) => void;
-  onRemove: (id: string) => void;
-}) => (
-  <div className="overflow-x-auto -mx-2 pb-2">
-    <div className="flex gap-3 px-2 min-w-max">
-      {PROCESS_STATUS.map((col) => {
-        const items = processes.filter((p) => p.status === col.value);
-        return (
-          <div key={col.value} className="w-72 shrink-0">
-            <div className="text-xs font-medium text-muted-foreground mb-2 flex items-center justify-between px-1">
-              <span>{col.label}</span>
-              <span className="tabular-nums">{items.length}</span>
-            </div>
-            <div className="space-y-2">
-              {items.map((p) => {
-                const tpl = templates.find((t) => t.id === p.template_id);
-                return (
-                  <ProcessCard
-                    key={p.id}
-                    p={p}
-                    steps={stepsByProc[p.id] ?? []}
-                    templateName={tpl?.name ?? null}
-                    templateColor={asColor(tpl?.color)}
-                    onOpen={() => onOpen(p)}
-                    onRemove={() => onRemove(p.id)}
-                  />
-                );
-              })}
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  </div>
-);
-
-const NewProcessButton = ({
-  templates,
-  onCreate,
-}: {
-  templates: Template[];
-  onCreate: (templateId: string | null, name: string, dueDate: string | null) => void;
-}) => {
-  const [open, setOpen] = useState(false);
-  const [name, setName] = useState("");
-  const [tpl, setTpl] = useState<string>("none");
-  const [due, setDue] = useState<string>("");
-  return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button size="sm">
-          <Plus className="h-4 w-4" /> Novo processo
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>Novo processo</DialogTitle>
-        </DialogHeader>
-        <div className="space-y-3">
-          <div>
-            <label className="text-xs font-medium">Nome</label>
-            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex.: AlteraÃ§Ã£o contratual - ACME" />
-          </div>
-          <div>
-            <label className="text-xs font-medium">Modelo</label>
-            <Select value={tpl} onValueChange={setTpl}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">Sem modelo</SelectItem>
-                {templates.map((t) => (
-                  <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <label className="text-xs font-medium">Data inicial / prazo (opcional)</label>
-            <DateField value={due} onChange={setDue} />
-            <p className="text-[11px] text-muted-foreground mt-1">
-              Usada para calcular automaticamente os prazos das etapas do modelo.
-            </p>
-          </div>
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
-          <Button
-            onClick={() => {
-              if (!name.trim()) return toast.error("Nome obrigatÃ³rio");
-              onCreate(tpl === "none" ? null : tpl, name.trim(), due || null);
-              setOpen(false); setName(""); setTpl("none"); setDue("");
-            }}
-          >Criar</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-};
-
-const TemplateManager = ({
+const FormBuilder = ({
+  form,
   userId,
-  workspaceId,
   templates,
-  reload,
-}: {
-  userId: string;
-  workspaceId: string | null;
-  templates: Template[];
-  reload: () => void;
-}) => {
-  const [open, setOpen] = useState(false);
-  const [stepsByTpl, setStepsByTpl] = useState<Record<string, TmplStep[]>>({});
-  const [newTplName, setNewTplName] = useState("");
-  const [newTplColor, setNewTplColor] = useState<TemplateColor>("gray");
-  const [newTplType, setNewTplType] = useState<TemplateKind>("tasks");
-  const [stepInput, setStepInput] = useState<Record<string, string>>({});
-  const [tableDraft, setTableDraft] = useState<Record<string, TableData>>({});
-
-  const loadSteps = async () => {
-    if (!templates.length || !workspaceId) return;
-    const { data } = await supabase
-      .from("process_template_steps")
-      .select("*")
-      .eq("workspace_id", workspaceId)
-      .order("position", { ascending: true });
-    const grouped: Record<string, TmplStep[]> = {};
-    (data ?? []).forEach((s) => {
-      (grouped[s.template_id] ||= []).push(s as TmplStep);
-    });
-    setStepsByTpl(grouped);
-  };
-
-  useEffect(() => {
-    if (open) loadSteps();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, templates.length, workspaceId]);
-
-  // Sync table drafts when templates list changes
-  useEffect(() => {
-    setTableDraft((prev) => {
-      const next = { ...prev };
-      templates.forEach((t) => {
-        if (t.template_type === "table" && !next[t.id]) {
-          next[t.id] = t.table_schema ?? emptyTable();
-        }
-      });
-      return next;
-    });
-  }, [templates]);
-
-  const addTpl = async () => {
-    const n = newTplName.trim();
-    if (!n || !workspaceId) return;
-    const { error } = await supabase
-      .from("process_templates")
-      .insert({
-        name: n,
-        user_id: userId,
-        workspace_id: workspaceId,
-        color: newTplColor,
-        template_type: newTplType,
-        table_schema: newTplType === "table" ? emptyTable() : { columns: [], rows: [] },
-      } as never);
-    if (error) return toast.error(error.message);
-    toast.success("Modelo criado");
-    setNewTplName("");
-    setNewTplColor("gray");
-    setNewTplType("tasks");
-    reload();
-  };
-
-  const saveTableSchema = async (id: string) => {
-    const schema = tableDraft[id];
-    if (!schema) return;
-    const { error } = await supabase
-      .from("process_templates")
-      .update({ table_schema: schema } as never)
-      .eq("id", id);
-    if (error) return toast.error(error.message);
-    toast.success("Tabela do modelo salva");
-    reload();
-  };
-
-  const updateTplColor = async (id: string, color: TemplateColor) => {
-    const { error } = await supabase
-      .from("process_templates")
-      .update({ color } as never)
-      .eq("id", id);
-    if (error) return toast.error(error.message);
-    reload();
-  };
-  const removeTpl = async (id: string) => {
-    if (!confirm("Excluir modelo e suas etapas?")) return;
-    const { error } = await supabase.from("process_templates").delete().eq("id", id);
-    if (error) return toast.error(error.message);
-    toast.success("Modelo excluÃ­do");
-    reload();
-  };
-  const addStep = async (tplId: string) => {
-    const t = (stepInput[tplId] ?? "").trim();
-    if (!t || !workspaceId) return;
-    const pos = (stepsByTpl[tplId] ?? []).length;
-    await supabase.from("process_template_steps").insert({
-      template_id: tplId, user_id: userId, workspace_id: workspaceId, title: t, position: pos,
-    });
-    setStepInput((p) => ({ ...p, [tplId]: "" }));
-    loadSteps();
-  };
-  const removeStep = async (id: string) => {
-    await supabase.from("process_template_steps").delete().eq("id", id);
-    loadSteps();
-  };
-
-  return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button size="sm" variant="outline">
-          <Settings2 className="h-4 w-4" /> Modelos
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-2xl max-h-[80vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Modelos de processo</DialogTitle>
-        </DialogHeader>
-        <div className="space-y-4">
-          <form
-            className="space-y-2"
-            onSubmit={(e) => { e.preventDefault(); addTpl(); }}
-          >
-            <div className="flex gap-2">
-              <Input
-                value={newTplName}
-                onChange={(e) => setNewTplName(e.target.value)}
-                placeholder="Novo modelo (ex.: AlteraÃ§Ã£o Contratual)"
-              />
-              <Select value={newTplType} onValueChange={(v) => setNewTplType(v as TemplateKind)}>
-                <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="tasks">Tarefas</SelectItem>
-                  <SelectItem value="table">Tabela</SelectItem>
-                </SelectContent>
-              </Select>
-              <Button type="submit" size="sm">Adicionar</Button>
-            </div>
-            <ColorSwatchPicker value={newTplColor} onChange={setNewTplColor} />
-          </form>
-          <div className="space-y-3">
-            {templates.map((t) => {
-              const steps = stepsByTpl[t.id] ?? [];
-              const tplColor = asColor(t.color);
-              const kind: TemplateKind = (t.template_type ?? "tasks") as TemplateKind;
-              return (
-                <div key={t.id} className={cn("rounded-lg border p-3 space-y-2 border-l-4", colorLeftBorder[tplColor])}>
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span
-                        className={cn(
-                          "inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide",
-                          colorPill[tplColor],
-                        )}
-                      >
-                        {t.name}
-                      </span>
-                      <span className="inline-flex items-center rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                        {kind === "table" ? "Tabela" : "Tarefas"}
-                      </span>
-                    </div>
-                    <button onClick={() => removeTpl(t.id)} className="text-muted-foreground hover:text-destructive">
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                  <ColorSwatchPicker value={tplColor} onChange={(c) => updateTplColor(t.id, c)} />
-
-                  {kind === "table" ? (
-                    <div className="space-y-2">
-                      <SheetEditor
-                        value={tableDraft[t.id] ?? t.table_schema ?? emptyTable()}
-                        onChange={(v) => setTableDraft((p) => ({ ...p, [t.id]: v }))}
-                      />
-                      <div className="flex justify-end">
-                        <Button size="sm" onClick={() => saveTableSchema(t.id)}>
-                          Salvar tabela do modelo
-                        </Button>
-                      </div>
-                    </div>
-                  ) : (
-                    <>
-                      <ol className="space-y-1 text-sm">
-                        {steps.map((s, i) => (
-                          <li key={s.id} className="flex items-center gap-2 group">
-                            <span className="text-xs text-muted-foreground w-5">{i + 1}.</span>
-                            <span className="flex-1 truncate">{s.title}</span>
-                            <Input
-                              type="number"
-                              min={0}
-                              defaultValue={s.due_offset_days ?? 0}
-                              onBlur={async (e) => {
-                                const v = Math.max(0, Number(e.target.value) || 0);
-                                await supabase.from("process_template_steps")
-                                  .update({ due_offset_days: v } as never).eq("id", s.id);
-                                loadSteps();
-                              }}
-                              className="h-7 w-20 text-xs"
-                              title="Prazo em dias apÃ³s o inÃ­cio do processo"
-                            />
-                            <span className="text-[11px] text-muted-foreground">dias</span>
-                            <button
-                              onClick={() => removeStep(s.id)}
-                              className="text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100"
-                            >
-                              <Trash2 className="h-3 w-3" />
-                            </button>
-                          </li>
-                        ))}
-                      </ol>
-                      <form
-                        className="flex gap-2"
-                        onSubmit={(e) => { e.preventDefault(); addStep(t.id); }}
-                      >
-                        <Input
-                          value={stepInput[t.id] ?? ""}
-                          onChange={(e) => setStepInput((p) => ({ ...p, [t.id]: e.target.value }))}
-                          placeholder="Adicionar etapaâ€¦"
-                          className="h-8 text-sm"
-                        />
-                        <Button type="submit" size="sm" variant="outline">
-                          <Plus className="h-3.5 w-3.5" />
-                        </Button>
-                      </form>
-                    </>
-                  )}
-                </div>
-              );
-            })}
-            {templates.length === 0 && (
-              <p className="text-xs text-muted-foreground text-center py-6">Nenhum modelo ainda.</p>
-            )}
-          </div>
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-};
-
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€ Process detail (operational timeline) â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
-
-type StepStatus = Step["status"];
-
-const stepStatusLabel: Record<StepStatus, string> = {
-  pendente: "Pendente",
-  fazendo: "Em andamento",
-  feita: "ConcluÃ­da",
-  pulado: "Dispensada",
-};
-
-function computeProcessStatus(current: ProcessStatus, steps: Step[]): ProcessStatus {
-  if (current === "cancelado") return "cancelado";
-  if (steps.length === 0) return "nao_iniciado";
-  const allResolved = steps.every((s) => s.status === "feita" || s.status === "pulado");
-  if (allResolved) return "concluido";
-  const anyStarted = steps.some((s) => s.status !== "pendente");
-  return anyStarted ? "em_andamento" : "nao_iniciado";
-}
-
-const ProcessDetail = ({
-  process,
-  steps,
-  userId,
   onClose,
-  onChanged,
 }: {
-  process: Process;
-  steps: Step[];
+  form: Form;
   userId: string;
+  templates: ProcessTemplate[];
   onClose: () => void;
-  onChanged: () => void;
 }) => {
   const { workspaceId } = useWorkspace();
-  const [name, setName] = useState(process.name);
-  const [client, setClient] = useState(process.client_name);
-  const [due, setDue] = useState(process.due_date ?? "");
-  const [notes, setNotes] = useState(process.notes);
-  const [showFuture, setShowFuture] = useState(false);
-  const [stepInput, setStepInput] = useState("");
-  const [obsDraft, setObsDraft] = useState<Record<string, string>>({});
+  const [title, setTitle] = useState(form.title);
+  const [desc, setDesc] = useState(form.description);
+  const [submitterNameLabel, setSubmitterNameLabel] = useState(form.submitter_name_label ?? "Seu nome");
+  const [color, setColor] = useState(asColor(form.color));
+  const [autoCreate, setAutoCreate] = useState(form.auto_create_process);
+  const [linkedTpl, setLinkedTpl] = useState<string | null>(form.linked_process_template_id);
+  const [logoPath, setLogoPath] = useState<string | null>(form.logo_path);
+  const [logoAlign, setLogoAlign] = useState<"left" | "center" | "right">(form.logo_alignment ?? "center");
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [fields, setFields] = useState<Field[]>([]);
 
-  const [customStatuses, setCustomStatuses] = useState<CustomStepStatus[]>([]);
+  const logoUrl = logoPath
+    ? supabase.storage.from("form-logos").getPublicUrl(logoPath).data.publicUrl
+    : null;
 
-  useEffect(() => {
+  const load = async () => {
+    const { data } = await supabase
+      .from("form_fields")
+      .select("*")
+      .eq("form_id", form.id)
+      .order("position", { ascending: true });
+    setFields(((data ?? []) as unknown as Field[]));
+  };
+  useEffect(() => { load(); }, [form.id]);
+
+  const saveMeta = async () => {
+    const label = submitterNameLabel.trim().slice(0, 60) || "Seu nome";
+    await supabase.from("forms").update({ title, description: desc, color, submitter_name_label: label }).eq("id", form.id);
+  };
+
+  const updateColor = async (c: ReturnType<typeof asColor>) => {
+    setColor(c);
+    await supabase.from("forms").update({ color: c }).eq("id", form.id);
+  };
+
+  const toggleAuto = async (v: boolean) => {
+    setAutoCreate(v);
+    const patch: { auto_create_process: boolean; linked_process_template_id?: string | null } = { auto_create_process: v };
+    if (!v) { patch.linked_process_template_id = null; setLinkedTpl(null); }
+    await supabase.from("forms").update(patch).eq("id", form.id);
+  };
+
+  const setTemplate = async (id: string) => {
+    setLinkedTpl(id);
+    await supabase.from("forms").update({ linked_process_template_id: id }).eq("id", form.id);
+  };
+
+  const onLogoFile = async (file: File | null) => {
+    if (!file) return;
+    const allowed = ["image/png", "image/jpeg", "image/webp"];
+    if (!allowed.includes(file.type)) {
+      return toast.error("Use PNG, JPG ou WEBP.");
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      return toast.error("Logo deve ter no máximo 5 MB.");
+    }
+    setUploadingLogo(true);
+    const ext = file.name.split(".").pop()?.toLowerCase().replace(/[^a-z0-9]/g, "") || "png";
+    const path = `${userId}/${form.id}/${crypto.randomUUID()}.${ext}`;
+    const { error } = await supabase.storage
+      .from("form-logos")
+      .upload(path, file, { upsert: false, contentType: file.type });
+    if (error) {
+      setUploadingLogo(false);
+      return toast.error("Falha no upload: " + error.message);
+    }
+    const old = logoPath;
+    await supabase.from("forms").update({ logo_path: path }).eq("id", form.id);
+    setLogoPath(path);
+    if (old) {
+      await supabase.storage.from("form-logos").remove([old]);
+    }
+    setUploadingLogo(false);
+    toast.success("Logo atualizado");
+  };
+
+  const removeLogo = async () => {
+    if (!logoPath) return;
+    const old = logoPath;
+    await supabase.from("forms").update({ logo_path: null }).eq("id", form.id);
+    setLogoPath(null);
+    await supabase.storage.from("form-logos").remove([old]);
+    toast.success("Logo removido");
+  };
+
+  const updateAlign = async (v: "left" | "center" | "right") => {
+    setLogoAlign(v);
+    await supabase.from("forms").update({ logo_alignment: v }).eq("id", form.id);
+  };
+
+
+
+  const addField = async (type: FieldType) => {
     if (!workspaceId) return;
-    supabase
-      .from("process_step_custom_statuses")
-      .select("id,label,color")
-      .eq("workspace_id", workspaceId)
-      .order("created_at", { ascending: true })
-      .then(({ data }) => setCustomStatuses((data ?? []) as CustomStepStatus[]));
-  }, [workspaceId]);
-
-  const isReserved = (st: string) => ["pendente", "fazendo", "feita", "pulado"].includes(st);
-  const resolved = steps.filter((s) => s.status === "feita" || s.status === "pulado");
-  const active = steps.find((s) => s.status !== "pendente" && s.status !== "feita" && s.status !== "pulado");
-  const firstPending = steps.find((s) => s.status === "pendente");
-  const currentStep = active ?? firstPending ?? null;
-  const futureSteps = steps.filter(
-    (s) => s.status === "pendente" && s.id !== currentStep?.id,
-  );
-  const total = steps.length;
-  const doneCount = resolved.length;
-  const pct = total ? Math.round((doneCount / total) * 100) : 0;
-
-  const autoStatus = computeProcessStatus(process.status, steps);
-
-  const saveDetails = async () => {
-    const { error } = await supabase.from("processes").update({
-      name, client_name: client, due_date: due || null, notes,
-    }).eq("id", process.id);
-    if (error) return toast.error(error.message);
-    toast.success("Processo atualizado");
-    onChanged();
-  };
-
-  const persistProcessStatus = async (after: Step[]) => {
-    const next = computeProcessStatus(process.status === "cancelado" ? "cancelado" : autoStatus, after);
-    const { error } = await supabase.from("processes").update({ status: next }).eq("id", process.id);
-    if (error) {
-      toast.error(error.message);
-      return false;
-    }
-    if (next === "concluido") {
-      await logActivity(userId, "process", process.id, "completed", `Processo concluÃ­do: "${process.name}"`);
-      toast.success("Processo concluÃ­do");
-    }
-    return true;
-  };
-
-  const startProcess = async () => {
-    const first = [...steps].sort((a, b) => a.position - b.position).find((s) => s.status === "pendente");
-    if (!first) return;
-    const { error } = await supabase.from("process_steps").update({
-      status: "fazendo", started_at: new Date().toISOString(),
-    }).eq("id", first.id);
-    if (error) return toast.error(error.message);
-    const after = steps.map((s) => (s.id === first.id ? { ...s, status: "fazendo" as const, started_at: new Date().toISOString() } : s));
-    const ok = await persistProcessStatus(after);
-    if (!ok) return;
-    toast.success("Processo iniciado");
-    onChanged();
-  };
-
-  const advanceNext = async (afterSteps: Step[]) => {
-    const nextPending = [...afterSteps].sort((a, b) => a.position - b.position).find((s) => s.status === "pendente");
-    if (nextPending) {
-      const { error } = await supabase.from("process_steps").update({
-        status: "fazendo", started_at: new Date().toISOString(),
-      }).eq("id", nextPending.id);
-      if (error) {
-        toast.error(error.message);
-        return null;
-      }
-      return afterSteps.map((s) => (s.id === nextPending.id ? { ...s, status: "fazendo" as const } : s));
-    }
-    return afterSteps;
-  };
-
-  const completeStep = async (s: Step) => {
-    const notesValue = obsDraft[s.id] ?? s.notes ?? "";
-    const completedAt = new Date().toISOString();
-    const { error } = await supabase.from("process_steps").update({
-      status: "feita", completed_at: completedAt, notes: notesValue,
-    }).eq("id", s.id);
-    if (error) return toast.error(error.message);
-    let after = steps.map((x) => (x.id === s.id ? { ...x, status: "feita" as const, completed_at: completedAt, notes: notesValue } : x));
-    after = await advanceNext(after);
-    if (!after) return;
-    const ok = await persistProcessStatus(after);
-    if (!ok) return;
-    toast.success("Etapa concluÃ­da");
-    onChanged();
-  };
-
-  const dismissStep = async (s: Step) => {
-    const notesValue = obsDraft[s.id] ?? s.notes ?? "";
-    const dismissedAt = new Date().toISOString();
-    const { error } = await supabase.from("process_steps").update({
-      status: "pulado", dismissed_at: dismissedAt, notes: notesValue,
-    }).eq("id", s.id);
-    if (error) return toast.error(error.message);
-    let after = steps.map((x) => (x.id === s.id ? { ...x, status: "pulado" as const, dismissed_at: dismissedAt, notes: notesValue } : x));
-    after = await advanceNext(after);
-    if (!after) return;
-    const ok = await persistProcessStatus(after);
-    if (!ok) return;
-    toast.success("Etapa dispensada");
-    onChanged();
-  };
-
-  const saveObservation = async (s: Step, valueOverride?: string) => {
-    const v = valueOverride ?? obsDraft[s.id] ?? s.notes ?? "";
-    const { error } = await supabase.from("process_steps").update({ notes: v }).eq("id", s.id);
-    if (error) throw new Error(error.message);
-    onChanged();
-  };
-
-  const changeStepStatus = async (s: Step, next: string) => {
-    if (next === s.status) return;
-    if (next === "feita") return completeStep(s);
-    if (next === "pulado") return dismissStep(s);
-    const patch: Record<string, unknown> = { status: next, completed_at: null, dismissed_at: null };
-    if (next !== "pendente" && !s.started_at) patch.started_at = new Date().toISOString();
-    const { error } = await supabase.from("process_steps").update(patch as never).eq("id", s.id);
-    if (error) return toast.error(error.message);
-    const after = steps.map((x) => (x.id === s.id ? { ...x, ...patch, status: next } as Step : x));
-    await persistProcessStatus(after);
-    toast.success("Status atualizado");
-    onChanged();
-  };
-
-  const addCustomStatus = async (): Promise<string | null> => {
-    const label = window.prompt("Nome do novo status:")?.trim();
-    if (!label || !workspaceId) return null;
-    const reserved = ["pendente", "fazendo", "feita", "pulado"];
-    if (reserved.includes(label.toLowerCase())) {
-      toast.error("Esse nome jÃ¡ Ã© um status padrÃ£o");
-      return null;
-    }
-    if (customStatuses.some((c) => c.label.toLowerCase() === label.toLowerCase())) {
-      return label;
-    }
-    const { data, error } = await supabase
-      .from("process_step_custom_statuses")
-      .insert({ workspace_id: workspaceId, user_id: userId, label, color: "gray" })
-      .select("id,label,color")
-      .single();
-    if (error) {
-      toast.error(error.message);
-      return null;
-    }
-    setCustomStatuses((p) => [...p, data as CustomStepStatus]);
-    return label;
-  };
-
-  const addStep = async () => {
-    const t = stepInput.trim();
-    if (!t || !workspaceId) return;
-    await supabase.from("process_steps").insert({
-      process_id: process.id, user_id: userId, workspace_id: workspaceId, title: t, position: steps.length, status: "pendente",
+    await supabase.from("form_fields").insert({
+      form_id: form.id, user_id: userId, workspace_id: workspaceId, label: "Novo campo",
+      field_type: type, required: false, position: fields.length, options: [],
     });
-    setStepInput("");
-    onChanged();
+    load();
   };
 
-  const removeStep = async (id: string) => {
-    if (!confirm("Excluir esta etapa?")) return;
-    await supabase.from("process_steps").delete().eq("id", id);
-    onChanged();
+
+  const updateField = async (id: string, patch: Partial<Field>) => {
+    await supabase.from("form_fields").update(patch as never).eq("id", id);
+    load();
   };
 
-  const cancelProcess = async () => {
-    if (!confirm("Cancelar este processo?")) return;
-    await supabase.from("processes").update({ status: "cancelado" }).eq("id", process.id);
-    await logActivity(userId, "process", process.id, "status_changed", `Processo cancelado: "${process.name}"`);
-    toast.success("Processo cancelado");
-    onChanged();
+  const removeField = async (id: string) => {
+    await supabase.from("form_fields").delete().eq("id", id);
+    load();
   };
 
-  const canStart = autoStatus === "nao_iniciado" && total > 0 && process.status !== "cancelado";
-  const isCancelled = process.status === "cancelado";
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIndex = fields.findIndex((f) => f.id === active.id);
+    const newIndex = fields.findIndex((f) => f.id === over.id);
+    if (oldIndex < 0 || newIndex < 0) return;
+    const reordered = arrayMove(fields, oldIndex, newIndex).map((f, i) => ({ ...f, position: i }));
+
+    // Detect conditions that now reference a field positioned at/after the dependent
+    let brokenCount = 0;
+    const cleaned = reordered.map((f, selfIdx) => {
+      const cond = f.conditional_logic;
+      if (!cond) return f;
+      const srcIdx = reordered.findIndex((x) => x.id === cond.field_id);
+      if (srcIdx === -1) return f;
+      if (srcIdx >= selfIdx) {
+        brokenCount += 1;
+        return { ...f, conditional_logic: null };
+      }
+      return f;
+    });
+
+    setFields(cleaned);
+
+    try {
+      await Promise.all(
+        cleaned.map((f, i) => {
+          const original = fields.find((x) => x.id === f.id);
+          const positionChanged = !original || original.position !== i;
+          const conditionCleared = original?.conditional_logic && !f.conditional_logic;
+          if (!positionChanged && !conditionCleared) return Promise.resolve();
+          const patch: Record<string, unknown> = { position: i };
+          if (conditionCleared) patch.conditional_logic = null;
+          return supabase.from("form_fields").update(patch as never).eq("id", f.id);
+        }),
+      );
+      if (brokenCount > 0) {
+        toast.warning(`${brokenCount} condição(ões) removida(s) porque a pergunta de origem ficou abaixo.`);
+      }
+    } catch {
+      toast.error("Não foi possível salvar a nova ordem");
+      load();
+    }
+  };
 
   return (
-    <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-2xl max-h-[88vh] overflow-y-auto">
+    <Dialog open onOpenChange={(o) => { if (!o) { saveMeta(); onClose(); } }}>
+      <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-3xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-base">{process.name}</DialogTitle>
-          {process.client_name && (
-            <p className="text-xs text-muted-foreground">{process.client_name}</p>
-          )}
+          <DialogTitle>Editar formulário</DialogTitle>
         </DialogHeader>
-
-        {/* Header summary */}
-        <div className="space-y-3 -mt-1">
-          <div className="flex items-center gap-3 flex-wrap">
-            <StatusPill domain="process" value={autoStatus} size="sm" />
-            <span className="text-xs text-muted-foreground tabular-nums">
-              {doneCount}/{total} etapas
-            </span>
-            <div className="h-1.5 flex-1 min-w-[120px] rounded-full bg-muted overflow-hidden">
-              <div className="h-full bg-foreground/70 transition-all" style={{ width: `${pct}%` }} />
-            </div>
+        <div className="space-y-4">
+          <div>
+            <label className="text-xs font-medium">Título</label>
+            <Input value={title} onChange={(e) => setTitle(e.target.value)} onBlur={saveMeta} />
           </div>
-          <div className="flex items-center gap-2 flex-wrap">
-            {canStart && (
-              <Button size="sm" onClick={startProcess}>
-                <Play className="h-3.5 w-3.5" /> Iniciar processo
-              </Button>
-            )}
-            {!isCancelled && autoStatus !== "concluido" && (
-              <Button size="sm" variant="outline" onClick={cancelProcess}>
-                Cancelar processo
-              </Button>
-            )}
-            {isCancelled && <span className="text-xs text-muted-foreground">Processo cancelado manualmente.</span>}
+          <div>
+            <label className="text-xs font-medium">Descrição / Instruções</label>
+            <Textarea value={desc} onChange={(e) => setDesc(e.target.value)} onBlur={saveMeta} className="min-h-[60px]" />
           </div>
-        </div>
-
-        {/* Timeline */}
-        <div className="mt-4 space-y-2">
-          {/* Resolved (compact) */}
-          {resolved.map((s) => (
-            <ResolvedStepRow
-              key={s.id}
-              s={s}
-              index={steps.findIndex((x) => x.id === s.id)}
-              onSaveObservation={(v) => {
-                setObsDraft((p) => ({ ...p, [s.id]: v }));
-                return saveObservation(s, v);
-              }}
-            />
-          ))}
-
-          {/* Current (expanded) */}
-          {currentStep && (
-            <CurrentStepCard
-              s={currentStep}
-              index={steps.findIndex((x) => x.id === currentStep.id)}
-              onSaveObservation={(v) => {
-                setObsDraft((p) => ({ ...p, [currentStep.id]: v }));
-                return saveObservation(currentStep, v);
-              }}
-              onDismiss={() => dismissStep(currentStep)}
-              onRemove={() => removeStep(currentStep.id)}
-              disabled={isCancelled || currentStep.status === "pendente"}
-              showStartHint={currentStep.status === "pendente"}
-              customStatuses={customStatuses}
-              onChangeStatus={(v) => changeStepStatus(currentStep, v)}
-              onAddCustomStatus={async () => {
-                const label = await addCustomStatus();
-                if (label) await changeStepStatus(currentStep, label);
-              }}
-            />
-          )}
-
-          {/* Future (collapsed) */}
-          {futureSteps.length > 0 && (
-            <div>
-              <button
-                onClick={() => setShowFuture((v) => !v)}
-                className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1 px-2 py-1"
-              >
-                <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", showFuture && "rotate-180")} />
-                {showFuture ? "Ocultar prÃ³ximas etapas" : `Exibir prÃ³ximas etapas (${futureSteps.length})`}
-              </button>
-              {showFuture && (
-                <ul className="mt-1 space-y-1">
-                  {futureSteps.map((s) => (
-                    <li
-                      key={s.id}
-                      className="flex items-center gap-2 px-3 py-2 rounded-md border border-dashed text-xs text-muted-foreground group"
-                    >
-                      <span className="w-5 tabular-nums">{steps.findIndex((x) => x.id === s.id) + 1}.</span>
-                      <span className="flex-1 truncate">{s.title}</span>
-                      {s.due_date && <span className="tabular-nums">{fmtDate(s.due_date)}</span>}
-                      <StatusPill domain="process_step" value={s.status} size="xs" />
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          )}
-
-          {/* Add step */}
-          <form
-            className="flex gap-2 pt-2"
-            onSubmit={(e) => { e.preventDefault(); addStep(); }}
-          >
+          <div>
+            <label className="text-xs font-medium">Rótulo do campo "Seu nome"</label>
             <Input
-              value={stepInput}
-              onChange={(e) => setStepInput(e.target.value)}
-              placeholder="Nova etapaâ€¦"
-              className="h-8 text-sm"
+              value={submitterNameLabel}
+              onChange={(e) => setSubmitterNameLabel(e.target.value)}
+              onBlur={saveMeta}
+              placeholder="Seu nome"
+              maxLength={60}
             />
-            <Button type="submit" size="sm" variant="outline">
-              <Plus className="h-3.5 w-3.5" />
-            </Button>
-          </form>
-        </div>
-
-        {/* Details (editable) */}
-        <details className="mt-4 group">
-          <summary className="text-xs font-medium text-muted-foreground cursor-pointer hover:text-foreground">
-            Editar detalhes do processo
-          </summary>
-          <div className="mt-3 space-y-3">
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs font-medium">Nome</label>
-                <Input value={name} onChange={(e) => setName(e.target.value)} />
-              </div>
-              <div>
-                <label className="text-xs font-medium">Cliente</label>
-                <Input value={client} onChange={(e) => setClient(e.target.value)} />
-              </div>
-              <div>
-                <label className="text-xs font-medium">Prazo</label>
-                <DateField value={due} onChange={setDue} />
-              </div>
-            </div>
-            <div>
-              <label className="text-xs font-medium">ObservaÃ§Ãµes gerais</label>
-              <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} className="min-h-[70px]" />
-            </div>
-            <Button size="sm" onClick={saveDetails}>Salvar detalhes</Button>
+            <p className="text-[11px] text-muted-foreground mt-0.5">Texto exibido acima do campo de identificação no formulário público.</p>
           </div>
-        </details>
+          <div>
+            <label className="text-xs font-medium block mb-1.5">Cor</label>
+            <div className="flex flex-wrap gap-1.5">
+              {TEMPLATE_COLORS.map((c) => (
+                <button
+                  key={c.key}
+                  type="button"
+                  onClick={() => updateColor(c.key)}
+                  className={cn(
+                    "h-6 w-6 rounded-full border-2 transition",
+                    c.swatch,
+                    color === c.key ? "border-foreground scale-110" : "border-transparent hover:scale-105",
+                  )}
+                  title={c.label}
+                />
+              ))}
+            </div>
+          </div>
+          <div className="rounded-lg border p-3 bg-muted/20 space-y-2">
+            <p className="text-sm font-medium">Identidade visual</p>
+            <p className="text-xs text-muted-foreground">Logo aparece no topo do formulário público. PNG, JPG ou WEBP, até 5 MB.</p>
+            <div className="flex items-center gap-3">
+              {logoUrl ? (
+                <img src={logoUrl} alt="Logo" className="h-16 max-w-[160px] object-contain rounded border bg-background p-1" />
+              ) : (
+                <div className="h-16 w-16 rounded border border-dashed grid place-items-center text-[10px] text-muted-foreground">sem logo</div>
+              )}
+              <div className="flex flex-col gap-1.5">
+                <label className="inline-flex items-center gap-1.5 text-xs h-8 px-3 rounded-md border cursor-pointer hover:bg-muted/40">
+                  <Plus className="h-3.5 w-3.5" />
+                  {uploadingLogo ? "Enviando..." : (logoPath ? "Trocar logo" : "Enviar logo")}
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    className="hidden"
+                    disabled={uploadingLogo}
+                    onChange={(e) => { onLogoFile(e.target.files?.[0] ?? null); e.target.value = ""; }}
+                  />
+                </label>
+                {logoPath && (
+                  <button type="button" onClick={removeLogo} className="text-xs text-destructive hover:underline w-fit">
+                    Remover logo
+                  </button>
+                )}
+              </div>
+            </div>
+            {logoPath && (
+              <div>
+                <label className="text-xs font-medium block mb-1">Alinhamento</label>
+                <Select value={logoAlign} onValueChange={(v) => updateAlign(v as "left" | "center" | "right")}>
+                  <SelectTrigger className="h-8 w-[160px] text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="left" className="text-xs">Esquerda</SelectItem>
+                    <SelectItem value="center" className="text-xs">Centro</SelectItem>
+                    <SelectItem value="right" className="text-xs">Direita</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+          </div>
+          <div className="rounded-lg border p-3 bg-muted/20 space-y-2">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-medium">Criar processo automaticamente</p>
+                <p className="text-xs text-muted-foreground">
+                  Quando este formulário for respondido, um processo será criado automaticamente usando o modelo selecionado.
+                </p>
+              </div>
+              <Switch checked={autoCreate} onCheckedChange={toggleAuto} />
+            </div>
+            {autoCreate && (
+              <div>
+                <label className="text-xs font-medium block mb-1">Modelo de processo vinculado</label>
+                <Select value={linkedTpl ?? ""} onValueChange={setTemplate}>
+                  <SelectTrigger className="h-9 text-sm">
+                    <SelectValue placeholder="Selecione um modelo..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {templates.length === 0 ? (
+                      <div className="px-3 py-2 text-xs text-muted-foreground">Nenhum modelo neste ambiente.</div>
+                    ) : templates.map((t) => (
+                      <SelectItem key={t.id} value={t.id} className="text-sm">{t.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+          </div>
+          <div>
 
-        <DialogFooter className="mt-4">
-          <Button variant="outline" onClick={onClose}>Fechar</Button>
+            <h4 className="text-sm font-semibold mb-2">Campos</h4>
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+              <SortableContext items={fields.map((f) => f.id)} strategy={verticalListSortingStrategy}>
+                <div className="space-y-2">
+                  {fields.map((f) => (
+                    <SortableFieldCard
+                      key={f.id}
+                      field={f}
+                      allFields={fields}
+                      onLabelChangeLocal={(v) =>
+                        setFields((p) => p.map((x) => (x.id === f.id ? { ...x, label: v } : x)))
+                      }
+                      onUpdate={(patch) => updateField(f.id, patch)}
+                      onRemove={() => removeField(f.id)}
+                    />
+                  ))}
+                </div>
+              </SortableContext>
+            </DndContext>
+            <div className="flex flex-wrap gap-2 mt-3">
+              {FIELD_TYPES.map((t) => (
+                <Button key={t.value} variant="outline" size="sm" onClick={() => addField(t.value)}>
+                  <Plus className="h-3.5 w-3.5" /> {t.label}
+                </Button>
+              ))}
+            </div>
+          </div>
+          {form.is_published && (
+            <div className="flex items-center gap-2 rounded-lg border p-3 bg-muted/30">
+              <LinkIcon className="h-4 w-4 text-muted-foreground" />
+              <span className="text-xs text-muted-foreground flex-1 truncate">
+                {buildAppUrl(`/f/${form.public_slug}`)}
+              </span>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  navigator.clipboard.writeText(buildAppUrl(`/f/${form.public_slug}`));
+                  toast.success("Link copiado");
+                }}
+              >
+                <Copy className="h-3.5 w-3.5" /> Copiar
+              </Button>
+            </div>
+          )}
+        </div>
+        <DialogFooter>
+          <Button onClick={() => { saveMeta(); onClose(); }}>Fechar</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   );
 };
 
-const ResolvedStepRow = ({
-  s, index, onSaveObservation,
+const SortableFieldCard = ({
+  field: f,
+  allFields,
+  onLabelChangeLocal,
+  onUpdate,
+  onRemove,
 }: {
-  s: Step;
-  index: number;
-  onSaveObservation: (v: string) => Promise<void>;
-}) => {
-  const isDismissed = s.status === "pulado";
-  return (
-    <div
-      className={cn(
-        "flex items-start gap-2 px-3 py-2 rounded-md border group",
-        isDismissed ? "bg-muted/30 border-dashed" : "bg-muted/20",
-      )}
-    >
-      <div
-        className={cn(
-          "h-5 w-5 rounded-full flex items-center justify-center shrink-0 mt-0.5",
-          isDismissed ? "bg-muted text-muted-foreground" : "bg-foreground text-background",
-        )}
-      >
-        {isDismissed ? <SkipForward className="h-3 w-3" /> : <Check className="h-3 w-3" />}
-      </div>
-      <span className="text-xs text-muted-foreground tabular-nums mt-0.5">{index + 1}.</span>
-      <div className="flex-1 min-w-0">
-        <p
-          className={cn(
-            "text-sm truncate",
-            isDismissed ? "text-muted-foreground italic" : "text-muted-foreground line-through",
-          )}
-        >
-          {s.title}
-        </p>
-        {s.notes && (
-          <p className="text-[11px] text-muted-foreground mt-0.5 whitespace-pre-wrap">{s.notes}</p>
-        )}
-        <details className="mt-1">
-          <summary className="text-[11px] text-muted-foreground cursor-pointer hover:text-foreground">
-            Editar observaÃ§Ã£o
-          </summary>
-          <div className="mt-2">
-            <NoteField
-              value={s.notes ?? ""}
-              onSave={onSaveObservation}
-              placeholder="ObservaÃ§Ã£o desta etapaâ€¦"
-              rows={3}
-              className="min-h-[56px] text-xs"
-            />
-          </div>
-        </details>
-      </div>
-      <StatusPill domain="process_step" value={s.status} size="xs" />
-    </div>
-  );
-};
-
-const CurrentStepCard = ({
-  s, index, onSaveObservation, onDismiss, onRemove, disabled, showStartHint,
-  customStatuses, onChangeStatus, onAddCustomStatus,
-}: {
-  s: Step;
-  index: number;
-  onSaveObservation: (v: string) => Promise<void>;
-  onDismiss: () => void;
+  field: Field;
+  allFields: Field[];
+  onLabelChangeLocal: (v: string) => void;
+  onUpdate: (patch: Partial<Field>) => void;
   onRemove: () => void;
-  disabled: boolean;
-  showStartHint: boolean;
-  customStatuses: CustomStepStatus[];
-  onChangeStatus: (v: string) => void;
-  onAddCustomStatus: () => void;
 }) => {
-  const today = new Date().toISOString().slice(0, 10);
-  const overdue = s.due_date && s.due_date < today;
-  const defaultStatuses = [
-    { value: "pendente", label: "Pendente" },
-    { value: "fazendo", label: "Em andamento" },
-    { value: "feita", label: "ConcluÃ­da" },
-    { value: "pulado", label: "Dispensada" },
-  ];
-  const isCustom = !defaultStatuses.some((d) => d.value === s.status);
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: f.id });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.6 : 1,
+  };
   return (
-    <div className="rounded-lg border-2 border-foreground/20 bg-card p-4 space-y-3 shadow-sm">
-      <div className="flex items-start gap-2">
-        <span className="text-xs text-muted-foreground tabular-nums mt-1">{index + 1}.</span>
-        <div className="flex-1 min-w-0">
-          <h4 className="text-sm font-semibold">{s.title}</h4>
-          <div className="flex items-center gap-2 mt-1 flex-wrap">
-            <Select
-              value={s.status}
-              onValueChange={(v) => {
-                if (v === "__add__") onAddCustomStatus();
-                else onChangeStatus(v);
-              }}
-            >
-              <SelectTrigger className="h-7 w-auto min-w-[140px] text-xs px-2">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {defaultStatuses.map((o) => (
-                  <SelectItem key={o.value} value={o.value} className="text-xs">{o.label}</SelectItem>
-                ))}
-                {customStatuses.length > 0 && <div className="my-1 h-px bg-border" />}
-                {customStatuses.map((c) => (
-                  <SelectItem key={c.id} value={c.label} className="text-xs">{c.label}</SelectItem>
-                ))}
-                {isCustom && !customStatuses.some((c) => c.label === s.status) && (
-                  <SelectItem value={s.status} className="text-xs">{s.status}</SelectItem>
-                )}
-                <div className="my-1 h-px bg-border" />
-                <SelectItem value="__add__" className="text-xs text-primary">
-                  + Adicionar status
-                </SelectItem>
-              </SelectContent>
-            </Select>
-            {s.due_date && (
-              <span
-                className={cn(
-                  "text-[11px] tabular-nums px-1.5 py-0.5 rounded inline-flex items-center gap-1",
-                  overdue ? "bg-destructive/10 text-destructive" : "text-muted-foreground",
-                )}
-              >
-                {overdue && <AlertCircle className="h-3 w-3" />}
-                Prazo: {fmtDate(s.due_date)}
-              </span>
-            )}
-            {showStartHint && (
-              <span className="text-[11px] text-muted-foreground">
-                Clique em &ldquo;Iniciar processo&rdquo; para comeÃ§ar.
-              </span>
-            )}
-          </div>
-        </div>
+    <div ref={setNodeRef} style={style} className="rounded-lg border bg-card p-3 space-y-2 group">
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          {...attributes}
+          {...listeners}
+          aria-label="Reordenar pergunta"
+          className="p-1 -ml-1 text-muted-foreground hover:text-foreground cursor-grab active:cursor-grabbing touch-none"
+        >
+          <GripVertical className="h-4 w-4" />
+        </button>
+        <Input
+          value={f.label}
+          onChange={(e) => onLabelChangeLocal(e.target.value)}
+          onBlur={(e) => onUpdate({ label: e.target.value })}
+          className="h-8 text-sm flex-1"
+        />
+        <Select value={f.field_type} onValueChange={(v) => onUpdate({ field_type: v as FieldType })}>
+          <SelectTrigger className="h-8 w-[160px] text-xs"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {FIELD_TYPES.map((t) => (
+              <SelectItem key={t.value} value={t.value} className="text-xs">{t.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         <button
           onClick={onRemove}
-          className="text-muted-foreground hover:text-destructive"
-          title="Excluir etapa"
+          className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100"
         >
           <Trash2 className="h-3.5 w-3.5" />
         </button>
       </div>
-
-      <div>
-        <label className="text-xs font-medium">ObservaÃ§Ã£o</label>
-        <div className="mt-1">
-          <NoteField
-            value={s.notes ?? ""}
-            onSave={onSaveObservation}
-            placeholder="AnotaÃ§Ãµes desta etapaâ€¦"
-            rows={3}
-            className="min-h-[70px]"
-          />
+      <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer w-fit select-none">
+        <Switch checked={f.required} onCheckedChange={(v) => onUpdate({ required: v })} />
+        <span>Resposta obrigatória</span>
+      </label>
+      <Textarea
+        defaultValue={f.description ?? ""}
+        placeholder="Descrição / instruções (opcional) — aparece abaixo da pergunta no formulário público"
+        className="text-xs min-h-[50px]"
+        maxLength={500}
+        onBlur={(e) => onUpdate({ description: e.target.value.trim() } as Partial<Field>)}
+      />
+      {(f.field_type === "select" || f.field_type === "multi_select") && (
+        <Textarea
+          defaultValue={Array.isArray(f.options) ? (f.options as string[]).join("\n") : ""}
+          placeholder="Uma opção por linha"
+          className="text-xs min-h-[60px]"
+          onBlur={(e) => onUpdate({
+            options: e.target.value.split("\n").map((s) => s.trim()).filter(Boolean) as never,
+          })}
+        />
+      )}
+      {f.field_type === "partner_group" && (
+        <Input
+          defaultValue={f.add_button_label ?? ""}
+          placeholder='Rótulo do botão (padrão: "Adicionar sócio")'
+          className="text-xs h-8"
+          maxLength={60}
+          onBlur={(e) => onUpdate({ add_button_label: e.target.value.trim() || null } as Partial<Field>)}
+        />
+      )}
+      {f.field_type === "cnpj" && (
+        <div className="rounded-md border border-border bg-muted/30 p-3 space-y-1">
+          <div className="text-xs font-medium text-foreground">Consulta informativa de CNPJ</div>
+          <p className="text-[11px] text-muted-foreground">
+            Quando o respondente digitar um CNPJ válido, os dados públicos serão exibidos como referência abaixo do campo. Nenhuma outra pergunta do formulário é preenchida automaticamente.
+          </p>
         </div>
-      </div>
+      )}
 
-      <div className="flex flex-wrap gap-2 pt-1 border-t">
-        <Button size="sm" variant="outline" onClick={onDismiss} disabled={disabled}>
-          <SkipForward className="h-3.5 w-3.5" /> Dispensar etapa
-        </Button>
-      </div>
+      <ConditionEditor
+        field={f}
+        allFields={allFields}
+        onChange={(cond) => onUpdate({ conditional_logic: cond } as Partial<Field>)}
+      />
     </div>
   );
 };
 
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€ Process detail (table type) â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
-
-const PROCESS_STATUS_OPTIONS: { value: ProcessStatus; label: string }[] = [
-  { value: "nao_iniciado", label: "NÃ£o iniciado" },
-  { value: "em_andamento", label: "Em andamento" },
-  { value: "concluido", label: "ConcluÃ­do" },
-  { value: "cancelado", label: "Cancelado" },
+const ELIGIBLE_SOURCE_TYPES: FieldType[] = [
+  "short_text",
+  "long_text",
+  "select",
+  "multi_select",
 ];
 
-const ProcessTableDetail = ({
-  process,
-  templateName,
-  userId,
-  onClose,
-  onChanged,
+const ConditionEditor = ({
+  field,
+  allFields,
+  onChange,
 }: {
-  process: Process;
-  templateName: string | null;
-  userId: string;
-  onClose: () => void;
-  onChanged: () => void;
+  field: Field;
+  allFields: Field[];
+  onChange: (cond: FieldCondition | null) => void;
 }) => {
-  const initial = process.table_data ?? emptyTable();
-  const [draft, setDraft] = useState<TableData>(initial);
-  const [dirty, setDirty] = useState(false);
-  const [status, setStatus] = useState<ProcessStatus>(process.status);
+  const cond = field.conditional_logic;
+  const [open, setOpen] = useState(!!cond);
+  const sources = allFields.filter(
+    (x) => x.position < field.position && ELIGIBLE_SOURCE_TYPES.includes(x.field_type),
+  );
+  const source = cond ? allFields.find((x) => x.id === cond.field_id) : null;
+  const sourceOpts =
+    source && (source.field_type === "select" || source.field_type === "multi_select")
+      ? ((Array.isArray(source.options) ? source.options : []) as string[])
+      : [];
 
-  const update = (next: TableData) => {
-    setDraft(next);
-    setDirty(true);
-  };
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="text-[11px] text-muted-foreground hover:text-foreground underline-offset-2 hover:underline w-fit"
+      >
+        + Mostrar somente se…
+      </button>
+    );
+  }
 
-  const hasAnyValue = (t: TableData) =>
-    t.rows.some((r) => Object.values(r.cells).some((v) => String(v).trim() !== ""));
+  if (sources.length === 0) {
+    return (
+      <div className="text-[11px] text-muted-foreground border rounded-md p-2 bg-muted/30">
+        Adicione uma pergunta anterior do tipo texto ou seleção para criar uma condição.
+        <button
+          type="button"
+          onClick={() => { setOpen(false); if (cond) onChange(null); }}
+          className="ml-2 underline hover:text-foreground"
+        >
+          fechar
+        </button>
+      </div>
+    );
+  }
 
-  const save = async () => {
-    let nextStatus = status;
-    if (status === "nao_iniciado" && hasAnyValue(draft)) nextStatus = "em_andamento";
-    const { error } = await supabase
-      .from("processes")
-      .update({ table_data: draft, status: nextStatus } as never)
-      .eq("id", process.id);
-    if (error) return toast.error(error.message);
-    setStatus(nextStatus);
-    setDirty(false);
-    await logActivity(userId, "process", process.id, "updated", `Tabela atualizada: "${process.name}"`);
-    toast.success("Tabela salva");
-    onChanged();
-  };
-
-  const changeStatus = async (s: ProcessStatus) => {
-    setStatus(s);
-    const { error } = await supabase
-      .from("processes")
-      .update({ status: s })
-      .eq("id", process.id);
-    if (error) return toast.error(error.message);
-    await logActivity(userId, "process", process.id, "status_changed", `Status alterado: "${process.name}" â†’ ${s}`);
-    onChanged();
-  };
-
-  const addRow = () => {
-    const cells: Record<string, string> = {};
-    draft.columns.forEach((c) => (cells[c.id] = ""));
-    update({ ...draft, rows: [...draft.rows, { id: Math.random().toString(36).slice(2, 10), cells }] });
-  };
-  const addColumn = () => {
-    const col = {
-      id: Math.random().toString(36).slice(2, 10),
-      label: `Coluna ${draft.columns.length + 1}`,
-      kind: "text" as const,
+  const update = (patch: Partial<FieldCondition>) => {
+    const base: FieldCondition = cond ?? {
+      field_id: sources[0].id,
+      operator: sources[0].field_type === "multi_select" ? "contains" : "equals",
+      value: "",
     };
-    update({
-      ...draft,
-      columns: [...draft.columns, col],
-      rows: draft.rows.map((r) => ({ ...r, cells: { ...r.cells, [col.id]: "" } })),
-    });
+    const next = { ...base, ...patch };
+    if (patch.field_id) {
+      // reset value/operator when source changes to keep a valid combo
+      next.value = "";
+      const s = allFields.find((x) => x.id === patch.field_id);
+      next.operator = s?.field_type === "multi_select" ? "contains" : "equals";
+    }
+    onChange(next);
   };
+
+  const isMulti = source?.field_type === "multi_select";
 
   return (
-    <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-4xl max-h-[88vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="text-base">{process.name}</DialogTitle>
-          {templateName && (
-            <p className="text-xs text-muted-foreground">Modelo: {templateName} Â· Tabela</p>
-          )}
-        </DialogHeader>
-
-        <div className="flex items-center gap-2 flex-wrap -mt-1">
-          <Select value={status} onValueChange={(v) => changeStatus(v as ProcessStatus)}>
-            <SelectTrigger className="h-8 w-44 text-xs"><SelectValue /></SelectTrigger>
+    <div className="rounded-md border bg-muted/20 p-2 space-y-2">
+      <div className="flex items-center justify-between">
+        <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+          Mostrar somente se…
+        </span>
+        <button
+          type="button"
+          onClick={() => { setOpen(false); onChange(null); }}
+          className="text-[11px] text-destructive hover:underline"
+        >
+          Remover condição
+        </button>
+      </div>
+      <div className={`grid grid-cols-1 ${isMulti ? "sm:grid-cols-2" : "sm:grid-cols-3"} gap-2`}>
+        <Select
+          value={cond?.field_id ?? ""}
+          onValueChange={(v) => update({ field_id: v })}
+        >
+          <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Pergunta…" /></SelectTrigger>
+          <SelectContent>
+            {sources.map((s) => (
+              <SelectItem key={s.id} value={s.id} className="text-xs">
+                {s.label || "(sem rótulo)"}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {!isMulti && (
+          <Select
+            value={cond?.operator ?? "equals"}
+            onValueChange={(v) => update({ operator: v as ConditionOperator })}
+          >
+            <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
             <SelectContent>
-              {PROCESS_STATUS_OPTIONS.map((o) => (
-                <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+              <SelectItem value="equals" className="text-xs">é igual a</SelectItem>
+              <SelectItem value="not_equals" className="text-xs">é diferente de</SelectItem>
+            </SelectContent>
+          </Select>
+        )}
+        {sourceOpts.length > 0 ? (
+          <Select
+            value={cond?.value ?? ""}
+            onValueChange={(v) =>
+              update(isMulti ? { value: v, operator: "contains" as ConditionOperator } : { value: v })
+            }
+          >
+            <SelectTrigger className="h-8 text-xs">
+              <SelectValue placeholder={isMulti ? "Aparece quando marcar…" : "Valor…"} />
+            </SelectTrigger>
+            <SelectContent>
+              {sourceOpts.map((o) => (
+                <SelectItem key={o} value={o} className="text-xs">{o}</SelectItem>
               ))}
             </SelectContent>
           </Select>
-          <Button size="sm" variant="outline" onClick={addRow} disabled={draft.columns.length === 0}>
-            <Plus className="h-3.5 w-3.5" /> Linha
-          </Button>
-          <Button size="sm" variant="outline" onClick={addColumn}>
-            <Plus className="h-3.5 w-3.5" /> Coluna
-          </Button>
-          <div className="flex-1" />
-          <Button size="sm" onClick={save} disabled={!dirty}>
-            Salvar
-          </Button>
-        </div>
-
-        <div className="mt-3">
-          <SheetEditor value={draft} onChange={update} />
-        </div>
-
-        <DialogFooter className="mt-4">
-          <Button variant="outline" onClick={onClose}>Fechar</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        ) : (
+          <Input
+            value={cond?.value ?? ""}
+            onChange={(e) => update({ value: e.target.value })}
+            placeholder="Valor"
+            className="h-8 text-xs"
+          />
+        )}
+      </div>
+      {isMulti && (
+        <p className="text-[10px] text-muted-foreground">
+          A pergunta aparece somente quando a opção acima estiver marcada na pergunta de origem.
+        </p>
+      )}
+    </div>
   );
 };
 
