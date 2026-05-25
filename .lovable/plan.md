@@ -1,64 +1,53 @@
-# CNPJ autofill — backend & cache (etapa 1)
+## CNPJ autofill — UI integration (form builder + public form)
 
-Objetivo: criar a infraestrutura de consulta de CNPJ (edge function + cache) sem mexer na UI dos formulários ainda.
+The backend (edge function `lookup-cnpj` + cache table) is already in place. This step only wires the UI.
 
-## 1. Tabela de cache
+### 1. Database — add new field type to validation
 
-Migration para criar `public.cnpj_lookup_cache`:
+The `validate_form_field_type` trigger currently rejects unknown types. Add `'cnpj'` to the allowed list (migration). No new tables; mapping config is stored inside the existing `form_fields.options` jsonb column.
 
-- `cnpj` text PK (apenas 14 dígitos, sem máscara)
-- `provider` text — `cnpja_open` | `brasilapi`
-- `data` jsonb — payload normalizado
-- `raw` jsonb — resposta original do provedor
-- `fetched_at` timestamptz not null default now()
-- `created_at` timestamptz not null default now()
-- Índice em `fetched_at` para futura expiração
+### 2. Form builder (`src/components/forms/FormsPanel.tsx`)
 
-RLS: habilitada. Sem políticas para usuários (acesso apenas via service role na edge function). Isso protege a tabela e ainda permite a function gravar/ler usando `SUPABASE_SERVICE_ROLE_KEY`.
+- Extend `FieldType` union and `FIELD_TYPES` list with `{ value: "cnpj", label: "CNPJ com preenchimento automático" }`.
+- When a field of type `cnpj` is selected, render a new config block (similar to the `partner_group` block) titled "Preenchimento automático" with one row per autofillable property:
+  - Razão social, Nome fantasia, Status, Endereço (logradouro+nº+complemento+bairro), Cidade, Estado, CEP, CNAE principal, CNAEs secundários, Telefone, E‑mail.
+  - Each row has a `Select` listing the other fields of the form (by label, filtered by sensible target types: `short_text`/`long_text`/`state_city`/`address`) plus an "— Não preencher —" option.
+- Persist the mapping as `options = { autofill: { company_name: "<label>", trade_name: "<label>", ... } }` in the field row. The view `form_fields_public` already exposes `options`, so the public form reads it without schema changes.
+- Hide the existing "options textarea" block for `cnpj` (it's not a select).
 
-## 2. Edge function `lookup-cnpj`
+### 3. Public form (`src/pages/PublicForm.tsx`)
 
-Arquivo: `supabase/functions/lookup-cnpj/index.ts`. Config em `supabase/config.toml` com `verify_jwt = true` (só usuários autenticados podem consultar — evita uso abusivo do endpoint público).
+- Extend the `FieldType` union with `"cnpj"`.
+- Render the CNPJ field as a masked input `00.000.000/0000-00` (formatting on each keystroke, max 18 chars).
+- On `blur`, if the raw digits length === 14:
+  - Set a per-field `loading` state (subtle inline spinner + "Consultando CNPJ…" muted text right of the input).
+  - Call the existing edge function via `supabase.functions.invoke("lookup-cnpj", { body: { cnpj: digits } })`.
+  - On success: read `data` and the field's `options.autofill` mapping; for each mapped property write into `values[targetLabel]`:
+    - Text fields → string (e.g. razão social, status, telefone, e‑mail, CEP formatted, CNAE as `"<code> - <description>"`, secondary CNAEs joined with `; `).
+    - `address` target → `{ cep, logradouro, numero, complemento, bairro }` matching `AddressValue`.
+    - `state_city` target → `{ uf, cidade }`.
+  - Existing user-typed values are overwritten only on a successful lookup (so the respondent can still edit afterwards — every field stays editable).
+  - On failure (invalid CNPJ, 404, network): show a small muted line below the input — "Não foi possível consultar este CNPJ. Você pode preencher manualmente." No toast spam.
+- No change to required-field/validation logic beyond accepting `cnpj` as a string type.
 
-Fluxo:
+### 4. Out of scope
 
-1. CORS + valida método `POST`.
-2. Lê `{ cnpj: string }` do body com Zod.
-3. Sanitiza: remove tudo que não é dígito, exige 14 dígitos, valida DV (algoritmo padrão de CNPJ). Rejeita sequências repetidas (`00000000000000` etc.).
-4. Consulta `cnpj_lookup_cache` pelo CNPJ sanitizado. Se existir e `fetched_at` < 30 dias, retorna `{ source: "cache", data, provider }`.
-5. Senão chama provedores em ordem:
-   - **CNPJá Open** (primário): `https://open.cnpja.com/office/{cnpj}` — gratuito, sem chave.
-   - **BrasilAPI** (fallback): `https://brasilapi.com.br/api/cnpj/v1/{cnpj}`.
-   Timeout de ~6s por chamada via `AbortController`. Em erro/timeout/404 do primário, tenta o fallback.
-6. Normaliza para o shape comum:
-   ```ts
-   {
-     cnpj, company_name, trade_name, status,
-     address: { street, number, complement, neighborhood },
-     city, state, zip_code,
-     main_cnae: { code, description },
-     secondary_cnaes: [{ code, description }],
-     phone, email
-   }
-   ```
-   Mapeamento por provedor documentado dentro do arquivo (campos diferem: CNPJá usa `company.name`/`alias`/`address.*`/`mainActivity`; BrasilAPI usa `razao_social`/`nome_fantasia`/`logradouro`/`cnae_fiscal*`).
-7. Faz `upsert` em `cnpj_lookup_cache` com `provider`, `data` (normalizado), `raw` (resposta crua), `fetched_at = now()`.
-8. Retorna `{ source: "provider", provider, data }`.
+- No backend changes (function, cache, schema columns).
+- No visual identity changes; reuse existing tokens, `Input`, muted text and `Loader2` icon already used elsewhere.
+- No new field validations beyond accepting the new type.
 
-Erros retornam JSON com `error` e status apropriado (400 inválido, 404 não encontrado nos dois provedores, 502 falha de upstream, 401 sem auth).
+### Technical notes
 
-## 3. Fora de escopo nesta etapa
+- Mapping shape stored in `form_fields.options`:
+  ```json
+  { "autofill": { "company_name": "Razão social", "address": "Endereço", "city": "Cidade", ... } }
+  ```
+- Public form keeps `options` typed as `unknown`; we cast with a narrow helper `getAutofillMap(options)`.
+- CNPJ mask helper lives inline in `PublicForm.tsx` (small, no new file).
+- Loading + error state stored in two local maps keyed by field id: `cnpjLoading: Record<string, boolean>`, `cnpjError: Record<string, boolean>`.
 
-- Sem alterações em `AddressField`, `PublicForm`, editor de formulários ou qualquer outra tela.
-- Sem novo tipo de campo `cnpj` no schema do formulário (fica para a próxima etapa, junto com a UI).
-- Sem cron de limpeza da cache (TTL é aplicado em leitura).
+### Files touched
 
-## Detalhes técnicos
-
-- Migration cria tabela + RLS habilitada + comentário explicando que o acesso é só via service role.
-- Function usa `createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)` para escrever na cache contornando RLS.
-- Validação CNPJ implementada inline (sem dependência nova).
-- Zod via `npm:zod`.
-- CORS via `npm:@supabase/supabase-js@2/cors`.
-
-Confirma que posso seguir com a migration + edge function?
+- migration (add `'cnpj'` to `validate_form_field_type`)
+- `src/components/forms/FormsPanel.tsx`
+- `src/pages/PublicForm.tsx`
