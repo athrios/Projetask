@@ -1,58 +1,39 @@
-## Card de pré-visualização do CNPJ no formulário público
+## Corrigir CNPJ: consulta apenas informativa + snapshot na resposta
 
-Depois que o respondente digita um CNPJ válido e a consulta retorna com sucesso, exibir **logo abaixo do input** um card com o resumo dos dados retornados — no estilo da referência (Razão Social, Nome Fantasia, Status, Endereço, Atividade Principal, Atividades Secundárias).
+Tornar a consulta de CNPJ **somente informativa** (bloco de conferência), nunca preenche outros campos. O snapshot fica salvo em `form_responses` em coluna separada e é exibido em Respostas/Solicitações.
 
-Esse card é **apenas visual** (preview). O autopreenchimento dos demais campos do formulário continua funcionando exatamente como hoje.
+> Migration já executada: coluna `cnpj_lookup_snapshot jsonb` adicionada em `form_responses`.
 
-### Escopo
+### 1. Form Builder — `src/components/forms/FormsPanel.tsx`
 
-Arquivo único: `src/pages/PublicForm.tsx`.
+- Renomear opção do tipo CNPJ para **"CNPJ (consulta informativa)"**.
+- Remover `CNPJ_AUTOFILL_KEYS`, `getCnpjAutofillMap`, `eligibleTargetsFor` e todo o bloco de UI de mapeamento autofill dentro do editor de campo CNPJ (linhas ~750–787).
+- Campos com `options.autofill` legado deixam de ser usados (sem migração de dados).
 
-Nada muda no backend, na edge function `lookup-cnpj`, no cache, no builder, na tabela `form_fields`, ou nos `options.autofill`.
+### 2. Formulário público — `src/pages/PublicForm.tsx`
 
-### Mudanças
+- Manter máscara, validação e chamada `lookup-cnpj` no `onBlur`.
+- **Remover toda a lógica de autofill** em `runCnpjLookup`: o bloco com `getCnpjAutofillMap`, `switch(key)` e `setValues(...updates)`. Manter só `setCnpjLoading`, `setCnpjError`, `setCnpjData`.
+- Tratar `res.error === "invalid_cnpj"` separadamente para mostrar "CNPJ inválido. Verifique os números digitados.". Demais erros: "Não encontramos dados públicos para este CNPJ. Você pode continuar mesmo assim.".
+- Loading: adicionar texto "Consultando dados do CNPJ…" ao lado do spinner.
+- `CnpjPreviewCard`:
+  - Remover prop `hasAutofill` e o rodapé sobre preenchimento automático.
+  - Adicionar título **"Dados públicos encontrados para conferência"** e subtítulo **"Revise as informações antes de continuar. Esses dados não preenchem o formulário automaticamente."**.
+- **Submit**: montar `cnpj_lookup_snapshot` a partir do primeiro campo CNPJ com `cnpjData` válido, normalizado para:
+  ```
+  { cnpj, razao_social, nome_fantasia, situacao,
+    endereco: { logradouro, numero, complemento, bairro, cidade, uf, cep },
+    atividade_principal, atividades_secundarias: [{ codigo, descricao }],
+    telefone, email, consultado_em }
+  ```
+  Incluir no `insert` em `form_responses`. Falha de consulta não bloqueia envio.
 
-1. **Novo estado** ao lado de `cnpjLoading` / `cnpjError`:
-   - `cnpjData: Record<string, CnpjLookupData>` — guarda o último resultado bem-sucedido por field id.
+### 3. Respostas/Solicitações — `src/components/requests/RequestsPanel.tsx`
 
-2. **Em `runCnpjLookup`**:
-   - Em caso de sucesso: `setCnpjData((p) => ({ ...p, [field.id]: data }))`.
-   - Em caso de erro / digitação nova: limpar `cnpjData[field.id]` (no `onChange` do input, quando o usuário alterar o valor, e em erro).
-
-3. **Renderização**: dentro do bloco `f.field_type === "cnpj"`, depois da mensagem de erro, renderizar (se `cnpjData[f.id]` existir):
-
-   ```text
-   ┌───────────────────────────────────────────────┐
-   │ ● Razão Social         ● Nome Fantasia        │
-   │   SONIA LIMA COM…        —                    │
-   │ ● Status                                      │
-   │   ATIVA                                       │
-   ├───────────────────────────────────────────────┤
-   │ ● Endereço                                    │
-   │   AV TIRADENTES 746 FRENTE                    │
-   │   Bairro: JARDIM GUARULHOS — CEP 07.090-000   │
-   │   Cidade: GUARULHOS / SP                      │
-   ├───────────────────────────────────────────────┤
-   │ ● Atividade Principal                         │
-   │   47.89-0-99 — Comércio varejista…            │
-   │ ● Atividades Secundárias                      │
-   │   • 82.11-3-00 — Serviços combinados…         │
-   └───────────────────────────────────────────────┘
-   ```
-
-   - Card usando tokens do design system: `rounded-lg border bg-card p-4 text-sm space-y-3`.
-   - Ícones discretos do `lucide-react` já existentes no projeto (`Building2`, `MapPin`, `Activity`, `CheckCircle2`) à esquerda de cada label, em `text-muted-foreground`.
-   - Labels em `text-xs uppercase tracking-wide text-muted-foreground`; valores em `text-foreground`.
-   - Grid de 2 colunas em telas ≥ `sm` para Razão social / Nome fantasia / Status; bloco de endereço e atividades em coluna única.
-   - Campos ausentes (null) renderizam `—`.
-   - CEP formatado com `maskCep` (helper já existente no arquivo).
-
-4. **Texto sutil de rodapé do card**: "Os campos abaixo foram preenchidos automaticamente. Você pode editar à vontade." — apenas quando há mapeamento `autofill` configurado para o campo; caso contrário ocultar essa linha.
+- Adicionar `cnpj_lookup_snapshot` ao tipo `Response`.
+- No drawer de detalhe, abaixo das respostas, renderizar bloco separado **"Dados públicos do CNPJ consultado"** quando `open.cnpj_lookup_snapshot` existir (CNPJ formatado, razão social, fantasia, situação, endereço, atividade principal, secundárias, telefone, e-mail, data/hora). Visual com `border`, `bg-card` e ícones lucide consistentes.
 
 ### Fora do escopo
 
-- Sem alterações no edge function, na tabela `cnpj_lookup_cache` ou em `form_fields`.
-- Sem novos campos no banco.
-- Sem mudanças no builder (`FormsPanel.tsx`).
-- Sem alteração da identidade visual; reutiliza tokens existentes (`--card`, `--border`, `--muted-foreground`, etc.).
-- Sem QSA / sócios (a edge function atual não retorna sócios).
+- Sem alterações na edge function `lookup-cnpj`, em `cnpj_lookup_cache`, RLS, auth ou identidade visual.
+- Sem migração de dados antigos: respostas anteriores ficam com snapshot `null`.
