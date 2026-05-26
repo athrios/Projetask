@@ -736,7 +736,7 @@ export const ClientForm = ({ workspaceId, userId, initial, onSaved, onCancel }: 
         {(() => {
           const visibleCustoms = draft.custom_fields
             .map((cf, i) => ({ cf, i }))
-            .filter(({ cf }) => cf.source !== "extra");
+            .filter(({ cf }) => cf.source !== "extra" && cf.source !== "qsa");
           if (visibleCustoms.length === 0) {
             return (
               <p className="text-xs text-muted-foreground">Sem campos personalizados.</p>
