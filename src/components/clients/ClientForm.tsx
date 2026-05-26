@@ -281,6 +281,10 @@ export const ClientForm = ({ workspaceId, userId, initial, onSaved, onCancel }: 
       email: draft.email.trim(),
       phone: draft.phone.trim(),
       address: draft.address as unknown as Record<string, unknown>,
+      birth_date:
+        draft.client_type === "pessoa_fisica" && draft.birth_date
+          ? draft.birth_date
+          : null,
       cnpj_lookup_snapshot: draft.cnpj_lookup_snapshot as unknown,
       notes: draft.notes,
       custom_fields: draft.custom_fields.filter(
