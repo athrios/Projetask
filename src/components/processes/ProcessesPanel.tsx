@@ -881,7 +881,7 @@ const TemplateManager = ({
         workspace_id: workspaceId,
         color: newTplColor,
         template_type: newTplType,
-        table_schema: (newTplType === "table" ? emptyTable() : { columns: [], rows: [] }) as Json,
+        table_schema: (newTplType === "table" ? emptyTable() : { columns: [], rows: [] }) as unknown as Json,
       });
     if (error) return toast.error(error.message);
     toast.success("Modelo criado");
@@ -896,7 +896,7 @@ const TemplateManager = ({
     if (!schema) return;
     const { error } = await supabase
       .from("process_templates")
-      .update({ table_schema: schema as Json })
+      .update({ table_schema: schema as unknown as Json })
       .eq("id", id);
     if (error) return toast.error(error.message);
     toast.success("Tabela do modelo salva");
@@ -1645,7 +1645,7 @@ const ProcessTableDetail = ({
     if (status === "nao_iniciado" && hasAnyValue(draft)) nextStatus = "em_andamento";
     const { error } = await supabase
       .from("processes")
-      .update({ table_data: draft as Json, status: nextStatus })
+      .update({ table_data: draft as unknown as Json, status: nextStatus })
       .eq("id", process.id);
     if (error) return toast.error(error.message);
     setStatus(nextStatus);
