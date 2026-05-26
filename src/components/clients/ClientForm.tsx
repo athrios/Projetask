@@ -645,7 +645,47 @@ export const ClientForm = ({ workspaceId, userId, initial, onSaved, onCancel }: 
         />
       </section>
 
-      {/* Custom fields */}
+      {/* Fixed extra fields (workspace-wide) */}
+      {clientSettings.extra_fields.length > 0 && (
+        <section className="space-y-2">
+          <h3 className="text-sm font-semibold">Campos Extras</h3>
+          <p className="text-xs text-muted-foreground">
+            Campos configurados nas configurações de Clientes e aplicados a todos os clientes deste ambiente.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {clientSettings.extra_fields.map((ex) => {
+              const v = getExtraValue(ex.id);
+              return (
+                <div key={ex.id} className="space-y-1">
+                  <Label>
+                    {ex.label || "Campo extra"}
+                    {ex.required && <span className="text-destructive"> *</span>}
+                  </Label>
+                  {ex.type === "long_text" ? (
+                    <Textarea
+                      value={v}
+                      rows={3}
+                      maxLength={2000}
+                      onChange={(e) => setExtraValue(ex, e.target.value)}
+                    />
+                  ) : (
+                    <Input
+                      type={
+                        ex.type === "number" ? "number" : ex.type === "date" ? "date" : "text"
+                      }
+                      value={v}
+                      maxLength={300}
+                      onChange={(e) => setExtraValue(ex, e.target.value)}
+                    />
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
+      {/* Custom fields (client-specific) */}
       <section className="space-y-2">
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-semibold">Campos personalizados</h3>
@@ -661,52 +701,59 @@ export const ClientForm = ({ workspaceId, userId, initial, onSaved, onCancel }: 
             <Plus className="h-3.5 w-3.5" /> Adicionar
           </Button>
         </div>
-        {draft.custom_fields.length === 0 ? (
-          <p className="text-xs text-muted-foreground">
-            Sem campos personalizados.
-          </p>
-        ) : (
-          <ul className="space-y-2">
-            {draft.custom_fields.map((cf, i) => (
-              <li key={i} className="grid grid-cols-[1fr_1fr_auto] gap-2 items-start">
-                <Input
-                  placeholder="Rótulo"
-                  value={cf.label}
-                  maxLength={80}
-                  onChange={(e) => {
-                    const next = [...draft.custom_fields];
-                    next[i] = { ...next[i], label: e.target.value };
-                    update("custom_fields", next);
-                  }}
-                />
-                <Input
-                  placeholder="Valor"
-                  value={cf.value}
-                  maxLength={300}
-                  onChange={(e) => {
-                    const next = [...draft.custom_fields];
-                    next[i] = { ...next[i], value: e.target.value };
-                    update("custom_fields", next);
-                  }}
-                />
-                <button
-                  type="button"
-                  onClick={() => {
-                    update(
-                      "custom_fields",
-                      draft.custom_fields.filter((_, ix) => ix !== i),
-                    );
-                  }}
-                  className="p-2 rounded hover:bg-muted text-muted-foreground"
-                  title="Remover"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
+        {(() => {
+          const visibleCustoms = draft.custom_fields
+            .map((cf, i) => ({ cf, i }))
+            .filter(({ cf }) => cf.source !== "extra");
+          if (visibleCustoms.length === 0) {
+            return (
+              <p className="text-xs text-muted-foreground">Sem campos personalizados.</p>
+            );
+          }
+          return (
+            <ul className="space-y-2">
+              {visibleCustoms.map(({ cf, i }) => (
+                <li key={i} className="grid grid-cols-[1fr_1fr_auto] gap-2 items-start">
+                  <Input
+                    placeholder="Rótulo"
+                    value={cf.label}
+                    maxLength={80}
+                    onChange={(e) => {
+                      const next = [...draft.custom_fields];
+                      next[i] = { ...next[i], label: e.target.value };
+                      update("custom_fields", next);
+                    }}
+                  />
+                  <Input
+                    placeholder="Valor"
+                    value={cf.value}
+                    maxLength={300}
+                    onChange={(e) => {
+                      const next = [...draft.custom_fields];
+                      next[i] = { ...next[i], value: e.target.value };
+                      update("custom_fields", next);
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      update(
+                        "custom_fields",
+                        draft.custom_fields.filter((_, ix) => ix !== i),
+                      );
+                    }}
+                    className="p-2 rounded hover:bg-muted text-muted-foreground"
+                    title="Remover"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          );
+        })()}
       </section>
+
 
       <div className="flex justify-end gap-2 pt-2 border-t">
         <Button type="button" variant="ghost" onClick={onCancel} disabled={saving}>
