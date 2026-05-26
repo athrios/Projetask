@@ -372,6 +372,11 @@ const Index = () => {
                   <AgendaPanel userId={user.id} />
                 </RequireModule>
               )}
+              {section === "clients" && (
+                <RequireModule module="clientes" onDenied={() => changeSection("today")}>
+                  <ClientsPanel userId={user.id} />
+                </RequireModule>
+              )}
               {section === "schedule" && (
                 <RequireModule module="cronograma" onDenied={() => changeSection("today")}>
                   <SchedulePanel date={date} userId={user.id} tasks={tasks} />
