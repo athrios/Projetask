@@ -165,7 +165,19 @@ export const ClientForm = ({ workspaceId, userId, initial, onSaved, onCancel }: 
         setCnpjPreview(null);
         return;
       }
-      const d = data as CnpjLookupData;
+      const payload = (data as { data?: CnpjLookupData })?.data ?? null;
+      if (!payload) {
+        setCnpjError("Não encontramos dados públicos para este CNPJ. Você pode continuar mesmo assim.");
+        setCnpjPreview(null);
+        return;
+      }
+      const d = payload;
+      const addr = d.address ?? {
+        street: null,
+        number: null,
+        complement: null,
+        neighborhood: null,
+      };
       setCnpjPreview(d);
       setDraft((prev) => ({
         ...prev,
@@ -176,11 +188,11 @@ export const ClientForm = ({ workspaceId, userId, initial, onSaved, onCancel }: 
         address: {
           ...prev.address,
           cep: prev.address.cep || d.zip_code || prev.address.cep,
-          logradouro: prev.address.logradouro || d.address.street || prev.address.logradouro,
-          numero: prev.address.numero || d.address.number || prev.address.numero,
+          logradouro: prev.address.logradouro || addr.street || prev.address.logradouro,
+          numero: prev.address.numero || addr.number || prev.address.numero,
           complemento:
-            prev.address.complemento || d.address.complement || prev.address.complemento,
-          bairro: prev.address.bairro || d.address.neighborhood || prev.address.bairro,
+            prev.address.complemento || addr.complement || prev.address.complemento,
+          bairro: prev.address.bairro || addr.neighborhood || prev.address.bairro,
           cidade: prev.address.cidade || d.city || prev.address.cidade,
           uf: prev.address.uf || d.state || prev.address.uf,
           pais: prev.address.pais || "Brasil",
@@ -196,6 +208,7 @@ export const ClientForm = ({ workspaceId, userId, initial, onSaved, onCancel }: 
       setCnpjLoading(false);
     }
   };
+
 
   const validate = (): string | null => {
     if (!draft.name.trim()) return "Informe o nome ou razão social.";
