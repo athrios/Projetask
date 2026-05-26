@@ -31,14 +31,16 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useClientSettings, type ExtraFieldDef } from "@/hooks/useClientSettings";
+import { PartnerGroupField, type Partner } from "@/components/forms/fields/PartnerGroupField";
 
 export type ClientType = "pessoa_fisica" | "pessoa_juridica" | "estrangeiro";
 
 export interface CustomField {
   label: string;
   value: string;
-  source?: "extra";
+  source?: "extra" | "qsa";
   extra_id?: string;
+  data?: unknown;
 }
 
 export interface ClientAddress extends AddressValue {
