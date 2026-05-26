@@ -461,35 +461,62 @@ export const ImportClientsDialog = ({
             </div>
 
             <div className="border rounded-md divide-y">
-              {headers.map((h, i) => (
-                <div key={i} className="grid grid-cols-[1fr_1fr] gap-3 items-center px-3 py-2">
-                  <div className="text-sm font-medium truncate">{h || `Coluna ${i + 1}`}</div>
-                  <Select
-                    value={mapping[i] ?? "std:ignore"}
-                    onValueChange={(v) => setMapping((m) => ({ ...m, [i]: v as MappingValue }))}
-                  >
-                    <SelectTrigger className="h-8">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {STANDARD_OPTIONS.map((o) => (
-                        <SelectItem key={o.value} value={`std:${o.value}`}>
-                          {o.label}
-                        </SelectItem>
-                      ))}
-                      {extraFields.length > 0 && (
-                        <>
-                          {extraFields.map((ex) => (
-                            <SelectItem key={ex.id} value={`extra:${ex.id}`}>
-                              Extra: {ex.label || "(sem nome)"}
+              <TooltipProvider delayDuration={250}>
+                {headers.map((h, i) => {
+                  const known = headerHasKnownField(h, extraFields);
+                  const current = mapping[i] ?? "std:ignore";
+                  const showCreate =
+                    !!onCreateExtra && !known && current === "std:ignore" && !!h.trim();
+                  return (
+                    <div key={i} className="grid grid-cols-[1fr_1fr] gap-3 items-center px-3 py-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-sm font-medium truncate">
+                          {h || `Coluna ${i + 1}`}
+                        </span>
+                        {showCreate && (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="h-6 px-2 text-[11px] gap-1 shrink-0"
+                                disabled={creatingExtra === i}
+                                onClick={() => handleCreateExtra(i)}
+                              >
+                                <Plus className="h-3 w-3" />
+                                Extra
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Criar Campo Extra com este nome</TooltipContent>
+                          </Tooltip>
+                        )}
+                      </div>
+                      <Select
+                        value={current}
+                        onValueChange={(v) => setMapping((m) => ({ ...m, [i]: v as MappingValue }))}
+                      >
+                        <SelectTrigger className="h-8">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {STANDARD_OPTIONS.map((o) => (
+                            <SelectItem key={o.value} value={`std:${o.value}`}>
+                              {o.label}
                             </SelectItem>
                           ))}
-                        </>
-                      )}
-                    </SelectContent>
-                  </Select>
-                </div>
-              ))}
+                          {extraFields.length > 0 &&
+                            extraFields.map((ex) => (
+                              <SelectItem key={ex.id} value={`extra:${ex.id}`}>
+                                Extra: {ex.label || "(sem nome)"}
+                              </SelectItem>
+                            ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  );
+                })}
+              </TooltipProvider>
             </div>
 
             <div className="flex justify-between">
