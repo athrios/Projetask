@@ -102,6 +102,7 @@ const emptyClient = (workspaceId: string, userId: string): ClientRecord => ({
   trade_name: "",
   email: "",
   phone: "",
+  birth_date: null,
   address: { pais: "Brasil" },
   cnpj_lookup_snapshot: null,
   notes: "",
