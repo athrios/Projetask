@@ -65,9 +65,11 @@ const CopyButton = ({ getText, className }: { getText: () => string; className?:
 
 const Field = ({ label, value }: { label: string; value: string }) => (
   <div className="flex items-start gap-2 text-xs">
-    <span className="text-muted-foreground w-24 shrink-0 pt-1">{label}</span>
-    <span className="flex-1 text-foreground break-words pt-1">{value}</span>
-    <CopyButton getText={() => value} />
+    <span className="text-muted-foreground w-20 shrink-1 pt-0.5">{label}</span>
+    <div className="flex items-center gap-1 flex-1 min-w-0">
+      <span className="text-foreground break-words">{value}</span>
+      <CopyButton getText={() => value} />
+    </div>
   </div>
 );
 
