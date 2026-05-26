@@ -214,6 +214,31 @@ export const ClientForm = ({ workspaceId, userId, initial, onSaved, onCancel }: 
   };
 
 
+  const getExtraValue = (extraId: string): string => {
+    const found = draft.custom_fields.find(
+      (c) => c.source === "extra" && c.extra_id === extraId,
+    );
+    return found?.value ?? "";
+  };
+
+  const setExtraValue = (ex: ExtraFieldDef, value: string) => {
+    setDraft((d) => {
+      const idx = d.custom_fields.findIndex(
+        (c) => c.source === "extra" && c.extra_id === ex.id,
+      );
+      const entry: CustomField = {
+        source: "extra",
+        extra_id: ex.id,
+        label: ex.label,
+        value,
+      };
+      const next = [...d.custom_fields];
+      if (idx >= 0) next[idx] = entry;
+      else next.push(entry);
+      return { ...d, custom_fields: next };
+    });
+  };
+
   const validate = (): string | null => {
     if (!draft.name.trim()) return "Informe o nome ou razão social.";
     if (draft.client_type === "pessoa_fisica") {
@@ -223,6 +248,11 @@ export const ClientForm = ({ workspaceId, userId, initial, onSaved, onCancel }: 
     }
     if (draft.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(draft.email)) {
       return "E-mail inválido.";
+    }
+    for (const ex of clientSettings.extra_fields) {
+      if (ex.required && !getExtraValue(ex.id).trim()) {
+        return `Preencha o campo extra obrigatório: ${ex.label}`;
+      }
     }
     return null;
   };
