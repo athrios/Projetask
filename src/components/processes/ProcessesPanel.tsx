@@ -881,7 +881,7 @@ const TemplateManager = ({
         workspace_id: workspaceId,
         color: newTplColor,
         template_type: newTplType,
-        table_schema: (newTplType === "table" ? emptyTable() : { columns: [], rows: [] }) as Json,
+        table_schema: (newTplType === "table" ? emptyTable() : { columns: [], rows: [] }) as unknown as Json,
       });
     if (error) return toast.error(error.message);
     toast.success("Modelo criado");
