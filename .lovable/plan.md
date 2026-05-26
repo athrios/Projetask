@@ -1,94 +1,77 @@
 ## Objetivo
 
-Tornar o campo "Grupo de sócios / QSA" totalmente configurável por formulário (adicionar, remover, renomear, reordenar, tipar campos), incluindo um novo campo padrão **Data de nascimento**, e propagar os dados — incluindo campos personalizados por sócio — para resposta, cadastro de cliente e demais telas do QSA. Múltiplos sócios continuam funcionando, cada um com seus próprios valores.
+Na tela de mapeamento da importação de planilha (`ImportClientsDialog`, etapa 2), adicionar um botão discreto **“+ Extra”** ao lado do nome de cada coluna da planilha que ainda não corresponde a um campo conhecido do sistema. Ao clicar, criar automaticamente um Campo Extra global nas configurações de Clientes e já selecioná-lo no dropdown daquela linha.
 
-## 1. Modelo de dados (sem migração de schema)
+## Escopo
 
-Reutilizar a coluna `form_fields.options` (JSONB) já existente. Quando `field_type = 'partner_group'`, `options` passa a guardar o **schema de subcampos do sócio**:
+Apenas frontend, no fluxo de importação. Sem alterações de banco, sem novas tabelas, sem mexer em CNPJ/CEP, sem mudar identidade visual.
 
-```json
-{
-  "partner_schema": [
-    { "id": "nome",            "label": "Nome completo",      "type": "text",       "required": true,  "builtin": true },
-    { "id": "data_nascimento", "label": "Data de nascimento", "type": "date",       "required": false, "builtin": true },
-    { "id": "nacionalidade",   "label": "Nacionalidade",      "type": "text",       "builtin": true },
-    { "id": "naturalidade",    "label": "Naturalidade",       "type": "state_city", "builtin": true },
-    { "id": "profissao",       "label": "Profissão",          "type": "text",       "builtin": true },
-    { "id": "estado_civil",    "label": "Estado civil",       "type": "select",     "options": [...], "builtin": true },
-    { "id": "regime_bens",     "label": "Regime de bens",     "type": "select",     "options": [...], "builtin": true, "visible_when": "estado_civil in [...]" },
-    { "id": "endereco",        "label": "Endereço",           "type": "address",    "builtin": true },
-    { "id": "etnia",           "label": "Etnia",              "type": "select",     "options": [...], "builtin": true },
-    { "id": "participacao",    "label": "Participação (R$)",  "type": "currency",   "builtin": true },
-    { "id": "<uuid>",          "label": "Campo custom",       "type": "email",      "builtin": false }
-  ]
-}
+## Onde mexer
+
+- `src/components/clients/ImportClientsDialog.tsx` — adicionar lógica de detecção, botão e criação inline.
+- `src/components/clients/ClientsPanel.tsx` — passar `onExtraCreated` / garantir recarregamento das settings após criação.
+- Reutilizar `useClientSettings.save()` para persistir o novo `ExtraFieldDef` em `client_settings.extra_fields`.
+
+## Regras de detecção (campo “já existe”)
+
+Para o título de cada coluna da planilha, normalizar (`lowercase`, sem acentos, sem caracteres não alfanuméricos — já existe `normalize()` no arquivo) e considerar como **existente** se:
+
+1. Bate com alguma chave do dicionário `guessMapping` (CNPJ, CPF, nome, e-mail, telefone, endereço, etc.).
+2. Bate (por `normalize`) com o `label` de algum `ExtraFieldDef` em `settings.extra_fields`.
+3. O usuário já mapeou manualmente aquela linha para algo diferente de `std:ignore`.
+
+Caso contrário (mapping atual = `std:ignore` e título não bate com nada) → mostrar botão **“+ Extra”**.
+
+## Botão “+ Extra”
+
+- Pequeno, `variant="ghost"` ou `outline` `size="sm"`, ícone `Plus` + texto “Extra”.
+- Tooltip: “Criar Campo Extra com este nome”.
+- Posicionado ao lado do título na grid existente (`grid-cols-[1fr_1fr]` → ajustar para `grid-cols-[1fr_auto_1fr]` ou agrupar título + botão num flex à esquerda mantendo alinhamento).
+- Desabilitado/oculto se o usuário não tiver permissão `clientes.edit` (a UI atual já só abre esse dialog para quem pode importar; reaproveitar a mesma checagem que `ClientsPanel` faz para o botão “Configurações”). Se já houver um prop/flag de permissão, usar; senão, manter visível e deixar o RLS barrar.
+
+## Ação ao clicar
+
+1. Verificação anti-duplicidade: procurar em `extraFields` algum `label` cujo `normalize()` == `normalize(header)`. Se achar → não criar, apenas setar `mapping[i] = "extra:" + def.id` e sair.
+2. Criar novo `ExtraFieldDef`:
+   ```ts
+   { id: crypto.randomUUID(), label: header.trim(), type: "text", required: false }
+   ```
+3. Chamar `saveSettings({ ...settings, extra_fields: [...settings.extra_fields, novo] }, userId)` — feito via um callback passado pelo `ClientsPanel` (`onCreateExtra(label) => Promise<ExtraFieldDef>`) para manter o hook centralizado no painel.
+4. Após sucesso:
+   - Atualizar a lista local de `extraFields` (vinda por prop) — `ClientsPanel` recarrega settings e re-renderiza o dialog com a nova lista.
+   - `setMapping(m => ({ ...m, [i]: "extra:" + novo.id }))`.
+   - Toast: “Campo Extra criado: {label}”.
+   - O botão desaparece naturalmente porque o título agora bate com um extra existente.
+5. Em caso de erro do `save`, toast de erro e não alterar mapping.
+
+## Importação dos dados
+
+Nenhuma mudança necessária: o pipeline já trata `m.startsWith("extra:")` em `built`, monta `custom_fields` com `source: "extra"` e `extra_id`, e insere normalmente. O `ClientForm`/`ClientsPanel` já renderizam extras a partir de `settings.extra_fields`, então o campo recém-criado aparecerá automaticamente nas configurações, novos cadastros e cards.
+
+## Layout (exemplo)
+
+```text
+┌──────────────────────────────┬──────────────────────────┐
+│ CNPJ                         │ [Dropdown: CNPJ      ▾] │
+│ IE              [+ Extra]    │ [Dropdown: Ignorar   ▾] │
+│ SENHA WEB       [+ Extra]    │ [Dropdown: Ignorar   ▾] │
+│ CPF                          │ [Dropdown: CPF       ▾] │
+└──────────────────────────────┴──────────────────────────┘
 ```
 
-Tipos suportados para subcampos: `text`, `long_text`, `number`, `currency`, `date`, `email`, `phone`, `cpf`, `cnpj`, `select`, `checkbox`, mais os compostos já existentes `state_city` e `address`.
+Após clique em “+ Extra” na linha IE:
 
-Cada sócio passa a ser armazenado como `Record<subfieldId, value>` em `form_responses.data[<field_id>]` (array). Builtins mantêm os ids atuais (`nome`, `nacionalidade`, ...) — **retrocompatível** com respostas e snapshots já gravados.
+```text
+│ IE                           │ [Dropdown: Extra: IE ▾] │
+```
 
-Migração leve em runtime: se um `partner_group` não tiver `partner_schema` salvo, derivar o schema padrão dos builtins atuais + `data_nascimento`. Nada precisa ser reescrito no banco.
+## Critérios de aceite
 
-## 2. UI — Editor de formulário (`FormsPanel.tsx`)
-
-No bloco já existente do `partner_group`:
-- Mantém o input "Rótulo do botão".
-- Novo painel "Campos do sócio":
-  - Lista os subcampos em ordem (drag handle para reordenar).
-  - Por item: editar `label`, alternar `required`, alternar visibilidade (apenas para builtins opcionais — `nome` permanece sempre obrigatório).
-  - Builtins podem ser ocultados (exceto `nome`), mas não excluídos — para preservar dados antigos.
-  - Customs podem ser removidos.
-  - Botão "Adicionar campo" → escolhe tipo (lista acima) e label; para `select`, abre textarea de opções.
-- Persistência via `onUpdate({ options: { partner_schema: [...] } })`.
-
-## 3. UI — Preenchimento (`PartnerGroupField.tsx`)
-
-Refatorar para **renderização dirigida por schema**:
-- Recebe `schema: PartnerSubfield[]` (vindo de `field.options.partner_schema`, com fallback default).
-- Para cada sócio, itera o schema e renderiza o controle correspondente ao `type`:
-  - `text/email/phone/number/currency/cpf/cnpj` → `Input` (com máscara para cpf/cnpj/phone/currency, reusando `@/lib/documents`).
-  - `long_text` → `Textarea`.
-  - `date` → shadcn DatePicker com `pointer-events-auto`.
-  - `select` → `Select` com `options`.
-  - `checkbox` → `Checkbox`.
-  - `state_city` → `StateCityField`.
-  - `address` → `AddressField`.
-- Mantém visual atual (cards `bg-muted/20`, label uppercase `text-[11px]`).
-- Mantém regra condicional `regime_bens` visível só quando casado/união estável.
-- Validação obrigatória aplicada na submissão pelo `PublicForm` usando o schema.
-
-## 4. Visualização da resposta (`RequestsPanel.tsx`)
-
-`SUBFIELD_LABELS` deixa de ser fixo: para cada `partner_group` da resposta, ler `field.options.partner_schema` e renderizar pares label/valor na ordem definida, formatando por tipo (date em `dd/MM/yyyy`, currency em BRL, address via `formatAddress`, state_city como `UF / Cidade`). Botão Copiar é reaproveitado sem alteração.
-
-## 5. Cliente — Cadastro/edição (`ClientForm.tsx`)
-
-Adicionar uma seção colapsável **"Sócios / QSA"**:
-- Reusa `PartnerGroupField` com o **schema padrão** (builtins + `data_nascimento`).
-- Persistido em `clients.custom_fields` como entrada `{ id: "__qsa__", source: "qsa", value: Partner[] }` (mantém o schema atual de `custom_fields` JSONB; não exige migração).
-- Pré-popula a partir de `cnpj_lookup_snapshot.qsa` na criação de PJ (quando ainda vazio), sem sobrescrever edição manual.
-- Exibido também em qualquer outro lugar que mostra detalhes do cliente (`ClientsPanel` cards já iteram `custom_fields` — adicionar renderer dedicado para `__qsa__`).
-
-## 6. Compatibilidade
-
-- Respostas antigas continuam abrindo: leitor usa schema default quando faltam metadados.
-- Snapshots de CNPJ (`cnpj_lookup_snapshot.qsa`) seguem inalterados.
-- Lógica de lookup de CNPJ e CEP não muda.
-
-## 7. Passos de implementação
-
-1. Criar `src/components/forms/fields/partnerSchema.ts` com tipos (`PartnerSubfield`, `PartnerSubfieldType`), schema default (incluindo `data_nascimento`) e helper `resolvePartnerSchema(field)`.
-2. Refatorar `PartnerGroupField.tsx` para render dinâmico baseado em schema, com componentes por tipo.
-3. Em `FormsPanel.tsx`, adicionar o editor de subcampos para `partner_group` (lista + reordenar + adicionar/remover/editar + tipo).
-4. Em `PublicForm.tsx`, passar `schema` resolvido para `PartnerGroupField` e validar required dos subcampos no submit.
-5. Em `RequestsPanel.tsx`, trocar `SUBFIELD_LABELS` por leitura do schema do field correspondente; formatar por tipo.
-6. Em `ClientForm.tsx`, adicionar seção QSA usando `PartnerGroupField` com schema default; persistência via `custom_fields`.
-7. Em `ClientsPanel.tsx`, renderizar a entrada `__qsa__` no card (lista resumida de sócios com copiar).
-8. QA: criar formulário com campo custom (ex.: e-mail do sócio), responder com 2 sócios, validar exibição na resposta e no cliente; abrir resposta antiga (sem schema) e confirmar retrocompat.
-
-## Fora de escopo
-
-- Mudanças no banco (nenhuma migração).
-- Alterações em CNPJ/CEP lookup, identidade visual ou outros módulos.
-- Sincronização contínua com planilhas/Google Sheets.
+- Colunas reconhecidas (CNPJ, CPF, e-mail…) não exibem botão.
+- Colunas não reconhecidas exibem botão “+ Extra” com tooltip.
+- Clique cria o extra global no workspace ativo, sem duplicidade (case/acentos/espaços ignorados).
+- Dropdown da linha passa a “Extra: {label}” automaticamente.
+- Botão some após criação.
+- Extra aparece em Configurações de Clientes, novos cadastros e cards.
+- Valores da coluna são salvos no extra correspondente ao concluir a importação.
+- Tudo isolado pelo `workspace_id` atual via RLS existente.
