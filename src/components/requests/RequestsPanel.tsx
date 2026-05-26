@@ -583,31 +583,58 @@ export const RequestsPanel = ({ userId }: Props) => {
                           <CopyButton getText={() => formatValue(v)} />
                         </div>
                       ) : isPartnerList ? (
-                        <div className="space-y-2 mt-1">
-                          {(v as Array<Record<string, unknown>>).map((row, i) => (
-                            <div key={i} className="rounded-md border p-2 bg-background text-xs space-y-0.5">
-                              <div className="flex items-center justify-between mb-1">
-                                <p className="font-semibold">Sócio {i + 1}</p>
-                                <CopyButton
-                                  getText={() =>
-                                    Object.entries(row)
-                                      .map(([kk, vv]) => `${prettySubLabel(kk)}: ${formatValue(vv)}`)
-                                      .join("\n")
-                                  }
-                                />
-                              </div>
-                              {Object.entries(row).map(([kk, vv]) => (
-                                <div key={kk} className="flex items-start gap-2">
-                                  <p className="flex-1">
-                                    <span className="text-muted-foreground">{prettySubLabel(kk)}: </span>
-                                    {formatValue(vv)}
-                                  </p>
-                                  <CopyButton getText={() => formatValue(vv)} />
+                        (() => {
+                          const partnerSchema = openPartnerSchemas.get(k);
+                          const subLabel = (kk: string) => {
+                            const def = partnerSchema?.find((s) => s.id === kk);
+                            return def?.label ?? prettySubLabel(kk);
+                          };
+                          const orderedRowEntries = (row: Record<string, unknown>) => {
+                            const entries = Object.entries(row);
+                            if (!partnerSchema) return entries;
+                            const order = new Map(partnerSchema.map((s, i) => [s.id, i]));
+                            return entries.sort(([a], [b]) => {
+                              const ai = order.has(a) ? (order.get(a) as number) : Number.MAX_SAFE_INTEGER;
+                              const bi = order.has(b) ? (order.get(b) as number) : Number.MAX_SAFE_INTEGER;
+                              return ai - bi;
+                            });
+                          };
+                          return (
+                            <div className="space-y-2 mt-1">
+                              {(v as Array<Record<string, unknown>>).map((row, i) => (
+                                <div key={i} className="rounded-md border p-2 bg-background text-xs space-y-0.5">
+                                  <div className="flex items-center justify-between mb-1">
+                                    <p className="font-semibold">Sócio {i + 1}</p>
+                                    <CopyButton
+                                      getText={() =>
+                                        orderedRowEntries(row)
+                                          .map(([kk, vv]) => `${subLabel(kk)}: ${formatValue(vv)}`)
+                                          .join("\n")
+                                      }
+                                    />
+                                  </div>
+                                  {orderedRowEntries(row).map(([kk, vv]) => {
+                                    const empty =
+                                      vv === null ||
+                                      vv === undefined ||
+                                      vv === "" ||
+                                      (Array.isArray(vv) && vv.length === 0);
+                                    if (empty) return null;
+                                    return (
+                                      <div key={kk} className="flex items-start gap-2">
+                                        <p className="flex-1">
+                                          <span className="text-muted-foreground">{subLabel(kk)}: </span>
+                                          {formatValue(vv)}
+                                        </p>
+                                        <CopyButton getText={() => formatValue(vv)} />
+                                      </div>
+                                    );
+                                  })}
                                 </div>
                               ))}
                             </div>
-                          ))}
-                        </div>
+                          );
+                        })()
                       ) : (
                         <div className="flex items-start gap-2">
                           <p className="text-sm whitespace-pre-wrap flex-1">{formatValue(v)}</p>
