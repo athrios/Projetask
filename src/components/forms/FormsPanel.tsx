@@ -699,13 +699,21 @@ const SortableFieldCard = ({
         />
       )}
       {f.field_type === "partner_group" && (
-        <Input
-          defaultValue={f.add_button_label ?? ""}
-          placeholder='Rótulo do botão (padrão: "Adicionar sócio")'
-          className="text-xs h-8"
-          maxLength={60}
-          onBlur={(e) => onUpdate({ add_button_label: e.target.value.trim() || null } as Partial<Field>)}
-        />
+        <div className="space-y-2">
+          <Input
+            defaultValue={f.add_button_label ?? ""}
+            placeholder='Rótulo do botão (padrão: "Adicionar sócio")'
+            className="text-xs h-8"
+            maxLength={60}
+            onBlur={(e) => onUpdate({ add_button_label: e.target.value.trim() || null } as Partial<Field>)}
+          />
+          <PartnerSchemaEditor
+            options={f.options}
+            onChange={(partner_schema) =>
+              onUpdate({ options: { partner_schema } as unknown as never })
+            }
+          />
+        </div>
       )}
       {f.field_type === "cnpj" && (
         <div className="rounded-md border border-border bg-muted/30 p-3 space-y-1">
