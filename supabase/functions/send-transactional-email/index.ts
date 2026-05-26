@@ -25,9 +25,13 @@ function generateToken(): string {
     .join('')
 }
 
-// Auth note: this function uses verify_jwt = true in config.toml, so Supabase's
-// gateway validates the caller's JWT (anon or service_role) before the request
-// reaches this code. No in-function auth check is needed.
+// Auth note: verify_jwt = true means the gateway validates the JWT signature,
+// but the anon key is public — anyone on the internet can produce a valid anon
+// JWT. We therefore additionally enforce in-function authorization below: only
+// service_role callers may pass arbitrary recipient/templateData. Authenticated
+// end-users are restricted to a whitelist of templates whose recipient and
+// template data are resolved server-side from trusted database rows.
+const PUBLIC_APP_URL = 'https://ambitask.lovable.app'
 
 Deno.serve(async (req) => {
   // Handle CORS preflight
@@ -37,8 +41,9 @@ Deno.serve(async (req) => {
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL')
   const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+  const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')
 
-  if (!supabaseUrl || !supabaseServiceKey) {
+  if (!supabaseUrl || !supabaseServiceKey || !supabaseAnonKey) {
     console.error('Missing required environment variables')
     return new Response(
       JSON.stringify({ error: 'Server configuration error' }),
@@ -55,10 +60,12 @@ Deno.serve(async (req) => {
   let idempotencyKey: string
   let messageId: string
   let templateData: Record<string, any> = {}
+  let invitationId: string | undefined
   try {
     const body = await req.json()
     templateName = body.templateName || body.template_name
     recipientEmail = body.recipientEmail || body.recipient_email
+    invitationId = body.invitationId || body.invitation_id
     messageId = crypto.randomUUID()
     idempotencyKey = body.idempotencyKey || body.idempotency_key || messageId
     if (body.templateData && typeof body.templateData === 'object') {
@@ -83,6 +90,98 @@ Deno.serve(async (req) => {
       }
     )
   }
+
+  // ---- Authorization & input-trust gate ----------------------------------
+  // The gateway validated the JWT signature, but anon JWTs are public. We
+  // require service_role for arbitrary sends; end-users are restricted to a
+  // whitelist where recipient/templateData are resolved server-side.
+  const authHeader = req.headers.get('Authorization') ?? ''
+  const callerToken = authHeader.replace(/^Bearer\s+/i, '')
+  let callerRole: string | null = null
+  let callerUserId: string | null = null
+  if (callerToken) {
+    const authClient = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: `Bearer ${callerToken}` } },
+    })
+    const { data: claimsData } = await authClient.auth.getClaims(callerToken)
+    callerRole = (claimsData?.claims?.role as string | undefined) ?? null
+    callerUserId = (claimsData?.claims?.sub as string | undefined) ?? null
+  }
+
+  const isServiceRole = callerRole === 'service_role'
+
+  if (!isServiceRole) {
+    if (!callerUserId) {
+      return new Response(
+        JSON.stringify({ error: 'Authentication required' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    if (templateName !== 'workspace-invite') {
+      return new Response(
+        JSON.stringify({ error: 'Template not allowed for this caller' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    if (!invitationId || typeof invitationId !== 'string') {
+      return new Response(
+        JSON.stringify({ error: 'invitationId is required for workspace-invite' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    const adminClient = createClient(supabaseUrl, supabaseServiceKey)
+    const { data: invite, error: inviteErr } = await adminClient
+      .from('workspace_invitations')
+      .select('id, email, workspace_id, invited_by')
+      .eq('id', invitationId)
+      .maybeSingle()
+
+    if (inviteErr || !invite) {
+      return new Response(
+        JSON.stringify({ error: 'Invitation not found' }),
+        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    const { data: isMember } = await adminClient.rpc('is_workspace_member', {
+      _ws: invite.workspace_id,
+      _uid: callerUserId,
+    })
+    if (invite.invited_by !== callerUserId && !isMember) {
+      return new Response(
+        JSON.stringify({ error: 'Forbidden' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    const { data: ws } = await adminClient
+      .from('workspaces')
+      .select('name')
+      .eq('id', invite.workspace_id)
+      .maybeSingle()
+
+    let inviterName = 'Alguém'
+    const { data: inviterUser } = await adminClient.auth.admin.getUserById(invite.invited_by)
+    const meta = inviterUser?.user?.user_metadata as Record<string, unknown> | undefined
+    inviterName =
+      (meta?.full_name as string | undefined) ||
+      (meta?.name as string | undefined) ||
+      inviterUser?.user?.email ||
+      'Alguém'
+
+    // Overwrite any client-supplied values with server-trusted ones.
+    recipientEmail = invite.email
+    templateData = {
+      inviterName,
+      workspaceName: ws?.name ?? 'Workspace',
+      acceptUrl: `${PUBLIC_APP_URL}/convite/${invite.id}`,
+    }
+    idempotencyKey = `workspace-invite-${invite.id}-${idempotencyKey}`
+  }
+  // ------------------------------------------------------------------------
 
   // 1. Look up template from registry (early — needed to resolve recipient)
   const template = TEMPLATES[templateName]
