@@ -625,6 +625,183 @@ const FormBuilder = ({
   );
 };
 
+// ---------- Partner (QSA) subfield schema editor ----------
+import {
+  resolvePartnerSchema,
+  REQUIRED_BUILTIN_IDS,
+  type PartnerSubfield,
+  type PartnerSubfieldType,
+} from "@/components/forms/fields/partnerSchema";
+
+const PARTNER_SUBFIELD_TYPES: { value: PartnerSubfieldType; label: string }[] = [
+  { value: "text", label: "Texto" },
+  { value: "long_text", label: "Texto longo" },
+  { value: "number", label: "Número" },
+  { value: "currency", label: "Valor (R$)" },
+  { value: "date", label: "Data" },
+  { value: "email", label: "E-mail" },
+  { value: "phone", label: "Telefone" },
+  { value: "cpf", label: "CPF" },
+  { value: "cnpj", label: "CNPJ" },
+  { value: "select", label: "Seleção" },
+  { value: "checkbox", label: "Caixa de seleção" },
+  { value: "state_city", label: "UF + Cidade" },
+  { value: "address", label: "Endereço" },
+];
+
+const PartnerSchemaEditor = ({
+  options,
+  onChange,
+}: {
+  options: unknown;
+  onChange: (next: PartnerSubfield[]) => void;
+}) => {
+  const schema = resolvePartnerSchema(options);
+
+  const patch = (idx: number, p: Partial<PartnerSubfield>) => {
+    const next = schema.map((s, i) => (i === idx ? { ...s, ...p } : s));
+    onChange(next);
+  };
+  const move = (idx: number, dir: -1 | 1) => {
+    const j = idx + dir;
+    if (j < 0 || j >= schema.length) return;
+    const next = [...schema];
+    [next[idx], next[j]] = [next[j], next[idx]];
+    onChange(next);
+  };
+  const remove = (idx: number) => onChange(schema.filter((_, i) => i !== idx));
+  const add = () =>
+    onChange([
+      ...schema,
+      {
+        id: crypto.randomUUID(),
+        label: "Novo campo",
+        type: "text",
+        required: false,
+        builtin: false,
+      },
+    ]);
+
+  return (
+    <div className="rounded-md border bg-muted/20 p-2 space-y-2">
+      <div className="flex items-center justify-between">
+        <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+          Campos do sócio
+        </p>
+        <Button type="button" size="sm" variant="outline" className="h-7 gap-1" onClick={add}>
+          <Plus className="h-3 w-3" /> Adicionar campo
+        </Button>
+      </div>
+      <ul className="space-y-1.5">
+        {schema.map((s, i) => {
+          const isRequiredBuiltin = REQUIRED_BUILTIN_IDS.has(s.id);
+          return (
+            <li
+              key={s.id}
+              className="rounded border bg-card p-2 space-y-1.5"
+            >
+              <div className="flex items-center gap-1.5">
+                <div className="flex flex-col">
+                  <button
+                    type="button"
+                    onClick={() => move(i, -1)}
+                    disabled={i === 0}
+                    className="text-muted-foreground hover:text-foreground disabled:opacity-30 text-[10px] leading-none"
+                    title="Mover para cima"
+                  >
+                    ▲
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => move(i, 1)}
+                    disabled={i === schema.length - 1}
+                    className="text-muted-foreground hover:text-foreground disabled:opacity-30 text-[10px] leading-none"
+                    title="Mover para baixo"
+                  >
+                    ▼
+                  </button>
+                </div>
+                <Input
+                  value={s.label}
+                  onChange={(e) => patch(i, { label: e.target.value })}
+                  className="h-7 text-xs flex-1"
+                  maxLength={80}
+                />
+                <Select
+                  value={s.type}
+                  onValueChange={(v) => patch(i, { type: v as PartnerSubfieldType })}
+                  disabled={s.builtin}
+                >
+                  <SelectTrigger className="h-7 w-[130px] text-[11px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PARTNER_SUBFIELD_TYPES.map((t) => (
+                      <SelectItem key={t.value} value={t.value} className="text-xs">
+                        {t.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {s.builtin ? (
+                  <button
+                    type="button"
+                    onClick={() => patch(i, { hidden: !s.hidden })}
+                    disabled={isRequiredBuiltin}
+                    className="text-[10px] uppercase px-1.5 py-0.5 rounded border text-muted-foreground hover:text-foreground disabled:opacity-40"
+                    title={s.hidden ? "Mostrar campo" : "Ocultar campo"}
+                  >
+                    {s.hidden ? "oculto" : "visível"}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => remove(i)}
+                    className="p-1 text-muted-foreground hover:text-destructive"
+                    title="Remover"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </button>
+                )}
+              </div>
+              <div className="flex items-center gap-3 pl-7">
+                <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground cursor-pointer">
+                  <Switch
+                    checked={!!s.required}
+                    onCheckedChange={(v) => patch(i, { required: v })}
+                    disabled={isRequiredBuiltin}
+                  />
+                  <span>Obrigatório</span>
+                </label>
+                {s.builtin && (
+                  <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                    Padrão
+                  </span>
+                )}
+              </div>
+              {s.type === "select" && (
+                <Textarea
+                  defaultValue={(s.options ?? []).join("\n")}
+                  placeholder="Uma opção por linha"
+                  className="text-[11px] min-h-[48px] ml-7"
+                  onBlur={(e) =>
+                    patch(i, {
+                      options: e.target.value
+                        .split("\n")
+                        .map((x) => x.trim())
+                        .filter(Boolean),
+                    })
+                  }
+                />
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+};
+
 const SortableFieldCard = ({
   field: f,
   allFields,
