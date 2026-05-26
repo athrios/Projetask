@@ -361,7 +361,7 @@ export const ImportClientsDialog = ({
       }));
       const { error } = await supabase
         .from("clients")
-        .insert(slice as unknown as Partial<ClientRecord>[]);
+        .insert(slice as never);
       if (error) {
         toast.error("Erro no lote: " + error.message);
         setImporting(false);
