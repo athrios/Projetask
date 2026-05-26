@@ -30,6 +30,7 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useClientSettings, type ExtraFieldDef } from "@/hooks/useClientSettings";
 
 export type ClientType = "pessoa_fisica" | "pessoa_juridica" | "estrangeiro";
 
@@ -115,6 +116,7 @@ interface Props {
 }
 
 export const ClientForm = ({ workspaceId, userId, initial, onSaved, onCancel }: Props) => {
+  const { settings: clientSettings } = useClientSettings(workspaceId);
   const [draft, setDraft] = useState<ClientRecord>(
     initial ?? emptyClient(workspaceId, userId),
   );
