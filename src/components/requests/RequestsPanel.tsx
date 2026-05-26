@@ -216,6 +216,9 @@ export const RequestsPanel = ({ userId }: Props) => {
   const [open, setOpen] = useState<Response | null>(null);
   const [openFormLabels, setOpenFormLabels] = useState<Set<string>>(new Set());
   const [openFieldOrder, setOpenFieldOrder] = useState<Map<string, number>>(new Map());
+  const [openPartnerSchemas, setOpenPartnerSchemas] = useState<Map<string, PartnerSubfield[]>>(
+    new Map(),
+  );
 
   const load = async () => {
     if (!workspaceId) return;
@@ -240,20 +243,37 @@ export const RequestsPanel = ({ userId }: Props) => {
 
   // Carrega os labels reais das perguntas do formulário aberto, para validar chaves técnicas
   useEffect(() => {
-    if (!open) { setOpenFormLabels(new Set()); setOpenFieldOrder(new Map()); return; }
+    if (!open) {
+      setOpenFormLabels(new Set());
+      setOpenFieldOrder(new Map());
+      setOpenPartnerSchemas(new Map());
+      return;
+    }
     let cancel = false;
     (async () => {
       const { data } = await supabase
         .from("form_fields")
-        .select("label,position")
+        .select("label,position,field_type,options")
         .eq("form_id", open.form_id)
         .order("position", { ascending: true });
       if (cancel) return;
-      const rows = (data ?? []) as Array<{ label: string; position: number }>;
+      const rows = (data ?? []) as Array<{
+        label: string;
+        position: number;
+        field_type: string;
+        options: unknown;
+      }>;
       setOpenFormLabels(new Set(rows.map((x) => x.label)));
       const ord = new Map<string, number>();
       rows.forEach((x, i) => ord.set(x.label, i));
       setOpenFieldOrder(ord);
+      const ps = new Map<string, PartnerSubfield[]>();
+      for (const row of rows) {
+        if (row.field_type === "partner_group") {
+          ps.set(row.label, resolvePartnerSchema(row.options));
+        }
+      }
+      setOpenPartnerSchemas(ps);
     })();
     return () => { cancel = true; };
   }, [open]);
