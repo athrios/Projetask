@@ -287,6 +287,9 @@ export const ClientsPanel = ({ userId }: { userId: string }) => {
                           value={c.value || ""}
                         />
                       ))}
+                      {qsaCount > 0 && (
+                        <Field label="Sócios / QSA" value={`${qsaCount} sócio(s)`} />
+                      )}
                     </div>
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
