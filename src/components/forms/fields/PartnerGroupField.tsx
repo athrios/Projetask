@@ -1,6 +1,5 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -10,6 +9,7 @@ import {
 } from "@/components/ui/select";
 import { Plus, Trash2, UserPlus } from "lucide-react";
 import { StateCityField, StateCityValue } from "./StateCityField";
+import { AddressField, type AddressValue } from "./AddressField";
 
 export interface Partner {
   nome?: string;
@@ -18,7 +18,7 @@ export interface Partner {
   profissao?: string;
   estado_civil?: string;
   regime_bens?: string;
-  endereco?: string;
+  endereco?: AddressValue;
   etnia?: string;
   participacao?: string;
 }
@@ -160,10 +160,9 @@ export const PartnerGroupField = ({
             )}
 
             <Field label="Endereço residencial">
-              <Textarea
-                value={p.endereco ?? ""}
-                onChange={(e) => update(i, { endereco: e.target.value })}
-                className="min-h-[60px]"
+              <AddressField
+                value={typeof p.endereco === "object" && p.endereco !== null ? p.endereco : undefined}
+                onChange={(v) => update(i, { endereco: v })}
               />
             </Field>
 
