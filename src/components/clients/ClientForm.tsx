@@ -524,7 +524,8 @@ export const ClientForm = ({ workspaceId, userId, initial, onSaved, onCancel }: 
             />
           </div>
         </div>
-      </section>
+
+
 
         {draft.client_type === "pessoa_fisica" && (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
