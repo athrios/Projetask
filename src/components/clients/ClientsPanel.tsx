@@ -21,7 +21,8 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { EmptyState } from "@/components/shared/EmptyState";
-import { Users, Plus, Search, Trash2, Pencil, Copy, Check, Settings, Upload } from "lucide-react";
+import { Users, Plus, Search, Trash2, Pencil, Settings, Upload } from "lucide-react";
+import { CopyButton } from "@/components/shared/CopyButton";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { ClientForm, type ClientRecord, type CustomField } from "./ClientForm";
@@ -41,35 +42,6 @@ const TYPE_LABEL: Record<ClientRecord["client_type"], string> = {
   estrangeiro: "Estrangeiro",
 };
 
-const CopyButton = ({ getText, className }: { getText: () => string; className?: string }) => {
-  const [done, setDone] = useState(false);
-  const onClick = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    e.preventDefault();
-    try {
-      await navigator.clipboard.writeText(getText());
-      setDone(true);
-      toast.success("Copiado");
-      setTimeout(() => setDone(false), 1500);
-    } catch {
-      toast.error("Não foi possível copiar");
-    }
-  };
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-label="Copiar"
-      title="Copiar"
-      className={cn(
-        "inline-flex items-center justify-center h-6 w-6 rounded text-muted-foreground hover:text-foreground hover:bg-muted shrink-0",
-        className,
-      )}
-    >
-      {done ? <Check className="h-3.5 w-3.5 text-[hsl(var(--status-feita))]" /> : <Copy className="h-3.5 w-3.5" />}
-    </button>
-  );
-};
 
 const Field = ({ label, value }: { label: string; value: string }) => (
   <div className="flex items-start gap-2 text-xs">
