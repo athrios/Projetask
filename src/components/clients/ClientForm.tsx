@@ -57,6 +57,7 @@ export interface ClientRecord {
   trade_name: string;
   email: string;
   phone: string;
+  birth_date: string | null;
   address: ClientAddress;
   cnpj_lookup_snapshot: unknown | null;
   notes: string;
