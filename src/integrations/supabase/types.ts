@@ -124,6 +124,7 @@ export type Database = {
       clients: {
         Row: {
           address: Json
+          birth_date: string | null
           client_type: string
           cnpj_lookup_snapshot: Json | null
           created_at: string
@@ -141,6 +142,7 @@ export type Database = {
         }
         Insert: {
           address?: Json
+          birth_date?: string | null
           client_type?: string
           cnpj_lookup_snapshot?: Json | null
           created_at?: string
@@ -158,6 +160,7 @@ export type Database = {
         }
         Update: {
           address?: Json
+          birth_date?: string | null
           client_type?: string
           cnpj_lookup_snapshot?: Json | null
           created_at?: string
