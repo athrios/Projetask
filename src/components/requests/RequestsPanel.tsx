@@ -27,6 +27,10 @@ import { logActivity } from "@/lib/activityLog";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { colorPill, asColor, type TemplateColor } from "@/components/processes/templateColors";
 import { cn } from "@/lib/utils";
+import {
+  resolvePartnerSchema,
+  type PartnerSubfield,
+} from "@/components/forms/fields/partnerSchema";
 
 interface FormRow { id: string; title: string; color: string }
 interface CnpjSnapshot {
