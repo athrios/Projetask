@@ -896,7 +896,7 @@ const TemplateManager = ({
     if (!schema) return;
     const { error } = await supabase
       .from("process_templates")
-      .update({ table_schema: schema as Json })
+      .update({ table_schema: schema as unknown as Json })
       .eq("id", id);
     if (error) return toast.error(error.message);
     toast.success("Tabela do modelo salva");
