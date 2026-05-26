@@ -21,8 +21,9 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { EmptyState } from "@/components/shared/EmptyState";
-import { Users, Plus, Search, Mail, Phone, Trash2, Pencil } from "lucide-react";
+import { Users, Plus, Search, Trash2, Pencil, Copy, Check } from "lucide-react";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 import { ClientForm, type ClientRecord } from "./ClientForm";
 import { maskCpf, maskCnpj } from "@/lib/documents";
 
@@ -30,6 +31,56 @@ const TYPE_LABEL: Record<ClientRecord["client_type"], string> = {
   pessoa_fisica: "PF",
   pessoa_juridica: "PJ",
   estrangeiro: "Estrangeiro",
+};
+
+const CopyButton = ({ getText, className }: { getText: () => string; className?: string }) => {
+  const [done, setDone] = useState(false);
+  const onClick = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    try {
+      await navigator.clipboard.writeText(getText());
+      setDone(true);
+      toast.success("Copiado");
+      setTimeout(() => setDone(false), 1500);
+    } catch {
+      toast.error("Não foi possível copiar");
+    }
+  };
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label="Copiar"
+      title="Copiar"
+      className={cn(
+        "inline-flex items-center justify-center h-6 w-6 rounded text-muted-foreground hover:text-foreground hover:bg-muted shrink-0",
+        className,
+      )}
+    >
+      {done ? <Check className="h-3.5 w-3.5 text-[hsl(var(--status-feita))]" /> : <Copy className="h-3.5 w-3.5" />}
+    </button>
+  );
+};
+
+const Field = ({ label, value }: { label: string; value: string }) => (
+  <div className="flex items-start gap-2 text-xs">
+    <span className="text-muted-foreground w-24 shrink-0 pt-1">{label}</span>
+    <span className="flex-1 text-foreground break-words pt-1">{value}</span>
+    <CopyButton getText={() => value} />
+  </div>
+);
+
+const formatAddress = (a: ClientRecord["address"]): string => {
+  if (!a) return "";
+  const street = [a.logradouro, a.numero].filter(Boolean).join(", ");
+  const withCompl = [street, a.complemento].filter(Boolean).join(" - ");
+  const cityUf = [a.cidade, a.uf].filter(Boolean).join("/");
+  const tail = [a.bairro, cityUf].filter(Boolean).join(", ");
+  const cep = a.cep ? ` – CEP ${a.cep}` : "";
+  const pais = a.pais ? `, ${a.pais}` : "";
+  const result = [withCompl, tail].filter(Boolean).join(", ") + cep + pais;
+  return result.trim();
 };
 
 export const ClientsPanel = ({ userId }: { userId: string }) => {
@@ -133,70 +184,70 @@ export const ClientsPanel = ({ userId }: { userId: string }) => {
           }
         />
       ) : (
-        <div className="rounded-lg border bg-card divide-y">
-          {filtered.map((r) => (
-            <button
-              key={r.id}
-              type="button"
-              onClick={() => canEdit && setEditing(r)}
-              className="w-full text-left px-4 py-3 hover:bg-muted/40 transition-colors flex items-center gap-3"
-            >
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="font-medium text-sm truncate">{r.name || "—"}</span>
-                  <Badge variant="secondary" className="text-[10px]">
-                    {TYPE_LABEL[r.client_type]}
-                  </Badge>
-                  {r.trade_name && (
-                    <span className="text-xs text-muted-foreground truncate">
-                      ({r.trade_name})
-                    </span>
-                  )}
-                </div>
-                <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-3 flex-wrap">
-                  {r.document && <span>{formatDoc(r)}</span>}
-                  {r.email && (
-                    <span className="flex items-center gap-1">
-                      <Mail className="h-3 w-3" /> {r.email}
-                    </span>
-                  )}
-                  {r.phone && (
-                    <span className="flex items-center gap-1">
-                      <Phone className="h-3 w-3" /> {r.phone}
-                    </span>
-                  )}
+        <div className="space-y-2">
+          {filtered.map((r) => {
+            const doc = r.document ? formatDoc(r) : "";
+            const address = formatAddress(r.address);
+            const customs = (r.custom_fields ?? []).filter(
+              (c) => c && (c.label || c.value),
+            );
+            return (
+              <div
+                key={r.id}
+                className="rounded-lg border bg-card px-4 py-3 hover:bg-muted/20 transition-colors"
+              >
+                <div className="flex items-start gap-3">
+                  <div className="flex-1 min-w-0 space-y-2">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-medium text-sm">{r.name || "—"}</span>
+                      <Badge variant="secondary" className="text-[10px]">
+                        {TYPE_LABEL[r.client_type]}
+                      </Badge>
+                    </div>
+                    <div className="space-y-1">
+                      {doc && <Field label="Documento" value={doc} />}
+                      {r.trade_name && <Field label="Nome fantasia" value={r.trade_name} />}
+                      {r.email && <Field label="E-mail" value={r.email} />}
+                      {r.phone && <Field label="Telefone" value={r.phone} />}
+                      {address && <Field label="Endereço" value={address} />}
+                      {r.notes && <Field label="Observações" value={r.notes} />}
+                      {customs.map((c, i) => (
+                        <Field
+                          key={i}
+                          label={c.label || `Campo ${i + 1}`}
+                          value={c.value || ""}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    {canEdit && (
+                      <button
+                        type="button"
+                        onClick={() => setEditing(r)}
+                        className="p-1.5 rounded hover:bg-muted text-muted-foreground"
+                        title="Editar"
+                        aria-label="Editar"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                    {canDelete && (
+                      <button
+                        type="button"
+                        onClick={() => setToDelete(r)}
+                        className="p-1.5 rounded hover:bg-muted text-muted-foreground"
+                        title="Excluir"
+                        aria-label="Excluir"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
-              <div className="flex items-center gap-1 shrink-0">
-                {canEdit && (
-                  <span
-                    role="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setEditing(r);
-                    }}
-                    className="p-1.5 rounded hover:bg-muted text-muted-foreground"
-                    title="Editar"
-                  >
-                    <Pencil className="h-3.5 w-3.5" />
-                  </span>
-                )}
-                {canDelete && (
-                  <span
-                    role="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setToDelete(r);
-                    }}
-                    className="p-1.5 rounded hover:bg-muted text-muted-foreground"
-                    title="Excluir"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </span>
-                )}
-              </div>
-            </button>
-          ))}
+            );
+          })}
         </div>
       )}
 
