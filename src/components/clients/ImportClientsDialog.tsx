@@ -170,6 +170,7 @@ export const ImportClientsDialog = ({
   workspaceId,
   userId,
   extraFields,
+  onCreateExtra,
   onImported,
 }: Props) => {
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
@@ -179,6 +180,30 @@ export const ImportClientsDialog = ({
   const [defaultType, setDefaultType] = useState<ClientType>("pessoa_fisica");
   const [progress, setProgress] = useState(0);
   const [importing, setImporting] = useState(false);
+  const [creatingExtra, setCreatingExtra] = useState<number | null>(null);
+
+  const handleCreateExtra = async (index: number) => {
+    if (!onCreateExtra) return;
+    const header = (headers[index] ?? "").trim();
+    if (!header) return;
+    const n = normalize(header);
+    const existing = extraFields.find((e) => normalize(e.label) === n);
+    if (existing) {
+      setMapping((m) => ({ ...m, [index]: `extra:${existing.id}` }));
+      toast.info(`Campo Extra "${existing.label}" já existe; selecionado.`);
+      return;
+    }
+    setCreatingExtra(index);
+    try {
+      const novo = await onCreateExtra(header);
+      setMapping((m) => ({ ...m, [index]: `extra:${novo.id}` }));
+      toast.success(`Campo Extra criado: ${novo.label}`);
+    } catch (e) {
+      toast.error("Erro ao criar Campo Extra: " + (e as Error).message);
+    } finally {
+      setCreatingExtra(null);
+    }
+  };
 
   const reset = () => {
     setStep(1);
