@@ -36,6 +36,8 @@ export type ClientType = "pessoa_fisica" | "pessoa_juridica" | "estrangeiro";
 export interface CustomField {
   label: string;
   value: string;
+  source?: "extra";
+  extra_id?: string;
 }
 
 export interface ClientAddress extends AddressValue {
