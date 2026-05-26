@@ -50,6 +50,104 @@ export type Database = {
         }
         Relationships: []
       }
+      client_attachments: {
+        Row: {
+          client_id: string
+          created_at: string
+          file_name: string
+          file_path: string
+          id: string
+          mime_type: string
+          size_bytes: number
+          user_id: string
+          workspace_id: string
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          file_name: string
+          file_path: string
+          id?: string
+          mime_type?: string
+          size_bytes?: number
+          user_id: string
+          workspace_id: string
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          file_name?: string
+          file_path?: string
+          id?: string
+          mime_type?: string
+          size_bytes?: number
+          user_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_attachments_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      clients: {
+        Row: {
+          address: Json
+          client_type: string
+          cnpj_lookup_snapshot: Json | null
+          created_at: string
+          custom_fields: Json
+          document: string
+          email: string
+          id: string
+          name: string
+          notes: string
+          phone: string
+          trade_name: string
+          updated_at: string
+          user_id: string
+          workspace_id: string
+        }
+        Insert: {
+          address?: Json
+          client_type?: string
+          cnpj_lookup_snapshot?: Json | null
+          created_at?: string
+          custom_fields?: Json
+          document?: string
+          email?: string
+          id?: string
+          name: string
+          notes?: string
+          phone?: string
+          trade_name?: string
+          updated_at?: string
+          user_id: string
+          workspace_id: string
+        }
+        Update: {
+          address?: Json
+          client_type?: string
+          cnpj_lookup_snapshot?: Json | null
+          created_at?: string
+          custom_fields?: Json
+          document?: string
+          email?: string
+          id?: string
+          name?: string
+          notes?: string
+          phone?: string
+          trade_name?: string
+          updated_at?: string
+          user_id?: string
+          workspace_id?: string
+        }
+        Relationships: []
+      }
       cnpj_lookup_cache: {
         Row: {
           cnpj: string
