@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import type { Json } from "@/integrations/supabase/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -180,8 +181,8 @@ export const ProcessesPanel = ({ userId }: Props) => {
         status: "nao_iniciado",
         due_date: dueDate,
         template_type: isTable ? "table" : "tasks",
-        table_data: tableData,
-      } as never)
+        table_data: tableData as Json,
+      })
       .select()
       .single();
     if (error || !proc) return toast.error(error?.message ?? "Erro");
@@ -195,7 +196,7 @@ export const ProcessesPanel = ({ userId }: Props) => {
         .order("position", { ascending: true });
       if (stepsError) return toast.error(stepsError.message);
       const baseISO = (dueDate ?? proc.created_at?.slice(0, 10) ?? new Date().toISOString().slice(0, 10));
-      const rows = (tmplSteps ?? []).map((s, i) => {
+      const rows: import('@/integrations/supabase/types').Database['public']['Tables']['process_steps']['Insert'][] = (tmplSteps ?? []).map((s, i) => {
         const offset = (s as { due_offset_days?: number }).due_offset_days ?? 0;
         return {
           process_id: proc.id,
@@ -208,7 +209,7 @@ export const ProcessesPanel = ({ userId }: Props) => {
         };
       });
       if (rows.length) {
-        const { error: insertStepsError } = await supabase.from("process_steps").insert(rows as never);
+        const { error: insertStepsError } = await supabase.from("process_steps").insert(rows);
         if (insertStepsError) return toast.error(insertStepsError.message);
       }
     }
@@ -222,8 +223,8 @@ export const ProcessesPanel = ({ userId }: Props) => {
     const proc = processes.find((p) => p.id === id);
     const { error } = await supabase.from("processes").delete().eq("id", id);
     if (error) return toast.error(error.message);
-    await logActivity(userId, "process", id, "deleted", `Processo excluÃ­do: "${proc?.name ?? ""}"`);
-    toast.success("Processo excluÃ­do");
+    await logActivity(userId, "process", id, "deleted", `Processo excluÃƒÂ­do: "${proc?.name ?? ""}"`);
+    toast.success("Processo excluÃƒÂ­do");
     load();
   };
 
@@ -233,7 +234,7 @@ export const ProcessesPanel = ({ userId }: Props) => {
     const s = procSteps.find((x) => x.id === stepId);
     if (!s || !proc || s.status === next) return;
     const now = new Date().toISOString();
-    const patch: Record<string, unknown> = { status: next };
+    const patch: import('@/integrations/supabase/types').Database['public']['Tables']['process_steps']['Update'] = { status: next };
     if (next === "feita") {
       patch.completed_at = now;
     } else if (next === "pulado") {
@@ -243,7 +244,7 @@ export const ProcessesPanel = ({ userId }: Props) => {
       patch.dismissed_at = null;
       if (next !== "pendente" && !s.started_at) patch.started_at = now;
     }
-    const { error } = await supabase.from("process_steps").update(patch as never).eq("id", stepId);
+    const { error } = await supabase.from("process_steps").update(patch).eq("id", stepId);
     if (error) return toast.error(error.message);
     let after: Step[] = procSteps.map((x) =>
       x.id === stepId ? ({ ...x, ...patch, status: next } as Step) : x,
@@ -272,8 +273,8 @@ export const ProcessesPanel = ({ userId }: Props) => {
     if (nextProcStatus !== proc.status) {
       await supabase.from("processes").update({ status: nextProcStatus }).eq("id", proc.id);
       if (nextProcStatus === "concluido") {
-        await logActivity(userId, "process", proc.id, "completed", `Processo concluÃ­do: "${proc.name}"`);
-        toast.success("Processo concluÃ­do");
+        await logActivity(userId, "process", proc.id, "completed", `Processo concluÃƒÂ­do: "${proc.name}"`);
+        toast.success("Processo concluÃƒÂ­do");
       }
     }
     toast.success("Status da etapa atualizado");
@@ -354,7 +355,7 @@ export const ProcessesPanel = ({ userId }: Props) => {
   );
 };
 
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€ Date picker (popover) â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Date picker (popover) Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ */
 
 const toLocalISO = (d: Date) => {
   const tz = d.getTimezoneOffset() * 60000;
@@ -458,12 +459,12 @@ const ColorSwatchPicker = ({
 );
 
 
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€ Sub-components â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Sub-components Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ */
 
 const CARD_STEP_STATUSES: { value: string; label: string }[] = [
   { value: "pendente", label: "Pendente" },
   { value: "fazendo", label: "Em andamento" },
-  { value: "feita", label: "ConcluÃ­da" },
+  { value: "feita", label: "ConcluÃƒÂ­da" },
   { value: "pulado", label: "Dispensada" },
 ];
 
@@ -579,7 +580,7 @@ const ProcessCard = ({
                         <span className="truncate shrink-0 max-w-[40%]">{s.title}</span>
                         {note && (
                           <>
-                            <span className="text-muted-foreground/60 shrink-0">—</span>
+                            <span className="text-muted-foreground/60 shrink-0">â€”</span>
                             <span
                               className="text-[11px] text-muted-foreground line-clamp-1 flex-1 min-w-0 cursor-text select-text"
                               onClick={(e) => e.stopPropagation()}
@@ -653,7 +654,7 @@ const ProcessCard = ({
                 onPointerDown={(e) => e.stopPropagation()}
                 onKeyDown={(e) => e.stopPropagation()}
               >
-                <p className="text-[10px] uppercase tracking-wide text-muted-foreground">ObservaÃ§Ã£o</p>
+                <p className="text-[10px] uppercase tracking-wide text-muted-foreground">ObservaÃƒÂ§ÃƒÂ£o</p>
                 <p className="text-xs text-foreground/80 line-clamp-2 break-words">{currentNote}</p>
               </div>
             )}
@@ -661,7 +662,7 @@ const ProcessCard = ({
         )}
         {p.template_type === "table" && (
           <p className="text-[11px] text-muted-foreground">
-            {p.table_data?.rows?.length ?? 0} linha(s) Â· {p.table_data?.columns?.length ?? 0} coluna(s)
+            {p.table_data?.rows?.length ?? 0} linha(s) Ã‚Â· {p.table_data?.columns?.length ?? 0} coluna(s)
           </p>
         )}
         {p.due_date && (
@@ -694,7 +695,7 @@ const ListView = ({
           <button onClick={() => onOpen(p)} className="flex-1 min-w-0 text-left">
             <p className="text-sm font-medium truncate">{p.name}</p>
             <p className="text-xs text-muted-foreground truncate">
-              {p.client_name || "â€”"} Â· {done}/{steps.length} etapas{current ? ` Â· ${current.title}` : ""}
+              {p.client_name || "Ã¢â‚¬â€"} Ã‚Â· {done}/{steps.length} etapas{current ? ` Ã‚Â· ${current.title}` : ""}
             </p>
           </button>
           <StatusPill domain="process" value={p.status} size="xs" />
@@ -781,7 +782,7 @@ const NewProcessButton = ({
         <div className="space-y-3">
           <div>
             <label className="text-xs font-medium">Nome</label>
-            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex.: AlteraÃ§Ã£o contratual - ACME" />
+            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex.: AlteraÃƒÂ§ÃƒÂ£o contratual - ACME" />
           </div>
           <div>
             <label className="text-xs font-medium">Modelo</label>
@@ -807,7 +808,7 @@ const NewProcessButton = ({
           <Button variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
           <Button
             onClick={() => {
-              if (!name.trim()) return toast.error("Nome obrigatÃ³rio");
+              if (!name.trim()) return toast.error("Nome obrigatÃƒÂ³rio");
               onCreate(tpl === "none" ? null : tpl, name.trim(), due || null);
               setOpen(false); setName(""); setTpl("none"); setDue("");
             }}
@@ -880,8 +881,8 @@ const TemplateManager = ({
         workspace_id: workspaceId,
         color: newTplColor,
         template_type: newTplType,
-        table_schema: newTplType === "table" ? emptyTable() : { columns: [], rows: [] },
-      } as never);
+        table_schema: (newTplType === "table" ? emptyTable() : { columns: [], rows: [] }) as Json,
+      });
     if (error) return toast.error(error.message);
     toast.success("Modelo criado");
     setNewTplName("");
@@ -895,7 +896,7 @@ const TemplateManager = ({
     if (!schema) return;
     const { error } = await supabase
       .from("process_templates")
-      .update({ table_schema: schema } as never)
+      .update({ table_schema: schema as Json })
       .eq("id", id);
     if (error) return toast.error(error.message);
     toast.success("Tabela do modelo salva");
@@ -905,7 +906,7 @@ const TemplateManager = ({
   const updateTplColor = async (id: string, color: TemplateColor) => {
     const { error } = await supabase
       .from("process_templates")
-      .update({ color } as never)
+      .update({ color })
       .eq("id", id);
     if (error) return toast.error(error.message);
     reload();
@@ -914,7 +915,7 @@ const TemplateManager = ({
     if (!confirm("Excluir modelo e suas etapas?")) return;
     const { error } = await supabase.from("process_templates").delete().eq("id", id);
     if (error) return toast.error(error.message);
-    toast.success("Modelo excluÃ­do");
+    toast.success("Modelo excluÃƒÂ­do");
     reload();
   };
   const addStep = async (tplId: string) => {
@@ -952,7 +953,7 @@ const TemplateManager = ({
               <Input
                 value={newTplName}
                 onChange={(e) => setNewTplName(e.target.value)}
-                placeholder="Novo modelo (ex.: AlteraÃ§Ã£o Contratual)"
+                placeholder="Novo modelo (ex.: AlteraÃƒÂ§ÃƒÂ£o Contratual)"
               />
               <Select value={newTplType} onValueChange={(v) => setNewTplType(v as TemplateKind)}>
                 <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
@@ -1018,11 +1019,11 @@ const TemplateManager = ({
                               onBlur={async (e) => {
                                 const v = Math.max(0, Number(e.target.value) || 0);
                                 await supabase.from("process_template_steps")
-                                  .update({ due_offset_days: v } as never).eq("id", s.id);
+                                  .update({ due_offset_days: v }).eq("id", s.id);
                                 loadSteps();
                               }}
                               className="h-7 w-20 text-xs"
-                              title="Prazo em dias apÃ³s o inÃ­cio do processo"
+                              title="Prazo em dias apÃƒÂ³s o inÃƒÂ­cio do processo"
                             />
                             <span className="text-[11px] text-muted-foreground">dias</span>
                             <button
@@ -1041,7 +1042,7 @@ const TemplateManager = ({
                         <Input
                           value={stepInput[t.id] ?? ""}
                           onChange={(e) => setStepInput((p) => ({ ...p, [t.id]: e.target.value }))}
-                          placeholder="Adicionar etapaâ€¦"
+                          placeholder="Adicionar etapaÃ¢â‚¬Â¦"
                           className="h-8 text-sm"
                         />
                         <Button type="submit" size="sm" variant="outline">
@@ -1063,14 +1064,14 @@ const TemplateManager = ({
   );
 };
 
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€ Process detail (operational timeline) â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Process detail (operational timeline) Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ */
 
 type StepStatus = Step["status"];
 
 const stepStatusLabel: Record<StepStatus, string> = {
   pendente: "Pendente",
   fazendo: "Em andamento",
-  feita: "ConcluÃ­da",
+  feita: "ConcluÃƒÂ­da",
   pulado: "Dispensada",
 };
 
@@ -1148,8 +1149,8 @@ const ProcessDetail = ({
       return false;
     }
     if (next === "concluido") {
-      await logActivity(userId, "process", process.id, "completed", `Processo concluÃ­do: "${process.name}"`);
-      toast.success("Processo concluÃ­do");
+      await logActivity(userId, "process", process.id, "completed", `Processo concluÃƒÂ­do: "${process.name}"`);
+      toast.success("Processo concluÃƒÂ­do");
     }
     return true;
   };
@@ -1195,7 +1196,7 @@ const ProcessDetail = ({
     if (!after) return;
     const ok = await persistProcessStatus(after);
     if (!ok) return;
-    toast.success("Etapa concluÃ­da");
+    toast.success("Etapa concluÃƒÂ­da");
     onChanged();
   };
 
@@ -1226,9 +1227,9 @@ const ProcessDetail = ({
     if (next === s.status) return;
     if (next === "feita") return completeStep(s);
     if (next === "pulado") return dismissStep(s);
-    const patch: Record<string, unknown> = { status: next, completed_at: null, dismissed_at: null };
+    const patch: import('@/integrations/supabase/types').Database['public']['Tables']['process_steps']['Update'] = { status: next, completed_at: null, dismissed_at: null };
     if (next !== "pendente" && !s.started_at) patch.started_at = new Date().toISOString();
-    const { error } = await supabase.from("process_steps").update(patch as never).eq("id", s.id);
+    const { error } = await supabase.from("process_steps").update(patch).eq("id", s.id);
     if (error) return toast.error(error.message);
     const after = steps.map((x) => (x.id === s.id ? { ...x, ...patch, status: next } as Step : x));
     await persistProcessStatus(after);
@@ -1241,7 +1242,7 @@ const ProcessDetail = ({
     if (!label || !workspaceId) return null;
     const reserved = ["pendente", "fazendo", "feita", "pulado"];
     if (reserved.includes(label.toLowerCase())) {
-      toast.error("Esse nome jÃ¡ Ã© um status padrÃ£o");
+      toast.error("Esse nome jÃƒÂ¡ ÃƒÂ© um status padrÃƒÂ£o");
       return null;
     }
     if (customStatuses.some((c) => c.label.toLowerCase() === label.toLowerCase())) {
@@ -1368,7 +1369,7 @@ const ProcessDetail = ({
                 className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1 px-2 py-1"
               >
                 <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", showFuture && "rotate-180")} />
-                {showFuture ? "Ocultar prÃ³ximas etapas" : `Exibir prÃ³ximas etapas (${futureSteps.length})`}
+                {showFuture ? "Ocultar prÃƒÂ³ximas etapas" : `Exibir prÃƒÂ³ximas etapas (${futureSteps.length})`}
               </button>
               {showFuture && (
                 <ul className="mt-1 space-y-1">
@@ -1396,7 +1397,7 @@ const ProcessDetail = ({
             <Input
               value={stepInput}
               onChange={(e) => setStepInput(e.target.value)}
-              placeholder="Nova etapaâ€¦"
+              placeholder="Nova etapaÃ¢â‚¬Â¦"
               className="h-8 text-sm"
             />
             <Button type="submit" size="sm" variant="outline">
@@ -1426,7 +1427,7 @@ const ProcessDetail = ({
               </div>
             </div>
             <div>
-              <label className="text-xs font-medium">ObservaÃ§Ãµes gerais</label>
+              <label className="text-xs font-medium">ObservaÃƒÂ§ÃƒÂµes gerais</label>
               <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} className="min-h-[70px]" />
             </div>
             <Button size="sm" onClick={saveDetails}>Salvar detalhes</Button>
@@ -1479,13 +1480,13 @@ const ResolvedStepRow = ({
         )}
         <details className="mt-1">
           <summary className="text-[11px] text-muted-foreground cursor-pointer hover:text-foreground">
-            Editar observaÃ§Ã£o
+            Editar observaÃƒÂ§ÃƒÂ£o
           </summary>
           <div className="mt-2">
             <NoteField
               value={s.notes ?? ""}
               onSave={onSaveObservation}
-              placeholder="ObservaÃ§Ã£o desta etapaâ€¦"
+              placeholder="ObservaÃƒÂ§ÃƒÂ£o desta etapaÃ¢â‚¬Â¦"
               rows={3}
               className="min-h-[56px] text-xs"
             />
@@ -1517,7 +1518,7 @@ const CurrentStepCard = ({
   const defaultStatuses = [
     { value: "pendente", label: "Pendente" },
     { value: "fazendo", label: "Em andamento" },
-    { value: "feita", label: "ConcluÃ­da" },
+    { value: "feita", label: "ConcluÃƒÂ­da" },
     { value: "pulado", label: "Dispensada" },
   ];
   const isCustom = !defaultStatuses.some((d) => d.value === s.status);
@@ -1568,7 +1569,7 @@ const CurrentStepCard = ({
             )}
             {showStartHint && (
               <span className="text-[11px] text-muted-foreground">
-                Clique em &ldquo;Iniciar processo&rdquo; para comeÃ§ar.
+                Clique em &ldquo;Iniciar processo&rdquo; para comeÃƒÂ§ar.
               </span>
             )}
           </div>
@@ -1583,12 +1584,12 @@ const CurrentStepCard = ({
       </div>
 
       <div>
-        <label className="text-xs font-medium">ObservaÃ§Ã£o</label>
+        <label className="text-xs font-medium">ObservaÃƒÂ§ÃƒÂ£o</label>
         <div className="mt-1">
           <NoteField
             value={s.notes ?? ""}
             onSave={onSaveObservation}
-            placeholder="AnotaÃ§Ãµes desta etapaâ€¦"
+            placeholder="AnotaÃƒÂ§ÃƒÂµes desta etapaÃ¢â‚¬Â¦"
             rows={3}
             className="min-h-[70px]"
           />
@@ -1604,12 +1605,12 @@ const CurrentStepCard = ({
   );
 };
 
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€ Process detail (table type) â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Process detail (table type) Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ */
 
 const PROCESS_STATUS_OPTIONS: { value: ProcessStatus; label: string }[] = [
-  { value: "nao_iniciado", label: "NÃ£o iniciado" },
+  { value: "nao_iniciado", label: "NÃƒÂ£o iniciado" },
   { value: "em_andamento", label: "Em andamento" },
-  { value: "concluido", label: "ConcluÃ­do" },
+  { value: "concluido", label: "ConcluÃƒÂ­do" },
   { value: "cancelado", label: "Cancelado" },
 ];
 
@@ -1644,7 +1645,7 @@ const ProcessTableDetail = ({
     if (status === "nao_iniciado" && hasAnyValue(draft)) nextStatus = "em_andamento";
     const { error } = await supabase
       .from("processes")
-      .update({ table_data: draft, status: nextStatus } as never)
+      .update({ table_data: draft as Json, status: nextStatus })
       .eq("id", process.id);
     if (error) return toast.error(error.message);
     setStatus(nextStatus);
@@ -1661,7 +1662,7 @@ const ProcessTableDetail = ({
       .update({ status: s })
       .eq("id", process.id);
     if (error) return toast.error(error.message);
-    await logActivity(userId, "process", process.id, "status_changed", `Status alterado: "${process.name}" â†’ ${s}`);
+    await logActivity(userId, "process", process.id, "status_changed", `Status alterado: "${process.name}" Ã¢â€ â€™ ${s}`);
     onChanged();
   };
 
@@ -1689,7 +1690,7 @@ const ProcessTableDetail = ({
         <DialogHeader>
           <DialogTitle className="text-base">{process.name}</DialogTitle>
           {templateName && (
-            <p className="text-xs text-muted-foreground">Modelo: {templateName} Â· Tabela</p>
+            <p className="text-xs text-muted-foreground">Modelo: {templateName} Ã‚Â· Tabela</p>
           )}
         </DialogHeader>
 
