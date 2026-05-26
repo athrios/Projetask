@@ -556,6 +556,52 @@ const ProcessCard = ({
                 {done}/{total}
               </span>
             </div>
+            {(() => {
+              const resolved = sorted.filter((s) => s.status === "feita" || s.status === "pulado");
+              if (resolved.length === 0) return null;
+              const MAX = 3;
+              const shown = resolved.slice(-MAX);
+              const extra = resolved.length - shown.length;
+              return (
+                <div className="space-y-0.5">
+                  {shown.map((s) => {
+                    const isSkipped = s.status === "pulado";
+                    const note = s.notes?.trim() ?? "";
+                    return (
+                      <div
+                        key={s.id}
+                        className={cn(
+                          "flex items-center gap-1.5 text-xs min-w-0",
+                          isSkipped ? "text-muted-foreground/70" : "text-foreground/80",
+                        )}
+                      >
+                        <Check className={cn("h-3 w-3 shrink-0", isSkipped && "opacity-50")} />
+                        <span className="truncate shrink-0 max-w-[40%]">{s.title}</span>
+                        {note && (
+                          <>
+                            <span className="text-muted-foreground/60 shrink-0">—</span>
+                            <span
+                              className="text-[11px] text-muted-foreground line-clamp-1 flex-1 min-w-0 cursor-text select-text"
+                              onClick={(e) => e.stopPropagation()}
+                              onMouseDown={(e) => e.stopPropagation()}
+                              onPointerDown={(e) => e.stopPropagation()}
+                              onKeyDown={(e) => e.stopPropagation()}
+                              title={note}
+                            >
+                              {note}
+                            </span>
+                            <CopyButton getText={() => note} size="xs" />
+                          </>
+                        )}
+                      </div>
+                    );
+                  })}
+                  {extra > 0 && (
+                    <p className="text-[11px] text-muted-foreground pl-4.5">+{extra} etapa{extra > 1 ? "s" : ""} anterior{extra > 1 ? "es" : ""}</p>
+                  )}
+                </div>
+              );
+            })()}
             {current && (
               <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                 <ChevronRight className="h-3 w-3 shrink-0" />
