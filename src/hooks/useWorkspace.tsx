@@ -4,6 +4,7 @@ import { useAuth } from "./useAuth";
 
 export type ModuleKey =
   | "hoje"
+  | "clientes"
   | "cronograma"
   | "tarefas"
   | "processos"
@@ -13,6 +14,7 @@ export type ModuleKey =
 
 export const MODULE_KEYS: ModuleKey[] = [
   "hoje",
+  "clientes",
   "cronograma",
   "tarefas",
   "processos",
@@ -23,6 +25,7 @@ export const MODULE_KEYS: ModuleKey[] = [
 
 export const MODULE_LABELS: Record<ModuleKey, string> = {
   hoje: "Hoje",
+  clientes: "Clientes",
   cronograma: "Cronograma",
   tarefas: "Tarefas",
   processos: "Processos",
