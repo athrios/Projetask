@@ -57,6 +57,7 @@ export interface ClientRecord {
   trade_name: string;
   email: string;
   phone: string;
+  birth_date: string | null;
   address: ClientAddress;
   cnpj_lookup_snapshot: unknown | null;
   notes: string;
@@ -101,6 +102,7 @@ const emptyClient = (workspaceId: string, userId: string): ClientRecord => ({
   trade_name: "",
   email: "",
   phone: "",
+  birth_date: null,
   address: { pais: "Brasil" },
   cnpj_lookup_snapshot: null,
   notes: "",
@@ -279,6 +281,10 @@ export const ClientForm = ({ workspaceId, userId, initial, onSaved, onCancel }: 
       email: draft.email.trim(),
       phone: draft.phone.trim(),
       address: draft.address as unknown as Record<string, unknown>,
+      birth_date:
+        draft.client_type === "pessoa_fisica" && draft.birth_date
+          ? draft.birth_date
+          : null,
       cnpj_lookup_snapshot: draft.cnpj_lookup_snapshot as unknown,
       notes: draft.notes,
       custom_fields: draft.custom_fields.filter(
@@ -518,6 +524,21 @@ export const ClientForm = ({ workspaceId, userId, initial, onSaved, onCancel }: 
             />
           </div>
         </div>
+
+
+
+        {draft.client_type === "pessoa_fisica" && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label>Data de nascimento</Label>
+              <Input
+                type="date"
+                value={draft.birth_date ?? ""}
+                onChange={(e) => update("birth_date", e.target.value || null)}
+              />
+            </div>
+          </div>
+        )}
       </section>
 
       {/* Address */}
