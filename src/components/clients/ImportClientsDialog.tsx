@@ -37,6 +37,7 @@ interface Props {
   workspaceId: string;
   userId: string;
   extraFields: ExtraFieldDef[];
+  onCreateExtra?: (label: string) => Promise<ExtraFieldDef>;
   onImported: () => void;
 }
 
