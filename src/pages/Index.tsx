@@ -12,6 +12,7 @@ import { ProcessesPanel } from "@/components/processes/ProcessesPanel";
 import { FormsPanel } from "@/components/forms/FormsPanel";
 import { RequestsPanel } from "@/components/requests/RequestsPanel";
 import { AgendaPanel } from "@/components/agenda/AgendaPanel";
+import { ClientsPanel } from "@/components/clients/ClientsPanel";
 import { GlobalSearch } from "@/components/shared/GlobalSearch";
 import { WorkspaceSwitcher } from "@/components/workspace/WorkspaceSwitcher";
 import { WorkspacesPanel } from "@/components/workspace/WorkspacesPanel";
