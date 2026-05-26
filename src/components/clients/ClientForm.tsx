@@ -30,12 +30,15 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useClientSettings, type ExtraFieldDef } from "@/hooks/useClientSettings";
 
 export type ClientType = "pessoa_fisica" | "pessoa_juridica" | "estrangeiro";
 
 export interface CustomField {
   label: string;
   value: string;
+  source?: "extra";
+  extra_id?: string;
 }
 
 export interface ClientAddress extends AddressValue {
@@ -113,6 +116,7 @@ interface Props {
 }
 
 export const ClientForm = ({ workspaceId, userId, initial, onSaved, onCancel }: Props) => {
+  const { settings: clientSettings } = useClientSettings(workspaceId);
   const [draft, setDraft] = useState<ClientRecord>(
     initial ?? emptyClient(workspaceId, userId),
   );
@@ -210,6 +214,31 @@ export const ClientForm = ({ workspaceId, userId, initial, onSaved, onCancel }: 
   };
 
 
+  const getExtraValue = (extraId: string): string => {
+    const found = draft.custom_fields.find(
+      (c) => c.source === "extra" && c.extra_id === extraId,
+    );
+    return found?.value ?? "";
+  };
+
+  const setExtraValue = (ex: ExtraFieldDef, value: string) => {
+    setDraft((d) => {
+      const idx = d.custom_fields.findIndex(
+        (c) => c.source === "extra" && c.extra_id === ex.id,
+      );
+      const entry: CustomField = {
+        source: "extra",
+        extra_id: ex.id,
+        label: ex.label,
+        value,
+      };
+      const next = [...d.custom_fields];
+      if (idx >= 0) next[idx] = entry;
+      else next.push(entry);
+      return { ...d, custom_fields: next };
+    });
+  };
+
   const validate = (): string | null => {
     if (!draft.name.trim()) return "Informe o nome ou razão social.";
     if (draft.client_type === "pessoa_fisica") {
@@ -219,6 +248,11 @@ export const ClientForm = ({ workspaceId, userId, initial, onSaved, onCancel }: 
     }
     if (draft.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(draft.email)) {
       return "E-mail inválido.";
+    }
+    for (const ex of clientSettings.extra_fields) {
+      if (ex.required && !getExtraValue(ex.id).trim()) {
+        return `Preencha o campo extra obrigatório: ${ex.label}`;
+      }
     }
     return null;
   };
@@ -245,7 +279,9 @@ export const ClientForm = ({ workspaceId, userId, initial, onSaved, onCancel }: 
       address: draft.address as unknown as Record<string, unknown>,
       cnpj_lookup_snapshot: draft.cnpj_lookup_snapshot as unknown,
       notes: draft.notes,
-      custom_fields: draft.custom_fields.filter((f) => f.label.trim() || f.value.trim()),
+      custom_fields: draft.custom_fields.filter(
+        (f) => f.source === "extra" || f.label.trim() || f.value.trim(),
+      ),
     };
     if (isEdit) {
       const { data, error } = await supabase
@@ -611,7 +647,47 @@ export const ClientForm = ({ workspaceId, userId, initial, onSaved, onCancel }: 
         />
       </section>
 
-      {/* Custom fields */}
+      {/* Fixed extra fields (workspace-wide) */}
+      {clientSettings.extra_fields.length > 0 && (
+        <section className="space-y-2">
+          <h3 className="text-sm font-semibold">Campos Extras</h3>
+          <p className="text-xs text-muted-foreground">
+            Campos configurados nas configurações de Clientes e aplicados a todos os clientes deste ambiente.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {clientSettings.extra_fields.map((ex) => {
+              const v = getExtraValue(ex.id);
+              return (
+                <div key={ex.id} className="space-y-1">
+                  <Label>
+                    {ex.label || "Campo extra"}
+                    {ex.required && <span className="text-destructive"> *</span>}
+                  </Label>
+                  {ex.type === "long_text" ? (
+                    <Textarea
+                      value={v}
+                      rows={3}
+                      maxLength={2000}
+                      onChange={(e) => setExtraValue(ex, e.target.value)}
+                    />
+                  ) : (
+                    <Input
+                      type={
+                        ex.type === "number" ? "number" : ex.type === "date" ? "date" : "text"
+                      }
+                      value={v}
+                      maxLength={300}
+                      onChange={(e) => setExtraValue(ex, e.target.value)}
+                    />
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
+      {/* Custom fields (client-specific) */}
       <section className="space-y-2">
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-semibold">Campos personalizados</h3>
@@ -627,52 +703,59 @@ export const ClientForm = ({ workspaceId, userId, initial, onSaved, onCancel }: 
             <Plus className="h-3.5 w-3.5" /> Adicionar
           </Button>
         </div>
-        {draft.custom_fields.length === 0 ? (
-          <p className="text-xs text-muted-foreground">
-            Sem campos personalizados.
-          </p>
-        ) : (
-          <ul className="space-y-2">
-            {draft.custom_fields.map((cf, i) => (
-              <li key={i} className="grid grid-cols-[1fr_1fr_auto] gap-2 items-start">
-                <Input
-                  placeholder="Rótulo"
-                  value={cf.label}
-                  maxLength={80}
-                  onChange={(e) => {
-                    const next = [...draft.custom_fields];
-                    next[i] = { ...next[i], label: e.target.value };
-                    update("custom_fields", next);
-                  }}
-                />
-                <Input
-                  placeholder="Valor"
-                  value={cf.value}
-                  maxLength={300}
-                  onChange={(e) => {
-                    const next = [...draft.custom_fields];
-                    next[i] = { ...next[i], value: e.target.value };
-                    update("custom_fields", next);
-                  }}
-                />
-                <button
-                  type="button"
-                  onClick={() => {
-                    update(
-                      "custom_fields",
-                      draft.custom_fields.filter((_, ix) => ix !== i),
-                    );
-                  }}
-                  className="p-2 rounded hover:bg-muted text-muted-foreground"
-                  title="Remover"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
+        {(() => {
+          const visibleCustoms = draft.custom_fields
+            .map((cf, i) => ({ cf, i }))
+            .filter(({ cf }) => cf.source !== "extra");
+          if (visibleCustoms.length === 0) {
+            return (
+              <p className="text-xs text-muted-foreground">Sem campos personalizados.</p>
+            );
+          }
+          return (
+            <ul className="space-y-2">
+              {visibleCustoms.map(({ cf, i }) => (
+                <li key={i} className="grid grid-cols-[1fr_1fr_auto] gap-2 items-start">
+                  <Input
+                    placeholder="Rótulo"
+                    value={cf.label}
+                    maxLength={80}
+                    onChange={(e) => {
+                      const next = [...draft.custom_fields];
+                      next[i] = { ...next[i], label: e.target.value };
+                      update("custom_fields", next);
+                    }}
+                  />
+                  <Input
+                    placeholder="Valor"
+                    value={cf.value}
+                    maxLength={300}
+                    onChange={(e) => {
+                      const next = [...draft.custom_fields];
+                      next[i] = { ...next[i], value: e.target.value };
+                      update("custom_fields", next);
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      update(
+                        "custom_fields",
+                        draft.custom_fields.filter((_, ix) => ix !== i),
+                      );
+                    }}
+                    className="p-2 rounded hover:bg-muted text-muted-foreground"
+                    title="Remover"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          );
+        })()}
       </section>
+
 
       <div className="flex justify-end gap-2 pt-2 border-t">
         <Button type="button" variant="ghost" onClick={onCancel} disabled={saving}>

@@ -94,6 +94,33 @@ export type Database = {
           },
         ]
       }
+      client_settings: {
+        Row: {
+          extra_fields: Json
+          field_order: Json
+          hidden_fields: Json
+          updated_at: string
+          updated_by: string | null
+          workspace_id: string
+        }
+        Insert: {
+          extra_fields?: Json
+          field_order?: Json
+          hidden_fields?: Json
+          updated_at?: string
+          updated_by?: string | null
+          workspace_id: string
+        }
+        Update: {
+          extra_fields?: Json
+          field_order?: Json
+          hidden_fields?: Json
+          updated_at?: string
+          updated_by?: string | null
+          workspace_id?: string
+        }
+        Relationships: []
+      }
       clients: {
         Row: {
           address: Json

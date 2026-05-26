@@ -21,11 +21,19 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { EmptyState } from "@/components/shared/EmptyState";
-import { Users, Plus, Search, Trash2, Pencil, Copy, Check } from "lucide-react";
+import { Users, Plus, Search, Trash2, Pencil, Copy, Check, Settings, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { ClientForm, type ClientRecord } from "./ClientForm";
+import { ClientForm, type ClientRecord, type CustomField } from "./ClientForm";
 import { maskCpf, maskCnpj } from "@/lib/documents";
+import {
+  useClientSettings,
+  resolveFieldOrder,
+  STANDARD_FIELD_LABELS,
+  type ExtraFieldDef,
+} from "@/hooks/useClientSettings";
+import { ClientsSettingsDialog } from "./ClientsSettingsDialog";
+import { ImportClientsDialog } from "./ImportClientsDialog";
 
 const TYPE_LABEL: Record<ClientRecord["client_type"], string> = {
   pessoa_fisica: "PF",
@@ -85,14 +93,42 @@ const formatAddress = (a: ClientRecord["address"]): string => {
   return result.trim();
 };
 
+const getStandardValue = (r: ClientRecord, key: string): string => {
+  switch (key) {
+    case "document":
+      if (!r.document) return "";
+      return r.client_type === "pessoa_juridica"
+        ? maskCnpj(r.document)
+        : r.client_type === "pessoa_fisica"
+          ? maskCpf(r.document)
+          : r.document;
+    case "trade_name": return r.trade_name || "";
+    case "email": return r.email || "";
+    case "phone": return r.phone || "";
+    case "address": return formatAddress(r.address);
+    case "notes": return r.notes || "";
+    default: return "";
+  }
+};
+
+const getExtraValue = (r: ClientRecord, extraId: string): string => {
+  const found = (r.custom_fields ?? []).find(
+    (c) => c.source === "extra" && c.extra_id === extraId,
+  );
+  return found?.value ?? "";
+};
+
 export const ClientsPanel = ({ userId }: { userId: string }) => {
   const { workspaceId, can } = useWorkspace();
+  const { settings, save: saveSettings, reload: reloadSettings } = useClientSettings(workspaceId);
   const [rows, setRows] = useState<ClientRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [editing, setEditing] = useState<ClientRecord | null>(null);
   const [creating, setCreating] = useState(false);
   const [toDelete, setToDelete] = useState<ClientRecord | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
 
   const canCreate = can("clientes", "create");
   const canEdit = can("clientes", "edit");
@@ -128,12 +164,7 @@ export const ClientsPanel = ({ userId }: { userId: string }) => {
     );
   }, [rows, search]);
 
-  const formatDoc = (r: ClientRecord) =>
-    r.client_type === "pessoa_juridica"
-      ? maskCnpj(r.document)
-      : r.client_type === "pessoa_fisica"
-        ? maskCpf(r.document)
-        : r.document;
+  const orderedKeys = useMemo(() => resolveFieldOrder(settings), [settings]);
 
   const handleDelete = async () => {
     if (!toDelete) return;
@@ -159,11 +190,33 @@ export const ClientsPanel = ({ userId }: { userId: string }) => {
             className="pl-8 h-9"
           />
         </div>
-        {canCreate && (
-          <Button onClick={() => setCreating(true)} className="gap-1.5">
-            <Plus className="h-4 w-4" /> Novo cliente
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          {canEdit && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setSettingsOpen(true)}
+              title="Configurações de Clientes"
+              aria-label="Configurações de Clientes"
+            >
+              <Settings className="h-4 w-4" />
+            </Button>
+          )}
+          {canCreate && (
+            <Button
+              variant="outline"
+              onClick={() => setImportOpen(true)}
+              className="gap-1.5"
+            >
+              <Upload className="h-4 w-4" /> Importar
+            </Button>
+          )}
+          {canCreate && (
+            <Button onClick={() => setCreating(true)} className="gap-1.5">
+              <Plus className="h-4 w-4" /> Novo cliente
+            </Button>
+          )}
+        </div>
       </div>
 
       {loading ? (
@@ -188,11 +241,15 @@ export const ClientsPanel = ({ userId }: { userId: string }) => {
       ) : (
         <div className="space-y-2">
           {filtered.map((r) => {
-            const doc = r.document ? formatDoc(r) : "";
-            const address = formatAddress(r.address);
-            const customs = (r.custom_fields ?? []).filter(
-              (c) => c && (c.label || c.value),
-            );
+            const knownExtraIds = new Set(settings.extra_fields.map((e) => e.id));
+            const orphanCustoms: CustomField[] = (r.custom_fields ?? []).filter((c) => {
+              if (!c) return false;
+              if (c.source === "extra") {
+                // only show as orphan if its definition no longer exists
+                return !c.extra_id || !knownExtraIds.has(c.extra_id);
+              }
+              return c.label || c.value;
+            });
             return (
               <div
                 key={r.id}
@@ -207,15 +264,23 @@ export const ClientsPanel = ({ userId }: { userId: string }) => {
                       </Badge>
                     </div>
                     <div className="space-y-1">
-                      {doc && <Field label="Documento" value={doc} />}
-                      {r.trade_name && <Field label="Nome fantasia" value={r.trade_name} />}
-                      {r.email && <Field label="E-mail" value={r.email} />}
-                      {r.phone && <Field label="Telefone" value={r.phone} />}
-                      {address && <Field label="Endereço" value={address} />}
-                      {r.notes && <Field label="Observações" value={r.notes} />}
-                      {customs.map((c, i) => (
+                      {orderedKeys.map(({ key, isExtra, extraId }) => {
+                        if (isExtra && extraId) {
+                          const def = settings.extra_fields.find((e) => e.id === extraId);
+                          if (!def) return null;
+                          const v = getExtraValue(r, extraId);
+                          if (!v) return null;
+                          return <Field key={key} label={def.label || "Extra"} value={v} />;
+                        }
+                        const v = getStandardValue(r, key);
+                        if (!v) return null;
+                        const label =
+                          STANDARD_FIELD_LABELS[key as keyof typeof STANDARD_FIELD_LABELS] ?? key;
+                        return <Field key={key} label={label} value={v} />;
+                      })}
+                      {orphanCustoms.map((c, i) => (
                         <Field
-                          key={i}
+                          key={`orphan-${i}`}
                           label={c.label || `Campo ${i + 1}`}
                           value={c.value || ""}
                         />
@@ -308,6 +373,32 @@ export const ClientsPanel = ({ userId }: { userId: string }) => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {workspaceId && (
+        <>
+          <ClientsSettingsDialog
+            open={settingsOpen}
+            onOpenChange={setSettingsOpen}
+            initial={settings}
+            onSave={async (next) => {
+              const { error } = await saveSettings(next, userId);
+              if (error) throw error;
+              await reloadSettings();
+            }}
+          />
+          <ImportClientsDialog
+            open={importOpen}
+            onOpenChange={setImportOpen}
+            workspaceId={workspaceId}
+            userId={userId}
+            extraFields={settings.extra_fields as ExtraFieldDef[]}
+            onImported={() => {
+              setImportOpen(false);
+              load();
+            }}
+          />
+        </>
+      )}
     </div>
   );
 };
