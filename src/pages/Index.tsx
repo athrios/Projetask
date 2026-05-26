@@ -151,7 +151,7 @@ const Index = () => {
   }, [user, date, section, workspaceId]);
 
   const allSections: Section[] = [
-    "today", "agenda", "clients", "schedule", "tasks", "processes",
+    "today", "clients", "agenda", "schedule", "tasks", "processes",
     "forms", "requests", "done", "settings",
   ];
 
