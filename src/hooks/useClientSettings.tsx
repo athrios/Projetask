@@ -56,9 +56,9 @@ export const useClientSettings = (workspaceId: string | null) => {
       .maybeSingle();
     if (data) {
       setSettings({
-        field_order: (data.field_order as string[]) ?? [...DEFAULT_FIELD_ORDER],
-        hidden_fields: (data.hidden_fields as string[]) ?? [],
-        extra_fields: (data.extra_fields as ExtraFieldDef[]) ?? [],
+        field_order: (data.field_order as unknown as string[]) ?? [...DEFAULT_FIELD_ORDER],
+        hidden_fields: (data.hidden_fields as unknown as string[]) ?? [],
+        extra_fields: (data.extra_fields as unknown as ExtraFieldDef[]) ?? [],
       });
     } else {
       setSettings(empty);
@@ -76,9 +76,9 @@ export const useClientSettings = (workspaceId: string | null) => {
       const { error } = await supabase.from("client_settings").upsert(
         {
           workspace_id: workspaceId,
-          field_order: next.field_order,
-          hidden_fields: next.hidden_fields,
-          extra_fields: next.extra_fields,
+          field_order: next.field_order as unknown as never,
+          hidden_fields: next.hidden_fields as unknown as never,
+          extra_fields: next.extra_fields as unknown as never,
           updated_by: userId,
           updated_at: new Date().toISOString(),
         },
