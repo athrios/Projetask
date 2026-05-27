@@ -734,6 +734,7 @@ export type Database = {
           created_at: string
           duration_minutes: number
           id: string
+          note: string
           position: number
           start_time: string
           status: string
@@ -747,6 +748,7 @@ export type Database = {
           created_at?: string
           duration_minutes?: number
           id?: string
+          note?: string
           position?: number
           start_time: string
           status?: string
@@ -760,6 +762,7 @@ export type Database = {
           created_at?: string
           duration_minutes?: number
           id?: string
+          note?: string
           position?: number
           start_time?: string
           status?: string
