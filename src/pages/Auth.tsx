@@ -85,8 +85,7 @@ const AuthPage = () => {
       <div
         className="absolute inset-0 pointer-events-none"
         style={{
-          backgroundImage:
-            "radial-gradient(ellipse 60% 40% at 50% 0%, hsl(96 24% 27% / 0.06) 0%, transparent 70%)",
+          backgroundImage: "radial-gradient(ellipse 60% 40% at 50% 0%, hsl(96 24% 27% / 0.06) 0%, transparent 70%)",
         }}
       />
 
@@ -94,11 +93,7 @@ const AuthPage = () => {
         {/* Logo / Brand */}
         <div className="text-center mb-8">
           <div className="flex items-center justify-center mb-2">
-            <img
-              src="/ambitask-logo.png"
-              alt="Ambitask"
-              className="h-14 w-auto object-contain"
-            />
+            <img src="/ambitask-logo.png" alt="Ambitask" className="h-14 w-auto object-contain" />
           </div>
           <div className="w-16 h-[1px] mx-auto bg-gradient-to-r from-transparent via-[hsl(42,42%,50%)] to-transparent opacity-60" />
         </div>
@@ -108,8 +103,7 @@ const AuthPage = () => {
           className="bg-card rounded-xl shadow-sm overflow-hidden"
           style={{
             border: "1px solid hsl(34 16% 82%)",
-            boxShadow:
-              "0 1px 3px hsl(28 18% 16% / 0.06), 0 4px 16px hsl(28 18% 16% / 0.05)",
+            boxShadow: "0 1px 3px hsl(28 18% 16% / 0.06), 0 4px 16px hsl(28 18% 16% / 0.05)",
           }}
         >
           {/* Linha dourada no topo do card */}
@@ -117,7 +111,7 @@ const AuthPage = () => {
 
           <div className="p-8">
             <h1 className="text-xl font-semibold tracking-tight mb-1 text-foreground">
-              {mode === "login" ? "Bem-vindo de volta" : "Criar conta"}
+              {mode === "login" ? "Bem-vindo" : "Criar conta"}
             </h1>
             <p className="text-sm text-muted-foreground mb-6">
               {mode === "login"
@@ -185,16 +179,12 @@ const AuthPage = () => {
               className="w-full text-sm text-muted-foreground hover:text-[hsl(96,24%,27%)] transition-colors duration-200"
               onClick={() => setMode(mode === "login" ? "signup" : "login")}
             >
-              {mode === "login"
-                ? "Não tem conta? Cadastre-se"
-                : "Já tem conta? Entrar"}
+              {mode === "login" ? "Não tem conta? Cadastre-se" : "Já tem conta? Entrar"}
             </button>
           </div>
         </div>
 
-        <p className="text-center text-[11px] text-muted-foreground/50 mt-6">
-          Organize. Planeje. Execute.
-        </p>
+        <p className="text-center text-[11px] text-muted-foreground/50 mt-6">Organize. Planeje. Execute.</p>
       </div>
     </main>
   );
