@@ -53,7 +53,7 @@ type Section =
   | "settings";
 
 const SECTION_META: Record<Section, { label: string; icon: typeof Sun; subtitle: string }> = {
-  today: { label: "Hoje", icon: Sun, subtitle: "O que precisa acontecer hoje." },
+  today: { label: "HOY", icon: Sun, subtitle: "O que precisa acontecer hoje." },
   agenda: { label: "Agenda", icon: CalendarRange, subtitle: "Visão de tarefas e processos por dia, semana e mês." },
   clients: { label: "Clientes", icon: Users, subtitle: "Cadastro de clientes do ambiente." },
   schedule: { label: "Cronograma", icon: CalendarClock, subtitle: "Sua agenda do dia, bloco a bloco." },
