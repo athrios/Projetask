@@ -475,6 +475,7 @@ export type Database = {
           id: string
           message: string
           read_at: string | null
+          source_key: string | null
           task_id: string | null
           title: string
           user_id: string
@@ -485,6 +486,7 @@ export type Database = {
           id?: string
           message?: string
           read_at?: string | null
+          source_key?: string | null
           task_id?: string | null
           title: string
           user_id: string
@@ -495,6 +497,7 @@ export type Database = {
           id?: string
           message?: string
           read_at?: string | null
+          source_key?: string | null
           task_id?: string | null
           title?: string
           user_id?: string
