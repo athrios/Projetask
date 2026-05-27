@@ -808,7 +808,19 @@ export const ClientForm = ({ workspaceId, userId, initial, onSaved, onCancel }: 
       </section>
 
 
-      <div className="flex justify-end gap-2 pt-2 border-t">
+      <div className="flex items-center justify-end gap-2 pt-2 border-t">
+        {isEdit && initial?.created_at && (
+          <span className="text-xs text-muted-foreground mr-auto">
+            Cadastrado em{" "}
+            {new Date(initial.created_at).toLocaleString("pt-BR", {
+              day: "2-digit",
+              month: "2-digit",
+              year: "numeric",
+              hour: "2-digit",
+              minute: "2-digit",
+            }).replace(", ", " às ")}
+          </span>
+        )}
         <Button type="button" variant="ghost" onClick={onCancel} disabled={saving}>
           Cancelar
         </Button>
@@ -816,6 +828,7 @@ export const ClientForm = ({ workspaceId, userId, initial, onSaved, onCancel }: 
           {saving ? "Salvando…" : isEdit ? "Salvar" : "Criar cliente"}
         </Button>
       </div>
+
     </div>
   );
 };
