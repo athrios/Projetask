@@ -39,7 +39,6 @@ export interface Workspace {
   name: string;
   color: string;
   owner_id: string;
-  shared_modules: string[];
 }
 
 export interface Permission {
@@ -101,7 +100,7 @@ export const WorkspaceProvider = ({ children }: { children: ReactNode }) => {
     // Get memberships → workspace list
     const { data: memberships } = await supabase
       .from("workspace_members")
-      .select("workspace_id, role, workspaces(id, name, color, owner_id, archived_at, shared_modules)")
+      .select("workspace_id, role, workspaces(id, name, color, owner_id, archived_at)")
       .order("created_at", { ascending: true });
 
     let list: Workspace[] = ((memberships ?? [])
@@ -113,7 +112,7 @@ export const WorkspaceProvider = ({ children }: { children: ReactNode }) => {
       const { data: created } = await supabase
         .from("workspaces")
         .insert({ owner_id: user.id, name: "Meu ambiente", color: "blue" })
-        .select("id, name, color, owner_id, shared_modules")
+        .select("id, name, color, owner_id")
         .single();
       if (created) list = [created as Workspace];
     }
