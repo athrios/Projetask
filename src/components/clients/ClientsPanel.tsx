@@ -40,6 +40,7 @@ import {
 } from "@/hooks/useClientSettings";
 import { ClientsSettingsDialog } from "./ClientsSettingsDialog";
 import { ImportClientsDialog } from "./ImportClientsDialog";
+import { Checkbox } from "@/components/ui/checkbox";
 
 const TYPE_LABEL: Record<ClientRecord["client_type"], string> = {
   pessoa_fisica: "PF",
