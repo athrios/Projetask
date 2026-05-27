@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { Plus, Trash2, Copy, Send, Share2 } from "lucide-react";
+import { Plus, Trash2, Copy, Send } from "lucide-react";
 import { CreateWorkspaceDialog } from "./CreateWorkspaceDialog";
 import { buildAppUrl } from "@/lib/appUrl";
 
@@ -110,7 +110,7 @@ const WorkspaceDetail = ({
   workspace,
   reload,
 }: {
-  workspace: { id: string; name: string; color: string; owner_id: string; shared_modules: string[] };
+  workspace: { id: string; name: string; color: string; owner_id: string };
   reload: () => Promise<void>;
 }) => {
   const [name, setName] = useState(workspace.name);
@@ -187,7 +187,6 @@ const WorkspaceDetail = ({
         <TabsList>
           <TabsTrigger value="members">Membros</TabsTrigger>
           <TabsTrigger value="invites">Convites</TabsTrigger>
-          <TabsTrigger value="sharing">Compartilhamento</TabsTrigger>
         </TabsList>
         <TabsContent value="members">
           <MembersTab workspaceId={workspace.id} ownerId={workspace.owner_id} />
@@ -195,81 +194,7 @@ const WorkspaceDetail = ({
         <TabsContent value="invites">
           <InvitesTab workspaceId={workspace.id} workspaceName={workspace.name} />
         </TabsContent>
-        <TabsContent value="sharing">
-          <SharingTab workspaceId={workspace.id} initialModules={workspace.shared_modules} />
-        </TabsContent>
       </Tabs>
-    </div>
-  );
-};
-
-const SHAREABLE_MODULES: Array<{ key: string; label: string; description: string }> = [
-  {
-    key: "clientes",
-    label: "Clientes",
-    description: "A lista de clientes deste ambiente fica visível (somente leitura) em todos os seus outros ambientes.",
-  },
-];
-
-const SharingTab = ({
-  workspaceId,
-  initialModules,
-}: {
-  workspaceId: string;
-  initialModules: string[];
-}) => {
-  const [modules, setModules] = useState<string[]>(initialModules);
-  const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    setModules(initialModules);
-  }, [workspaceId]);
-
-  const toggle = async (key: string) => {
-    const next = modules.includes(key)
-      ? modules.filter((m) => m !== key)
-      : [...modules, key];
-    setModules(next);
-    setSaving(true);
-    const { error } = await supabase
-      .from("workspaces")
-      .update({ shared_modules: next } as never)
-      .eq("id", workspaceId);
-    setSaving(false);
-    if (error) {
-      toast.error(error.message);
-      setModules(modules); // rollback
-    }
-  };
-
-  return (
-    <div className="space-y-3 mt-3">
-      <div className="rounded-xl border bg-card p-4 space-y-1">
-        <div className="flex items-center gap-2 mb-3">
-          <Share2 className="h-4 w-4 text-muted-foreground" />
-          <p className="text-sm font-medium">Módulos compartilhados</p>
-          {saving && <span className="text-xs text-muted-foreground ml-auto">Salvando…</span>}
-        </div>
-        <p className="text-xs text-muted-foreground mb-3">
-          Módulos marcados como compartilhados terão seus dados exibidos (somente leitura, com etiqueta do ambiente) em todos os seus outros ambientes.
-        </p>
-        {SHAREABLE_MODULES.map((mod) => (
-          <label
-            key={mod.key}
-            className="flex items-start gap-3 py-2 cursor-pointer group"
-          >
-            <Checkbox
-              checked={modules.includes(mod.key)}
-              onCheckedChange={() => toggle(mod.key)}
-              className="mt-0.5"
-            />
-            <div>
-              <p className="text-sm font-medium group-hover:text-foreground">{mod.label}</p>
-              <p className="text-xs text-muted-foreground">{mod.description}</p>
-            </div>
-          </label>
-        ))}
-      </div>
     </div>
   );
 };
