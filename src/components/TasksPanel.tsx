@@ -578,7 +578,7 @@ export const TasksPanel = ({
                             ? "text-foreground"
                             : "text-muted-foreground opacity-0 group-hover/sub:opacity-100",
                         )}
-                        title="ObservaÃ§Ã£o"
+                        title="Observação"
                       >
                         <StickyNote className="h-3.5 w-3.5" />
                       </button>
@@ -616,7 +616,7 @@ export const TasksPanel = ({
                     <NoteField
                       value={s.notes}
                       onSave={(v) => saveNote(s.id, v, "sub")}
-                      placeholder="ObservaÃ§Ã£o..."
+                      placeholder="Observação..."
                       className="min-h-8 py-1.5 text-xs leading-5"
                       rows={1}
                       autoResize
@@ -668,7 +668,7 @@ export const TasksPanel = ({
             <Pencil className="h-3.5 w-3.5 mr-2" /> Editar tÃ­tulo
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => toggleNotes(`task:${t.id}`)}>
-            <StickyNote className="h-3.5 w-3.5 mr-2" /> ObservaÃ§Ã£o
+            <StickyNote className="h-3.5 w-3.5 mr-2" /> Observação
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => toggleExpand(t.id)}>
             <ChevronDown className="h-3.5 w-3.5 mr-2" /> Sub-tarefas
@@ -734,7 +734,7 @@ export const TasksPanel = ({
             <NoteField
               value={t.notes}
               onSave={(v) => saveNote(t.id, v, "task")}
-              placeholder="ObservaÃ§Ã£o da tarefa..."
+              placeholder="Observação da tarefa..."
               className="text-sm min-h-[60px]"
             />
           </div>
@@ -1092,7 +1092,7 @@ export const TasksPanel = ({
                                 <NoteField
                                   value={t.notes}
                                   onSave={(v) => saveNote(t.id, v, "task")}
-                                  placeholder="ObservaÃ§Ã£o..."
+                                  placeholder="Observação..."
                                   className="text-sm"
                                 />
                               </div>
@@ -1137,7 +1137,7 @@ export const TasksPanel = ({
                     <NoteField
                       value={t.notes}
                       onSave={(v) => saveNote(t.id, v, "task")}
-                      placeholder="ObservaÃ§Ã£o..."
+                      placeholder="Observação..."
                       className="text-sm"
                     />
                   )}
