@@ -14,7 +14,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Trash2, Download, Link2 } from "lucide-react";
+import { Trash2, Download, Link2, StickyNote } from "lucide-react";
 import { toast } from "sonner";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import type { Task } from "./TasksPanel";
@@ -28,6 +28,7 @@ interface ScheduleItem {
   task_date: string;
   status: "pendente" | "fazendo" | "aguardando" | "feita" | "cancelado" | "pulado";
   task_id: string | null;
+  note: string;
 }
 
 interface Props {
@@ -69,7 +70,6 @@ const fromMin = (n: number) => {
   const m = n % 60;
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 };
-const fmt = (t: string) => t.slice(0, 5);
 
 export const SchedulePanel = ({ date, userId, tasks }: Props) => {
   const { workspaceId } = useWorkspace();
@@ -259,11 +259,13 @@ export const SchedulePanel = ({ date, userId, tasks }: Props) => {
             status={it.status}
             tasks={importableTasks}
             linkedTaskId={it.task_id}
+            note={it.note ?? ""}
             isFirst={idx === 0}
             onChangeStart={(v) => updateItem(it.id, { start_time: v + ":00" })}
             onChangeTitle={(v) => updateItem(it.id, { title: v })}
             onChangeDuration={(v) => updateItem(it.id, { duration_minutes: v })}
             onChangeStatus={(v) => updateItem(it.id, { status: v })}
+            onChangeNote={(v) => updateItem(it.id, { note: v })}
             onImport={(task) =>
               updateItem(it.id, { title: task.title, task_id: task.id, status: task.status })
             }
@@ -295,10 +297,12 @@ interface RowProps {
   status: ScheduleItem["status"];
   tasks: Task[];
   linkedTaskId: string | null;
+  note: string;
   onChangeStart: (v: string) => void;
   onChangeTitle: (v: string) => void;
   onChangeDuration: (v: number) => void;
   onChangeStatus: (v: ScheduleItem["status"]) => void;
+  onChangeNote: (v: string) => void;
   onImport: (task: Task) => void;
   onUnlink: () => void;
   onRemove: () => void;
@@ -312,94 +316,140 @@ const ScheduleRow = ({
   status,
   tasks,
   linkedTaskId,
+  note,
   isFirst,
   onChangeStart,
   onChangeTitle,
   onChangeDuration,
   onChangeStatus,
+  onChangeNote,
   onImport,
   onUnlink,
   onRemove,
 }: RowProps) => {
   const [localTitle, setLocalTitle] = useState(title);
+  const [localNote, setLocalNote] = useState(note);
+  const [showNote, setShowNote] = useState(() => note.trim().length > 0);
+
   useEffect(() => setLocalTitle(title), [title]);
+  useEffect(() => {
+    setLocalNote(note);
+    if (note.trim().length > 0) setShowNote(true);
+  }, [note]);
+
+  const hasNote = note.trim().length > 0;
 
   return (
-    <li className="flex flex-wrap items-center gap-2 px-3 py-2 group">
-      {isFirst ? (
-        <Input
-          type="time"
-          value={start}
-          onChange={(e) => onChangeStart(e.target.value)}
-          className="h-8 text-xs w-[100px]"
-        />
-      ) : (
-        <div className="h-8 w-[100px] text-xs flex items-center px-2 text-muted-foreground tabular-nums">
-          {start}
+    <li className="group">
+      {/* Main row */}
+      <div className="flex flex-wrap items-center gap-2 px-3 py-2">
+        {isFirst ? (
+          <Input
+            type="time"
+            value={start}
+            onChange={(e) => onChangeStart(e.target.value)}
+            className="h-8 text-xs w-[100px]"
+          />
+        ) : (
+          <div className="h-8 w-[100px] text-xs flex items-center px-2 text-muted-foreground tabular-nums">
+            {start}
+          </div>
+        )}
+        <ImportButton tasks={tasks} onPick={onImport} />
+        <div className="flex-1 min-w-[160px] flex items-center gap-1">
+          {linkedTaskId && (
+            <button
+              onClick={onUnlink}
+              title="Tarefa vinculada — clique para desvincular"
+              className="text-[hsl(var(--status-fazendo))] hover:text-destructive transition shrink-0"
+            >
+              <Link2 className="h-3.5 w-3.5" />
+            </button>
+          )}
+          {linkedTaskId ? (
+            <div
+              title="Vinculado a uma tarefa — edite o título na seção Tarefas"
+              className={`h-8 text-sm flex-1 flex items-center px-3 rounded-md border border-dashed border-border bg-muted/30 text-foreground/90 truncate cursor-not-allowed ${status === "feita" ? "line-through text-muted-foreground" : ""}`}
+            >
+              {title || <span className="text-muted-foreground italic">Tarefa vinculada</span>}
+            </div>
+          ) : (
+            <Input
+              value={localTitle}
+              onChange={(e) => setLocalTitle(e.target.value)}
+              onBlur={() => localTitle !== title && onChangeTitle(localTitle)}
+              placeholder="Tarefa..."
+              className={`h-8 text-sm flex-1 ${status === "feita" ? "line-through text-muted-foreground" : ""}`}
+            />
+          )}
+        </div>
+        <Select value={String(duration)} onValueChange={(v) => onChangeDuration(Number(v))}>
+          <SelectTrigger className="h-8 text-xs w-[90px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {DURATIONS.map((d) => (
+              <SelectItem key={d} value={String(d)}>
+                {d} min
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Select value={status} onValueChange={(v) => onChangeStatus(v as ScheduleItem["status"])}>
+          <SelectTrigger
+            className={`h-7 w-[110px] text-xs border-0 rounded-full ${statusColor[status]}`}
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {STATUS_OPTIONS.map((o) => (
+              <SelectItem key={o.value} value={o.value} className="text-xs">
+                {o.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        {/* Note toggle button */}
+        <button
+          onClick={() => setShowNote((v) => !v)}
+          title={hasNote ? "Ver/editar observação" : "Adicionar observação"}
+          className={`transition shrink-0 ${
+            hasNote
+              ? "text-[hsl(var(--dourado))] opacity-100"
+              : "opacity-0 group-hover:opacity-60 text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          <StickyNote className="h-3.5 w-3.5" />
+        </button>
+
+        <button
+          onClick={onRemove}
+          className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition"
+          aria-label="Remover"
+        >
+          <Trash2 className="h-4 w-4" />
+        </button>
+      </div>
+
+      {/* Note area — appears when toggled or when note has content */}
+      {showNote && (
+        <div className="px-3 pb-2 pl-[calc(0.75rem+100px+0.5rem+2rem+0.5rem)]">
+          <textarea
+            value={localNote}
+            onChange={(e) => setLocalNote(e.target.value)}
+            onBlur={() => {
+              if (localNote !== note) onChangeNote(localNote);
+              if (localNote.trim().length === 0) setShowNote(false);
+            }}
+            placeholder="Observação sobre este item..."
+            rows={localNote.trim().length > 80 ? 3 : 2}
+            className="w-full text-xs resize-none rounded-md border border-border bg-muted/30 px-2 py-1.5 text-foreground/90 placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring transition"
+            autoFocus={!hasNote}
+          />
         </div>
       )}
-      <ImportButton tasks={tasks} onPick={onImport} />
-      <div className="flex-1 min-w-[160px] flex items-center gap-1">
-        {linkedTaskId && (
-          <button
-            onClick={onUnlink}
-            title="Tarefa vinculada — clique para desvincular"
-            className="text-[hsl(var(--status-fazendo))] hover:text-destructive transition shrink-0"
-          >
-            <Link2 className="h-3.5 w-3.5" />
-          </button>
-        )}
-        {linkedTaskId ? (
-          <div
-            title="Vinculado a uma tarefa — edite o título na seção Tarefas"
-            className={`h-8 text-sm flex-1 flex items-center px-3 rounded-md border border-dashed border-border bg-muted/30 text-foreground/90 truncate cursor-not-allowed ${status === "feita" ? "line-through text-muted-foreground" : ""}`}
-          >
-            {title || <span className="text-muted-foreground italic">Tarefa vinculada</span>}
-          </div>
-        ) : (
-          <Input
-            value={localTitle}
-            onChange={(e) => setLocalTitle(e.target.value)}
-            onBlur={() => localTitle !== title && onChangeTitle(localTitle)}
-            placeholder="Tarefa..."
-            className={`h-8 text-sm flex-1 ${status === "feita" ? "line-through text-muted-foreground" : ""}`}
-          />
-        )}
-      </div>
-      <Select value={String(duration)} onValueChange={(v) => onChangeDuration(Number(v))}>
-        <SelectTrigger className="h-8 text-xs w-[90px]">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {DURATIONS.map((d) => (
-            <SelectItem key={d} value={String(d)}>
-              {d} min
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-
-      <Select value={status} onValueChange={(v) => onChangeStatus(v as ScheduleItem["status"])}>
-        <SelectTrigger
-          className={`h-7 w-[110px] text-xs border-0 rounded-full ${statusColor[status]}`}
-        >
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {STATUS_OPTIONS.map((o) => (
-            <SelectItem key={o.value} value={o.value} className="text-xs">
-              {o.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-      <button
-        onClick={onRemove}
-        className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition"
-        aria-label="Remover"
-      >
-        <Trash2 className="h-4 w-4" />
-      </button>
     </li>
   );
 };
