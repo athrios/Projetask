@@ -20,8 +20,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { EmptyState } from "@/components/shared/EmptyState";
-import { Users, Plus, Search, Trash2, Pencil, Settings, Upload } from "lucide-react";
+import { Users, Plus, Search, Trash2, Pencil, Settings, Upload, Eye, EyeOff } from "lucide-react";
 import { CopyButton } from "@/components/shared/CopyButton";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -42,6 +47,10 @@ const TYPE_LABEL: Record<ClientRecord["client_type"], string> = {
   estrangeiro: "Estrangeiro",
 };
 
+
+const lsGet = <T,>(k: string, f: T): T => {
+  try { return JSON.parse(localStorage.getItem(k) || "null") ?? f; } catch { return f; }
+};
 
 const Field = ({ label, value }: { label: string; value: string }) => (
   <div className="flex items-start gap-2 text-xs">
@@ -93,7 +102,10 @@ const getExtraValue = (r: ClientRecord, extraId: string): string => {
 export const ClientsPanel = ({ userId }: { userId: string }) => {
   const { workspaceId, workspaces, can } = useWorkspace();
   const { settings, save: saveSettings, reload: reloadSettings } = useClientSettings(workspaceId);
-  const [rows, setRows] = useState<(ClientRecord & { _workspace_name?: string })[]>([]);
+  const [rows, setRows] = useState<(ClientRecord & { _workspace_name?: string; _workspace_color?: string })[]>([]);
+  const [hiddenSources, setHiddenSources] = useState<string[]>(() =>
+    lsGet<string[]>(`clientsHiddenSources_${workspaceId ?? ""}`, []),
+  );
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [editing, setEditing] = useState<ClientRecord | null>(null);
@@ -110,10 +122,14 @@ export const ClientsPanel = ({ userId }: { userId: string }) => {
     if (!workspaceId) return;
     setLoading(true);
 
+    // Load clients from ALL workspaces the user belongs to in one query
+    const allIds = workspaces.map((w) => w.id);
+    if (allIds.length === 0) { setRows([]); setLoading(false); return; }
+
     const { data, error } = await supabase
       .from("clients")
       .select("*")
-      .eq("workspace_id", workspaceId)
+      .in("workspace_id", allIds)
       .order("name", { ascending: true });
 
     if (error) {
@@ -122,31 +138,18 @@ export const ClientsPanel = ({ userId }: { userId: string }) => {
       return;
     }
 
-    let all: (ClientRecord & { _workspace_name?: string })[] =
-      (data ?? []) as unknown as ClientRecord[];
-
-    // Also load clients from other workspaces the user owns that share 'clientes'
-    const sharedSources = workspaces.filter(
-      (w) => w.id !== workspaceId && w.shared_modules?.includes("clientes"),
+    const wsMap = Object.fromEntries(
+      workspaces.map((w) => [w.id, { name: w.name, color: w.color }]),
     );
-    for (const ws of sharedSources) {
-      const { data: shared } = await supabase
-        .from("clients")
-        .select("*")
-        .eq("workspace_id", ws.id)
-        .order("name", { ascending: true });
-      if (shared) {
-        all = [
-          ...all,
-          ...(shared as unknown as ClientRecord[]).map((c) => ({
-            ...c,
-            _workspace_name: ws.name,
-          })),
-        ];
-      }
-    }
 
-    all.sort((a, b) => a.name.localeCompare(b.name));
+    const all = ((data ?? []) as unknown as ClientRecord[]).map((c) => ({
+      ...c,
+      _workspace_name: c.workspace_id !== workspaceId
+        ? (wsMap[c.workspace_id]?.name ?? "Outro ambiente")
+        : undefined,
+      _workspace_color: wsMap[c.workspace_id]?.color ?? "gray",
+    }));
+
     setRows(all);
     setLoading(false);
   }, [workspaceId, workspaces]);
@@ -155,15 +158,24 @@ export const ClientsPanel = ({ userId }: { userId: string }) => {
     load();
   }, [load]);
 
+  useEffect(() => {
+    setHiddenSources(lsGet<string[]>(`clientsHiddenSources_${workspaceId ?? ""}`, []));
+  }, [workspaceId]);
+
+  useEffect(() => {
+    localStorage.setItem(`clientsHiddenSources_${workspaceId ?? ""}`, JSON.stringify(hiddenSources));
+  }, [hiddenSources, workspaceId]);
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return rows;
-    return rows.filter((r) =>
-      [r.name, r.trade_name, r.email, r.document]
+    return rows.filter((r) => {
+      if (hiddenSources.includes(r.workspace_id ?? "")) return false;
+      if (!q) return true;
+      return [r.name, r.trade_name, r.email, r.document]
         .filter(Boolean)
-        .some((x) => x.toLowerCase().includes(q)),
-    );
-  }, [rows, search]);
+        .some((x) => x!.toLowerCase().includes(q));
+    });
+  }, [rows, search, hiddenSources]);
 
   const orderedKeys = useMemo(() => resolveFieldOrder(settings), [settings]);
 
@@ -192,6 +204,72 @@ export const ClientsPanel = ({ userId }: { userId: string }) => {
           />
         </div>
         <div className="flex items-center gap-2">
+          {/* Source workspace filter */}
+          {workspaces.length > 1 && (
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  title="Filtrar por ambiente"
+                  aria-label="Filtrar por ambiente"
+                  className={cn(hiddenSources.length > 0 && "text-foreground")}
+                >
+                  <Eye className="h-4 w-4" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-64 space-y-2">
+                <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                  Ambientes visíveis
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Clientes de todos os seus ambientes aparecem aqui. Oculte os que não quer ver.
+                </p>
+                <div className="space-y-1 pt-1">
+                  {workspaces.map((w) => {
+                    const hidden = hiddenSources.includes(w.id);
+                    return (
+                      <label key={w.id} className="flex items-center gap-2 text-xs cursor-pointer py-1">
+                        <Checkbox
+                          checked={!hidden}
+                          onCheckedChange={() =>
+                            setHiddenSources((cur) =>
+                              cur.includes(w.id)
+                                ? cur.filter((x) => x !== w.id)
+                                : [...cur, w.id],
+                            )
+                          }
+                          className="h-3.5 w-3.5"
+                        />
+                        <span className="flex items-center gap-1.5 flex-1">
+                          <span className={cn(
+                            "h-2 w-2 rounded-full shrink-0",
+                            w.id === workspaceId ? "bg-primary" : "bg-muted-foreground/50",
+                          )} />
+                          <span className={cn("truncate", hidden && "line-through text-muted-foreground")}>
+                            {w.name}
+                          </span>
+                          {w.id === workspaceId && (
+                            <span className="text-[10px] text-muted-foreground ml-auto">(atual)</span>
+                          )}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+                {hiddenSources.length > 0 && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="w-full h-8 text-xs"
+                    onClick={() => setHiddenSources([])}
+                  >
+                    <Eye className="h-3 w-3" /> Mostrar todos
+                  </Button>
+                )}
+              </PopoverContent>
+            </Popover>
+          )}
           {canEdit && (
             <Button
               variant="ghost"
@@ -266,8 +344,8 @@ export const ClientsPanel = ({ userId }: { userId: string }) => {
                         {TYPE_LABEL[r.client_type]}
                       </Badge>
                       {r._workspace_name && (
-                        <Badge variant="outline" className="text-[10px] gap-1">
-                          <span className="opacity-60">↗</span>
+                        <Badge variant="outline" className="text-[10px] gap-1.5 font-normal">
+                          <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/60 shrink-0" />
                           {r._workspace_name}
                         </Badge>
                       )}
