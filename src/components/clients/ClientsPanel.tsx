@@ -163,11 +163,16 @@ export const ClientsPanel = ({ userId }: { userId: string }) => {
 
   useEffect(() => {
     setHiddenSources(lsGet<string[]>(`clientsHiddenSources_${workspaceId ?? ""}`, []));
+    setSearch(lsGet<string>(`clientsSearch_${workspaceId ?? ""}`, ""));
   }, [workspaceId]);
 
   useEffect(() => {
     localStorage.setItem(`clientsHiddenSources_${workspaceId ?? ""}`, JSON.stringify(hiddenSources));
   }, [hiddenSources, workspaceId]);
+
+  useEffect(() => {
+    localStorage.setItem(`clientsSearch_${workspaceId ?? ""}`, JSON.stringify(search));
+  }, [search, workspaceId]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
