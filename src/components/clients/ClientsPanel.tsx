@@ -371,9 +371,9 @@ export const ClientsPanel = ({ userId }: { userId: string }) => {
                         if (!v) return null;
                         const label =
                           key === "document"
-                            ? r.client_type === "pj"
+                            ? r.client_type === "pessoa_juridica"
                               ? "CNPJ"
-                              : r.client_type === "pf"
+                              : r.client_type === "pessoa_fisica"
                                 ? "CPF"
                                 : "Documento"
                             : STANDARD_FIELD_LABELS[key as keyof typeof STANDARD_FIELD_LABELS] ?? key;
