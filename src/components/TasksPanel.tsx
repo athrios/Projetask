@@ -259,7 +259,7 @@ export const TasksPanel = ({
     e?.preventDefault();
     const t = title.trim();
     if (!t) return;
-    if (t.length > 200) return toast.error("TÃ­tulo muito longo");
+    if (t.length > 200) return toast.error("Título muito longo");
     const targetDate = dateFilter ?? (filter === "today" ? today : today);
     const { data, error } = await supabase.from("tasks").insert({
       title: t,
@@ -301,9 +301,9 @@ export const TasksPanel = ({
       parent_recurring_task_id: parentId,
       workspace_id: workspaceId ?? undefined,
     } as never).select().single();
-    if (error) return toast.error("Erro ao gerar recorrÃªncia: " + error.message);
-    if (data) await logActivity(userId, "task", data.id, "recurrence_generated", `PrÃ³xima ocorrÃªncia criada para ${nextISO}`);
-    toast.success(`PrÃ³xima ocorrÃªncia criada (${nextISO})`);
+    if (error) return toast.error("Erro ao gerar recorrência: " + error.message);
+    if (data) await logActivity(userId, "task", data.id, "recurrence_generated", `Próxima ocorrência criada para ${nextISO}`);
+    toast.success(`Próxima ocorrência criada (${nextISO})`);
   };
 
   const updateTask = async (id: string, patch: Partial<Task>) => {
@@ -344,8 +344,8 @@ export const TasksPanel = ({
     const t = tasks.find((x) => x.id === id);
     const { error } = await supabase.from("tasks").delete().eq("id", id);
     if (error) return toast.error(error.message);
-    await logActivity(userId, "task", id, "deleted", `Tarefa excluÃ­da: "${t?.title ?? ""}"`);
-    toast.success("Tarefa excluÃ­da");
+    await logActivity(userId, "task", id, "deleted", `Tarefa excluída: "${t?.title ?? ""}"`);
+    toast.success("Tarefa excluída");
     load();
   };
 
@@ -356,7 +356,7 @@ export const TasksPanel = ({
   const saveEdit = async () => {
     if (!editingId) return;
     const v = editingValue.trim();
-    if (!v) return toast.error("TÃ­tulo vazio");
+    if (!v) return toast.error("Título vazio");
     await updateTask(editingId, { title: v });
     setEditingId(null);
   };
@@ -368,7 +368,7 @@ export const TasksPanel = ({
   const saveEditSub = async () => {
     if (!editingSubId) return;
     const v = editingSubValue.trim();
-    if (!v) return toast.error("TÃ­tulo vazio");
+    if (!v) return toast.error("Título vazio");
     const { error } = await supabase.from("subtasks").update({ title: v }).eq("id", editingSubId);
     if (error) return toast.error(error.message);
     setEditingSubId(null);
@@ -665,7 +665,7 @@ export const TasksPanel = ({
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-48">
           <DropdownMenuItem onClick={() => startEdit(t)}>
-            <Pencil className="h-3.5 w-3.5 mr-2" /> Editar tÃ­tulo
+            <Pencil className="h-3.5 w-3.5 mr-2" /> Editar título
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => toggleNotes(`task:${t.id}`)}>
             <StickyNote className="h-3.5 w-3.5 mr-2" /> Observação
@@ -674,13 +674,13 @@ export const TasksPanel = ({
             <ChevronDown className="h-3.5 w-3.5 mr-2" /> Sub-tarefas
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => setRecurEditingId(t.id)}>
-            <Repeat className="h-3.5 w-3.5 mr-2" /> RecorrÃªncia
+            <Repeat className="h-3.5 w-3.5 mr-2" /> Recorrência
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => setReminderTaskId(t.id)}>
             <BellRing className="h-3.5 w-3.5 mr-2" /> Alertas
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => setHistoryId(t.id)}>
-            <History className="h-3.5 w-3.5 mr-2" /> HistÃ³rico
+            <History className="h-3.5 w-3.5 mr-2" /> Histórico
           </DropdownMenuItem>
 
           <DropdownMenuItem onClick={() => remove(t.id)} className="text-destructive">
@@ -1202,7 +1202,7 @@ export const TasksPanel = ({
             <Dialog open onOpenChange={(o) => !o && setRecurEditingId(null)}>
               <DialogContent className="max-w-md">
                 <DialogHeader>
-                  <DialogTitle>RecorrÃªncia da tarefa</DialogTitle>
+                  <DialogTitle>Recorrência da tarefa</DialogTitle>
                 </DialogHeader>
                 <div className="space-y-3">
                   <label className="flex items-center gap-2 text-sm">
@@ -1218,7 +1218,7 @@ export const TasksPanel = ({
                   {t.is_recurring && (
                     <>
                       <div>
-                        <label className="text-xs font-medium">FrequÃªncia</label>
+                        <label className="text-xs font-medium">Frequência</label>
                         <Select
                           value={t.recurrence_type ?? "weekly"}
                           onValueChange={(v) => updateTask(t.id, { recurrence_type: v as RecurrenceType } as Partial<Task>)}
@@ -1248,7 +1248,7 @@ export const TasksPanel = ({
                         />
                       </div>
                       <p className="text-xs text-muted-foreground">
-                        A prÃ³xima ocorrÃªncia serÃ¡ criada automaticamente quando esta tarefa for marcada como concluÃ­da.
+                        A prÃ³xima ocorrência será criada automaticamente quando esta tarefa for marcada como concluída.
                       </p>
                     </>
                   )}
@@ -1263,7 +1263,7 @@ export const TasksPanel = ({
           <Dialog open onOpenChange={(o) => !o && setHistoryId(null)}>
             <DialogContent className="max-w-md">
               <DialogHeader>
-                <DialogTitle>HistÃ³rico da tarefa</DialogTitle>
+                <DialogTitle>Histórico da tarefa</DialogTitle>
               </DialogHeader>
               <ActivityLogList entityType="task" entityId={historyId} />
             </DialogContent>
