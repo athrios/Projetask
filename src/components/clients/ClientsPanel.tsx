@@ -108,7 +108,9 @@ export const ClientsPanel = ({ userId }: { userId: string }) => {
     lsGet<string[]>(`clientsHiddenSources_${workspaceId ?? ""}`, []),
   );
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(() =>
+    lsGet<string>(`clientsSearch_${workspaceId ?? ""}`, ""),
+  );
   const [editing, setEditing] = useState<ClientRecord | null>(null);
   const [creating, setCreating] = useState(false);
   const [toDelete, setToDelete] = useState<ClientRecord | null>(null);
