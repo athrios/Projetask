@@ -1,17 +1,8 @@
-## Objetivo
-Tornar o rótulo do campo Documento dinâmico também no card do cliente (lista de Clientes), espelhando o comportamento já existente no formulário.
+Substituir o favicon pelo logo enviado (musgo/areia).
 
-## Mudança
-Arquivo: `src/components/clients/ClientsPanel.tsx` (~linha 372).
+Passos:
+1. Copiar `user-uploads://LOGO_AMBITASK_MUSGO-AREIA.png` para `public/favicon.png`.
+2. Remover `public/favicon.ico` (se existir) para evitar conflito com a requisição padrão do navegador.
+3. Atualizar `index.html` para referenciar `<link rel="icon" href="/favicon.png" type="image/png">`.
 
-No `.map` de `orderedKeys` que renderiza cada `Field`, quando `key === "document"`, calcular o rótulo a partir de `r.client_type`:
-- `pj` → "CNPJ"
-- `pf` → "CPF"
-- demais (`estrangeiro`, etc.) → "Documento"
-
-Para os outros campos, manter o uso de `STANDARD_FIELD_LABELS`.
-
-## Fora de escopo
-- Nenhuma mudança em `ClientForm` (já dinâmico).
-- Nenhuma mudança em `STANDARD_FIELD_LABELS` / settings (o label "Documento" continua sendo o padrão para configuração de ordem/visibilidade — a substituição é só visual no card).
-- Sem alterações no placeholder de busca e em outras telas.
+Sem alterações de lógica ou de outros componentes.
