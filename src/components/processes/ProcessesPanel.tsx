@@ -1348,6 +1348,28 @@ const ProcessDetail = ({
                 Cancelar processo
               </Button>
             )}
+            {canRestart && (
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button size="sm" variant="ghost" className="gap-1.5 text-muted-foreground hover:text-foreground">
+                    <RotateCcw className="h-3.5 w-3.5" /> Reiniciar processo
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Reiniciar este processo?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Tem certeza que deseja reiniciar este processo? As etapas voltarão ao estado inicial.
+                      Vínculos, anexos e dados do processo serão mantidos.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                    <AlertDialogAction onClick={restartProcess}>Reiniciar</AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            )}
             {isCancelled && <span className="text-xs text-muted-foreground">Processo cancelado manualmente.</span>}
           </div>
         </div>
