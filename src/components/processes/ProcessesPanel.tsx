@@ -1296,8 +1296,25 @@ const ProcessDetail = ({
     onChanged();
   };
 
+  const restartProcess = async () => {
+    const { error: stepsErr } = await supabase
+      .from("process_steps")
+      .update({ status: "pendente", started_at: null, completed_at: null, dismissed_at: null })
+      .eq("process_id", process.id);
+    if (stepsErr) return toast.error(stepsErr.message);
+    const { error: procErr } = await supabase
+      .from("processes")
+      .update({ status: "nao_iniciado" })
+      .eq("id", process.id);
+    if (procErr) return toast.error(procErr.message);
+    await logActivity(userId, "process", process.id, "status_changed", `Processo reiniciado: "${process.name}"`);
+    toast.success("Processo reiniciado");
+    onChanged();
+  };
+
   const canStart = autoStatus === "nao_iniciado" && total > 0 && process.status !== "cancelado";
   const isCancelled = process.status === "cancelado";
+  const canRestart = total > 0 && !canStart;
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
