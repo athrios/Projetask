@@ -370,7 +370,13 @@ export const ClientsPanel = ({ userId }: { userId: string }) => {
                         const v = getStandardValue(r, key);
                         if (!v) return null;
                         const label =
-                          STANDARD_FIELD_LABELS[key as keyof typeof STANDARD_FIELD_LABELS] ?? key;
+                          key === "document"
+                            ? r.client_type === "pessoa_juridica"
+                              ? "CNPJ"
+                              : r.client_type === "pessoa_fisica"
+                                ? "CPF"
+                                : "Documento"
+                            : STANDARD_FIELD_LABELS[key as keyof typeof STANDARD_FIELD_LABELS] ?? key;
                         return <Field key={key} label={label} value={v} />;
                       })}
                       {orphanCustoms.map((c, i) => (
