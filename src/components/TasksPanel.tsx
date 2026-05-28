@@ -1248,7 +1248,7 @@ export const TasksPanel = ({
                         />
                       </div>
                       <p className="text-xs text-muted-foreground">
-                        A prÃ³xima ocorrência será criada automaticamente quando esta tarefa for marcada como concluída.
+                        A próxima ocorrência será criada automaticamente quando esta tarefa for marcada como concluída.
                       </p>
                     </>
                   )}
