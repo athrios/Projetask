@@ -472,7 +472,7 @@ const PublicForm = () => {
                         return;
                       }
                       const safe = file.name.replace(/[^\w.\-]+/g, "_");
-                      const path = `${form.user_id}/${form.id}/${crypto.randomUUID()}-${safe}`;
+                      const path = `${form.id}/${crypto.randomUUID()}-${safe}`;
                       const { error } = await supabase.storage
                         .from("form-uploads")
                         .upload(path, file, { upsert: false, contentType: file.type });
