@@ -1,10 +1,36 @@
 import * as React from "react";
 
 import { cn } from "@/lib/utils";
+import { useSpotlight } from "@/hooks/useSpotlight";
 
-const Card = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(({ className, ...props }, ref) => (
-  <div ref={ref} className={cn("rounded-lg border bg-card text-card-foreground shadow-sm", className)} {...props} />
-));
+interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
+  spotlight?: boolean;
+}
+
+const Card = React.forwardRef<HTMLDivElement, CardProps>(
+  ({ className, spotlight, ...props }, ref) => {
+    const spotlightRef = useSpotlight<HTMLDivElement>();
+    const setRefs = React.useCallback(
+      (node: HTMLDivElement | null) => {
+        if (spotlight) spotlightRef(node);
+        if (typeof ref === "function") ref(node);
+        else if (ref) (ref as React.MutableRefObject<HTMLDivElement | null>).current = node;
+      },
+      [ref, spotlight, spotlightRef],
+    );
+    return (
+      <div
+        ref={setRefs}
+        className={cn(
+          "rounded-lg border bg-card text-card-foreground shadow-sm",
+          spotlight && "spotlight",
+          className,
+        )}
+        {...props}
+      />
+    );
+  },
+);
 Card.displayName = "Card";
 
 const CardHeader = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(

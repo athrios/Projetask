@@ -1118,7 +1118,7 @@ export const TasksPanel = ({
             {filtered.map((t) => {
               const noteKey = `task:${t.id}`;
               return (
-                <div key={t.id} className="rounded-lg border bg-card p-4 space-y-3 hover:shadow-sm transition">
+                <div key={t.id} className="spotlight rounded-lg border bg-card p-4 space-y-3 transition">
                   <div className="flex items-start gap-2">
                     <Checkbox
                       checked={t.done}
@@ -1167,7 +1167,7 @@ export const TasksPanel = ({
                     </div>
                     <div className="p-2 space-y-2 flex-1">
                       {colTasks.map((t) => (
-                        <div key={t.id} className="rounded-md border bg-card p-2.5 space-y-2 group">
+                        <div key={t.id} className="spotlight-sm rounded-md border bg-card p-2.5 space-y-2 group">
                           <div className="flex items-start gap-2">
                             <Checkbox
                               checked={t.done}

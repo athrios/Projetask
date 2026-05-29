@@ -345,7 +345,7 @@ export const ClientsPanel = ({ userId }: { userId: string }) => {
             return (
               <div
                 key={r.id}
-                className="rounded-lg border bg-card px-4 py-3 hover:bg-muted/20 transition-colors"
+                className="spotlight rounded-lg border bg-card px-4 py-3 transition-colors"
               >
                 <div className="flex items-start gap-3">
                   <div className="flex-1 min-w-0 space-y-2">

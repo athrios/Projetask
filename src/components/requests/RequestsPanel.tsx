@@ -699,7 +699,7 @@ const RequestCard = ({
   return (
     <button
       onClick={onOpen}
-      className="text-left rounded-xl border bg-card p-4 hover:shadow-sm transition w-full"
+      className="spotlight text-left rounded-xl border bg-card p-4 transition w-full"
     >
       <div className="flex items-start justify-between gap-2">
         <span className={cn("inline-block text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full border", colorPill[color])}>

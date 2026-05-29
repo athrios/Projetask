@@ -93,14 +93,14 @@ export const TodayPanel = ({ date, userId }: Props) => {
       {(overdue.length > 0 || pendingRequests.length > 0) && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {overdue.length > 0 && (
-            <div className="rounded-xl border border-[hsl(var(--prio-urgente))]/30 bg-card p-4">
+            <div className="spotlight rounded-xl border border-[hsl(var(--prio-urgente))]/30 bg-card p-4">
               <h3 className="text-xs font-semibold uppercase tracking-wide text-[hsl(var(--prio-urgente))] flex items-center gap-1.5 mb-2">
                 <AlertTriangle className="h-3.5 w-3.5" />
                 Tarefas atrasadas
               </h3>
               <ul className="divide-y">
                 {overdue.map((t) => (
-                  <li key={t.id} className="py-1.5 flex items-center justify-between gap-2">
+                  <li key={t.id} className="spotlight-sm rounded-md px-2 py-1.5 -mx-2 flex items-center justify-between gap-2">
                     <span className="text-sm truncate">{t.title}</span>
                     <span className="text-[11px] text-muted-foreground tabular-nums shrink-0">
                       {new Date(t.task_date).toLocaleDateString("pt-BR")}
@@ -111,14 +111,14 @@ export const TodayPanel = ({ date, userId }: Props) => {
             </div>
           )}
           {pendingRequests.length > 0 && (
-            <div className="rounded-xl border bg-card p-4">
+            <div className="spotlight rounded-xl border bg-card p-4">
               <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5 mb-2">
                 <Inbox className="h-3.5 w-3.5" />
                 Solicitações pendentes
               </h3>
               <ul className="divide-y">
                 {pendingRequests.map((r) => (
-                  <li key={r.id} className="py-1.5 flex items-center justify-between gap-2">
+                  <li key={r.id} className="spotlight-sm rounded-md px-2 py-1.5 -mx-2 flex items-center justify-between gap-2">
                     <span className="text-sm truncate">{r.submitter_name || "Anônimo"}</span>
                     <span className="text-[11px] text-muted-foreground tabular-nums shrink-0">
                       {new Date(r.created_at).toLocaleDateString("pt-BR")}
@@ -162,7 +162,7 @@ const Stat = ({
   hint?: string;
   accent?: boolean;
 }) => (
-  <div className={`rounded-xl border bg-card p-4 ${accent ? "border-[hsl(var(--prio-urgente))]/40" : ""}`}>
+  <div className={`spotlight rounded-xl border bg-card p-4 ${accent ? "border-[hsl(var(--prio-urgente))]/40" : ""}`}>
     <div className="flex items-center gap-2 text-muted-foreground text-xs">
       <Icon className={`h-3.5 w-3.5 ${accent ? "text-[hsl(var(--prio-urgente))]" : ""}`} />
       {label}

@@ -517,7 +517,7 @@ const ProcessCard = ({
         }
       }}
       className={cn(
-        "rounded-xl border bg-card p-4 hover:shadow-sm transition group cursor-pointer text-left border-l-4 relative",
+        "spotlight rounded-xl border bg-card p-4 transition group cursor-pointer text-left border-l-4 relative",
         colorLeftBorder[templateColor],
       )}
     >
