@@ -190,6 +190,14 @@ export const TasksPanel = ({
   const [view, setView] = useState<ViewMode>(
     () => (lsGet<ViewMode>("tasksView", "list")),
   );
+  const [indicators, setIndicators] = useState<Record<ViewMode, TaskIndicator[]>>(
+    () => ({
+      list: lsGet<TaskIndicator[]>("tasksIndicators:list", DEFAULT_INDICATORS.list),
+      table: lsGet<TaskIndicator[]>("tasksIndicators:table", DEFAULT_INDICATORS.table),
+      cards: lsGet<TaskIndicator[]>("tasksIndicators:cards", DEFAULT_INDICATORS.cards),
+      kanban: lsGet<TaskIndicator[]>("tasksIndicators:kanban", DEFAULT_INDICATORS.kanban),
+    }),
+  );
   const [newDialogOpen, setNewDialogOpen] = useState(false);
 
   useEffect(() => {
@@ -199,6 +207,34 @@ export const TasksPanel = ({
   useEffect(() => {
     localStorage.setItem("tasksView", JSON.stringify(view));
   }, [view]);
+
+  useEffect(() => {
+    (Object.keys(indicators) as ViewMode[]).forEach((k) => {
+      localStorage.setItem(`tasksIndicators:${k}`, JSON.stringify(indicators[k]));
+    });
+  }, [indicators]);
+
+  const show = useMemo(() => {
+    const cur = indicators[view] ?? [];
+    return {
+      priority: cur.includes("priority"),
+      status: cur.includes("status"),
+      due: cur.includes("due"),
+      progress: cur.includes("progress"),
+    };
+  }, [indicators, view]);
+
+  const toggleIndicator = (key: TaskIndicator) => {
+    setIndicators((p) => {
+      const cur = p[view] ?? [];
+      const next = cur.includes(key) ? cur.filter((x) => x !== key) : [...cur, key];
+      return { ...p, [view]: next };
+    });
+  };
+
+  const resetIndicators = () => {
+    setIndicators((p) => ({ ...p, [view]: DEFAULT_INDICATORS[view] }));
+  };
 
   const today = new Date().toISOString().slice(0, 10);
 
