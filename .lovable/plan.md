@@ -1,51 +1,41 @@
-## Objetivo
+## Plano: ícone ao salvar na tela inicial (iOS/Android)
 
-Trocar todos os `window.confirm()` nativos do app por diálogos de confirmação estilizados (`AlertDialog` do shadcn), garantindo consistência visual e melhor UX (sem o atraso/bloqueio do diálogo nativo do navegador).
+Usar o `public/favicon.png` atual como base.
 
-## Componente compartilhado
+### 1. Gerar ícones (ImageMagick)
+A partir de `public/favicon.png`, criar em `public/`:
+- `apple-touch-icon.png` — 180×180 (iOS)
+- `icon-192.png` — 192×192 (Android)
+- `icon-512.png` — 512×512 (Android, splash)
 
-Criar `src/components/shared/ConfirmDialog.tsx` reutilizável, com duas formas de uso:
-
-1. **Imperativa via hook `useConfirm()`** — retorna uma função `confirm({ title, description, confirmText?, cancelText?, destructive? }) => Promise<boolean>`. Internamente monta um `AlertDialog` controlado por estado e resolve a promise no clique. Isso permite trocar `if (!confirm("..."))` por `if (!(await confirm({...})))` com mudança mínima.
-2. Provider `<ConfirmProvider>` montado uma vez em `src/App.tsx` (envolvendo as rotas) para hospedar o dialog único.
-
-Variante `destructive: true` aplica `buttonVariants({ variant: "destructive" })` no botão de ação.
-
-## Substituições (12 ocorrências)
-
-| Arquivo | Linha | Texto atual | Destrutivo |
-|---|---|---|---|
-| `TasksPanel.tsx` | 343 | "Excluir esta tarefa?" | sim |
-| `TasksPanel.tsx` | 414 | "Excluir subtarefa \"{title}\"?" | sim |
-| `workspace/WorkspacesPanel.tsx` | 134 | "Arquivar este ambiente?..." | não |
-| `workspace/WorkspacesPanel.tsx` | 145 | "Excluir DEFINITIVAMENTE..." | sim |
-| `workspace/WorkspacesPanel.tsx` | 256 | "Remover este membro?" | sim |
-| `requests/RequestsPanel.tsx` | 386 | "Excluir esta solicitação?" | sim |
-| `forms/FormsPanel.tsx` | 164 | "Excluir formulário e todas as respostas vinculadas?" | sim |
-| `processes/ProcessesPanel.tsx` | 233 | "Excluir processo e todas as etapas?" | sim |
-| `processes/ProcessesPanel.tsx` | 550 | "Excluir processo?" | sim |
-| `processes/ProcessesPanel.tsx` | 926 | "Excluir modelo e suas etapas?" | sim |
-| `processes/ProcessesPanel.tsx` | 1286 | "Excluir esta etapa?" | sim |
-| `processes/ProcessesPanel.tsx` | 1292 | "Cancelar este processo?" | não |
-
-Em cada caso, a função handler passa a ser `async` (quando ainda não for) e o `if (!confirm(...)) return;` vira:
-
-```ts
-const ok = await confirm({
-  title: "Excluir tarefa",
-  description: "Esta ação não pode ser desfeita.",
-  destructive: true,
-});
-if (!ok) return;
+### 2. Criar `public/manifest.webmanifest`
+```json
+{
+  "name": "Ambitask",
+  "short_name": "Ambitask",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#ffffff",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
 ```
 
-## Detalhes técnicos
+### 3. Atualizar `<head>` do `index.html`
+Adicionar:
+```html
+<link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+<link rel="manifest" href="/manifest.webmanifest" />
+<meta name="theme-color" content="#ffffff" />
+<meta name="apple-mobile-web-app-title" content="Ambitask" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+```
 
-- Usa `AlertDialog`, `AlertDialogContent`, `AlertDialogHeader`, `AlertDialogTitle`, `AlertDialogDescription`, `AlertDialogFooter`, `AlertDialogAction`, `AlertDialogCancel` já existentes em `src/components/ui/alert-dialog.tsx`.
-- Hook guarda `{ options, resolve }` em estado; `onOpenChange(false)` resolve `false` para cobrir ESC/clique fora.
-- Sem alterações de lógica de negócio, banco ou RLS — apenas camada de apresentação.
-
-## Fora do escopo
-
-- `window.alert` e `window.prompt` (não foram solicitados).
-- Diálogos de confirmação já implementados com componentes (se houver) — não tocar.
+### Observações
+- Sem service worker (evita problemas de cache no preview).
+- iOS cacheia agressivamente o apple-touch-icon: para ver o novo, remover o atalho da tela inicial e adicionar de novo.
+- Se quiser usar uma cor de marca em `theme_color`/`background_color` em vez de branco, basta dizer.
