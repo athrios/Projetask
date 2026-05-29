@@ -70,6 +70,7 @@ import { ListChecks, Repeat, ArrowUp, ArrowDown, History } from "lucide-react";
 import { logActivity } from "@/lib/activityLog";
 import { nextOccurrenceDate, RECURRENCE_OPTIONS, type RecurrenceType } from "@/lib/recurrence";
 import { ActivityLogList } from "@/components/shared/ActivityLogList";
+import { useConfirm } from "@/components/shared/ConfirmDialog";
 import {
   Popover,
   PopoverContent,

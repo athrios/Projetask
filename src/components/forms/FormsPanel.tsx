@@ -39,6 +39,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { toast } from "sonner";
 import { EmptyState } from "@/components/shared/EmptyState";
+import { useConfirm } from "@/components/shared/ConfirmDialog";
 import { logActivity } from "@/lib/activityLog";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { TEMPLATE_COLORS, colorPill, colorLeftBorder, asColor } from "@/components/processes/templateColors";
