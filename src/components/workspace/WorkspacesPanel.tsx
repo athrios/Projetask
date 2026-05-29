@@ -17,6 +17,7 @@ import { toast } from "sonner";
 import { Plus, Trash2, Copy, Send } from "lucide-react";
 import { CreateWorkspaceDialog } from "./CreateWorkspaceDialog";
 import { buildAppUrl } from "@/lib/appUrl";
+import { useConfirm } from "@/components/shared/ConfirmDialog";
 
 type Member = { id: string; user_id: string; role: string };
 type Perm = {
@@ -115,6 +116,7 @@ const WorkspaceDetail = ({
 }) => {
   const [name, setName] = useState(workspace.name);
   const [color, setColor] = useState<TemplateColor>(asColor(workspace.color));
+  const confirm = useConfirm();
 
   useEffect(() => {
     setName(workspace.name);
@@ -131,7 +133,7 @@ const WorkspaceDetail = ({
   };
 
   const archive = async () => {
-    if (!confirm("Arquivar este ambiente? Ele ficará oculto da lista.")) return;
+    if (!(await confirm({ title: "Arquivar ambiente", description: "Ele ficará oculto da lista.", confirmText: "Arquivar" }))) return;
     const { error } = await supabase
       .from("workspaces")
       .update({ archived_at: new Date().toISOString() })
@@ -142,7 +144,7 @@ const WorkspaceDetail = ({
   };
 
   const remove = async () => {
-    if (!confirm("Excluir DEFINITIVAMENTE este ambiente e TODOS os seus dados? Esta ação não pode ser desfeita.")) return;
+    if (!(await confirm({ title: "Excluir ambiente definitivamente", description: "Todos os dados deste ambiente serão removidos. Esta ação não pode ser desfeita.", destructive: true, confirmText: "Excluir" }))) return;
     const { error } = await supabase.from("workspaces").delete().eq("id", workspace.id);
     if (error) return toast.error(error.message);
     toast.success("Ambiente excluído");
@@ -203,6 +205,7 @@ const WorkspaceDetail = ({
 const MembersTab = ({ workspaceId, ownerId }: { workspaceId: string; ownerId: string }) => {
   const [members, setMembers] = useState<Member[]>([]);
   const [perms, setPerms] = useState<Record<string, Perm[]>>({});
+  const confirm = useConfirm();
 
   const load = async () => {
     const { data: m } = await supabase
@@ -253,7 +256,7 @@ const MembersTab = ({ workspaceId, ownerId }: { workspaceId: string; ownerId: st
   };
 
   const removeMember = async (id: string) => {
-    if (!confirm("Remover este membro?")) return;
+    if (!(await confirm({ title: "Remover membro", description: "O membro perderá acesso a este ambiente.", destructive: true, confirmText: "Remover" }))) return;
     await supabase.from("workspace_members").delete().eq("id", id);
     load();
   };

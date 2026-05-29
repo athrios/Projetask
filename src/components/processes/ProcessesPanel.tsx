@@ -38,6 +38,7 @@ import { NoteField } from "@/components/shared/NoteField";
 import { ViewSwitcher, type ViewMode } from "@/components/shared/ViewSwitcher";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { CopyButton } from "@/components/shared/CopyButton";
+import { useConfirm } from "@/components/shared/ConfirmDialog";
 import { PROCESS_STATUS, type ProcessStatus } from "@/lib/taskTokens";
 import { logActivity } from "@/lib/activityLog";
 import { useWorkspace } from "@/hooks/useWorkspace";
@@ -121,6 +122,7 @@ interface Props {
 
 export const ProcessesPanel = ({ userId }: Props) => {
   const { workspaceId } = useWorkspace();
+  const confirm = useConfirm();
   const [templates, setTemplates] = useState<Template[]>([]);
   const [processes, setProcesses] = useState<Process[]>([]);
   const [stepsByProc, setStepsByProc] = useState<Record<string, Step[]>>({});
@@ -230,7 +232,7 @@ export const ProcessesPanel = ({ userId }: Props) => {
   };
 
   const removeProcess = async (id: string) => {
-    if (!confirm("Excluir processo e todas as etapas?")) return;
+    if (!(await confirm({ title: "Excluir processo", description: "Todas as etapas vinculadas também serão excluídas.", destructive: true, confirmText: "Excluir" }))) return;
     const proc = processes.find((p) => p.id === id);
     const { error } = await supabase.from("processes").delete().eq("id", id);
     if (error) return toast.error(error.message);
@@ -496,6 +498,7 @@ const ProcessCard = ({
   onRemove?: () => void;
   onChangeStepStatus?: (stepId: string, next: string) => void | Promise<void>;
 }) => {
+  const confirm = useConfirm();
   const done = steps.filter((s) => s.status === "feita" || s.status === "pulado").length;
   const total = steps.length;
   const pct = total ? Math.round((done / total) * 100) : 0;
@@ -545,9 +548,9 @@ const ProcessCard = ({
           {onRemove && (
             <button
               type="button"
-              onClick={(e) => {
+              onClick={async (e) => {
                 e.stopPropagation();
-                if (confirm("Excluir processo?")) onRemove();
+                if (await confirm({ title: "Excluir processo", destructive: true, confirmText: "Excluir" })) onRemove();
               }}
               className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition"
               aria-label="Excluir processo"
@@ -841,6 +844,7 @@ const TemplateManager = ({
   templates: Template[];
   reload: () => void;
 }) => {
+  const confirm = useConfirm();
   const [open, setOpen] = useState(false);
   const [stepsByTpl, setStepsByTpl] = useState<Record<string, TmplStep[]>>({});
   const [newTplName, setNewTplName] = useState("");
@@ -923,7 +927,7 @@ const TemplateManager = ({
     reload();
   };
   const removeTpl = async (id: string) => {
-    if (!confirm("Excluir modelo e suas etapas?")) return;
+    if (!(await confirm({ title: "Excluir modelo", description: "As etapas vinculadas a este modelo também serão excluídas.", destructive: true, confirmText: "Excluir" }))) return;
     const { error } = await supabase.from("process_templates").delete().eq("id", id);
     if (error) return toast.error(error.message);
     toast.success("Modelo excluído");
@@ -1109,6 +1113,7 @@ const ProcessDetail = ({
   onChanged: () => void;
 }) => {
   const { workspaceId } = useWorkspace();
+  const confirm = useConfirm();
   const [name, setName] = useState(process.name);
   const [client, setClient] = useState(process.client_name);
   const [due, setDue] = useState(process.due_date ?? "");
@@ -1283,13 +1288,13 @@ const ProcessDetail = ({
   };
 
   const removeStep = async (id: string) => {
-    if (!confirm("Excluir esta etapa?")) return;
+    if (!(await confirm({ title: "Excluir etapa", destructive: true, confirmText: "Excluir" }))) return;
     await supabase.from("process_steps").delete().eq("id", id);
     onChanged();
   };
 
   const cancelProcess = async () => {
-    if (!confirm("Cancelar este processo?")) return;
+    if (!(await confirm({ title: "Cancelar processo", description: "O status será alterado para cancelado.", confirmText: "Cancelar processo", cancelText: "Voltar" }))) return;
     await supabase.from("processes").update({ status: "cancelado" }).eq("id", process.id);
     await logActivity(userId, "process", process.id, "status_changed", `Processo cancelado: "${process.name}"`);
     toast.success("Processo cancelado");

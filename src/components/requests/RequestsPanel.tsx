@@ -27,6 +27,7 @@ import { logActivity } from "@/lib/activityLog";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { colorPill, asColor, type TemplateColor } from "@/components/processes/templateColors";
 import { cn } from "@/lib/utils";
+import { useConfirm } from "@/components/shared/ConfirmDialog";
 import {
   resolvePartnerSchema,
   type PartnerSubfield,
@@ -209,6 +210,7 @@ const CopyButton = ({ getText, className }: { getText: () => string; className?:
 
 export const RequestsPanel = ({ userId }: Props) => {
   const { workspaceId } = useWorkspace();
+  const confirm = useConfirm();
   const [forms, setForms] = useState<FormRow[]>([]);
   const [responses, setResponses] = useState<Response[]>([]);
   const [processNames, setProcessNames] = useState<Record<string, string>>({});
@@ -383,7 +385,7 @@ export const RequestsPanel = ({ userId }: Props) => {
   };
 
   const removeResponse = async (id: string) => {
-    if (!confirm("Excluir esta solicitação?")) return;
+    if (!(await confirm({ title: "Excluir solicitação", description: "Esta ação não pode ser desfeita.", destructive: true, confirmText: "Excluir" }))) return;
     const { error } = await supabase.from("form_responses").delete().eq("id", id);
     if (error) return toast.error(error.message);
     toast.success("Solicitação excluída");

@@ -13,6 +13,7 @@ import AcceptInvite from "./pages/AcceptInvite.tsx";
 import Unsubscribe from "./pages/Unsubscribe.tsx";
 import { AuthProvider } from "./hooks/useAuth";
 import { WorkspaceProvider } from "./hooks/useWorkspace";
+import { ConfirmProvider } from "./components/shared/ConfirmDialog";
 
 const queryClient = new QueryClient();
 
@@ -25,15 +26,17 @@ const App = () => (
         <BrowserRouter>
           <AuthProvider>
             <WorkspaceProvider>
-              <Routes>
-                <Route path="/" element={<Index />} />
-                <Route path="/auth" element={<Auth />} />
-                <Route path="/reset-password" element={<ResetPassword />} />
-                <Route path="/f/:slug" element={<PublicForm />} />
-                <Route path="/convite/:id" element={<AcceptInvite />} />
-                <Route path="/unsubscribe" element={<Unsubscribe />} />
-                <Route path="*" element={<NotFound />} />
-              </Routes>
+              <ConfirmProvider>
+                <Routes>
+                  <Route path="/" element={<Index />} />
+                  <Route path="/auth" element={<Auth />} />
+                  <Route path="/reset-password" element={<ResetPassword />} />
+                  <Route path="/f/:slug" element={<PublicForm />} />
+                  <Route path="/convite/:id" element={<AcceptInvite />} />
+                  <Route path="/unsubscribe" element={<Unsubscribe />} />
+                  <Route path="*" element={<NotFound />} />
+                </Routes>
+              </ConfirmProvider>
             </WorkspaceProvider>
           </AuthProvider>
         </BrowserRouter>

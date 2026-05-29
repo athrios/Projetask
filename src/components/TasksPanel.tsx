@@ -70,6 +70,7 @@ import { ListChecks, Repeat, ArrowUp, ArrowDown, History } from "lucide-react";
 import { logActivity } from "@/lib/activityLog";
 import { nextOccurrenceDate, RECURRENCE_OPTIONS, type RecurrenceType } from "@/lib/recurrence";
 import { ActivityLogList } from "@/components/shared/ActivityLogList";
+import { useConfirm } from "@/components/shared/ConfirmDialog";
 import {
   Popover,
   PopoverContent,
@@ -145,6 +146,7 @@ export const TasksPanel = ({
   onTasksChange,
 }: Props) => {
   const { workspaceId } = useWorkspace();
+  const confirm = useConfirm();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [subtasks, setSubtasks] = useState<Record<string, Subtask[]>>({});
   const [title, setTitle] = useState("");
@@ -340,7 +342,7 @@ export const TasksPanel = ({
   };
 
   const remove = async (id: string) => {
-    if (!confirm("Excluir esta tarefa?")) return;
+    if (!(await confirm({ title: "Excluir tarefa", description: "Esta ação não pode ser desfeita.", destructive: true, confirmText: "Excluir" }))) return;
     const t = tasks.find((x) => x.id === id);
     const { error } = await supabase.from("tasks").delete().eq("id", id);
     if (error) return toast.error(error.message);
@@ -411,7 +413,7 @@ export const TasksPanel = ({
   };
 
   const removeSub = async (s: Subtask) => {
-    if (!confirm(`Excluir subtarefa "${s.title}"?`)) return;
+    if (!(await confirm({ title: "Excluir subtarefa", description: `"${s.title}" será excluída.`, destructive: true, confirmText: "Excluir" }))) return;
     await supabase.from("subtasks").delete().eq("id", s.id);
     await maybeAutoComplete(s.task_id);
     load();

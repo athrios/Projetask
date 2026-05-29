@@ -39,6 +39,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { toast } from "sonner";
 import { EmptyState } from "@/components/shared/EmptyState";
+import { useConfirm } from "@/components/shared/ConfirmDialog";
 import { logActivity } from "@/lib/activityLog";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { TEMPLATE_COLORS, colorPill, colorLeftBorder, asColor } from "@/components/processes/templateColors";
@@ -103,6 +104,7 @@ interface Props { userId: string }
 
 export const FormsPanel = ({ userId }: Props) => {
   const { workspaceId } = useWorkspace();
+  const confirm = useConfirm();
   const [forms, setForms] = useState<Form[]>([]);
   const [templates, setTemplates] = useState<ProcessTemplate[]>([]);
   const [responseCounts, setResponseCounts] = useState<Record<string, number>>({});
@@ -161,7 +163,7 @@ export const FormsPanel = ({ userId }: Props) => {
   };
 
   const remove = async (id: string) => {
-    if (!confirm("Excluir formulário e todas as respostas vinculadas?")) return;
+    if (!(await confirm({ title: "Excluir formulário", description: "Todas as respostas vinculadas também serão excluídas. Esta ação não pode ser desfeita.", destructive: true, confirmText: "Excluir" }))) return;
     const { error } = await supabase.from("forms").delete().eq("id", id);
     if (error) return toast.error(error.message);
     toast.success("Formulário excluído");
