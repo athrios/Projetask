@@ -1173,8 +1173,6 @@ export type Database = {
           public_slug: string | null
           submitter_name_label: string | null
           title: string | null
-          user_id: string | null
-          workspace_id: string | null
         }
         Insert: {
           description?: string | null
@@ -1185,8 +1183,6 @@ export type Database = {
           public_slug?: string | null
           submitter_name_label?: string | null
           title?: string | null
-          user_id?: string | null
-          workspace_id?: string | null
         }
         Update: {
           description?: string | null
@@ -1197,8 +1193,6 @@ export type Database = {
           public_slug?: string | null
           submitter_name_label?: string | null
           title?: string | null
-          user_id?: string | null
-          workspace_id?: string | null
         }
         Relationships: []
       }
@@ -1242,6 +1236,15 @@ export type Database = {
           msg_id: number
           read_ct: number
         }[]
+      }
+      submit_public_form_response: {
+        Args: {
+          p_cnpj_snapshot?: Json
+          p_data: Json
+          p_form_id: string
+          p_submitter_name: string
+        }
+        Returns: string
       }
     }
     Enums: {

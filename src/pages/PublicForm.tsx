@@ -36,8 +36,6 @@ type FieldType =
 
 interface Form {
   id: string;
-  user_id: string;
-  workspace_id: string | null;
   title: string;
   description: string;
   is_published: boolean;
@@ -205,7 +203,7 @@ const PublicForm = () => {
     (async () => {
       const { data } = await supabase
         .from("forms_public" as never)
-        .select("id,user_id,workspace_id,title,description,is_published,logo_path,logo_alignment,submitter_name_label")
+        .select("id,title,description,is_published,logo_path,logo_alignment,submitter_name_label")
         .eq("public_slug", slug)
         .maybeSingle();
       if (!data) { setLoading(false); return; }
@@ -313,15 +311,12 @@ const PublicForm = () => {
       };
       break;
     }
-    const { error } = await supabase.from("form_responses").insert({
-      form_id: form.id,
-      owner_id: form.user_id,
-      workspace_id: form.workspace_id,
-      submitter_name: nameParsed.data,
-      data: cleanValues as never,
-      status: "recebida",
-      cnpj_lookup_snapshot: snapshot as never,
-    });
+    const { error } = await supabase.rpc("submit_public_form_response" as never, {
+      p_form_id: form.id,
+      p_submitter_name: nameParsed.data,
+      p_data: cleanValues as never,
+      p_cnpj_snapshot: snapshot as never,
+    } as never);
     setSubmitting(false);
     if (error) return toast.error("Não foi possível enviar. O formulário pode ter sido despublicado.");
     setSubmitted(true);
@@ -477,7 +472,7 @@ const PublicForm = () => {
                         return;
                       }
                       const safe = file.name.replace(/[^\w.\-]+/g, "_");
-                      const path = `${form.user_id}/${form.id}/${crypto.randomUUID()}-${safe}`;
+                      const path = `${form.id}/${crypto.randomUUID()}-${safe}`;
                       const { error } = await supabase.storage
                         .from("form-uploads")
                         .upload(path, file, { upsert: false, contentType: file.type });
