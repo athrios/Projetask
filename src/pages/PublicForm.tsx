@@ -36,8 +36,6 @@ type FieldType =
 
 interface Form {
   id: string;
-  user_id: string;
-  workspace_id: string | null;
   title: string;
   description: string;
   is_published: boolean;
