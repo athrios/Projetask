@@ -1031,8 +1031,71 @@ export const TasksPanel = ({
             </PopoverContent>
           </Popover>
 
+          {/* Indicadores (olho) */}
+          <Popover>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className={cn(
+                      "h-9 w-9 p-0 ml-auto",
+                      view === "list" && "opacity-50",
+                    )}
+                    disabled={view === "list"}
+                    aria-label="Indicadores visíveis"
+                  >
+                    <Eye className="h-4 w-4" />
+                  </Button>
+                </PopoverTrigger>
+              </TooltipTrigger>
+              <TooltipContent>
+                {view === "list"
+                  ? "O modo Lista mantém leitura limpa"
+                  : "Indicadores visíveis"}
+              </TooltipContent>
+            </Tooltip>
+            <PopoverContent align="end" className="w-56 space-y-2">
+              <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                Indicadores visíveis
+              </p>
+              <div className="space-y-1">
+                {AVAILABLE_INDICATORS[view].map((key) => {
+                  const checked = (indicators[view] ?? []).includes(key);
+                  return (
+                    <label
+                      key={key}
+                      className="flex items-center gap-2 text-xs cursor-pointer py-1"
+                    >
+                      <Checkbox
+                        checked={checked}
+                        onCheckedChange={() => toggleIndicator(key)}
+                        className="h-3.5 w-3.5"
+                      />
+                      {INDICATOR_LABELS[key]}
+                    </label>
+                  );
+                })}
+                {AVAILABLE_INDICATORS[view].length === 0 && (
+                  <p className="text-xs text-muted-foreground">Nenhum indicador disponível neste modo.</p>
+                )}
+              </div>
+              {AVAILABLE_INDICATORS[view].length > 0 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="w-full h-8 text-xs gap-1.5"
+                  onClick={resetIndicators}
+                >
+                  <RotateCcw className="h-3 w-3" /> Restaurar padrão
+                </Button>
+              )}
+            </PopoverContent>
+          </Popover>
+
           {/* View switcher */}
-          <div className="flex rounded-md border overflow-hidden bg-card ml-auto">
+          <div className="flex rounded-md border overflow-hidden bg-card">
             {([
               ["list", List, "Lista"],
               ["table", TableIcon, "Tabela"],
@@ -1057,6 +1120,7 @@ export const TasksPanel = ({
               </Tooltip>
             ))}
           </div>
+
         </div>
 
         {dateFilter && (
