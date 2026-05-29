@@ -58,7 +58,10 @@ const Field = ({ label, value }: { label: string; value: string }) => (
     <span className="text-muted-foreground w-20 shrink-1 pt-0.5">{label}</span>
     <div className="flex items-center gap-1 flex-1 min-w-0">
       <span className="text-foreground break-words">{value}</span>
-      <CopyButton getText={() => value} />
+      <CopyButton
+        getText={() => value}
+        getCleanText={() => value.replace(/[^a-zA-Z0-9]/g, "")}
+      />
     </div>
   </div>
 );

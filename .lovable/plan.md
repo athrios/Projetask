@@ -1,20 +1,25 @@
-## Problema
+### Objetivo
+Adicionar ao botão de copiar dos campos de cliente a funcionalidade de **clique duplo** para copiar o valor sem caracteres especiais (ex: `31.635.482/0001-45` → `31635482000145`).
 
-O arquivo `src/components/TasksPanel.tsx` está com caracteres acentuados corrompidos (mojibake — UTF-8 lido como Latin-1). Isso aparece visivelmente no dropdown "..." de cada tarefa: "Editar tÃ­tulo", "RecorrÃªncia", "HistÃ³rico". O problema também afeta 12 outras strings no mesmo arquivo (toasts, diálogo de recorrência e histórico).
+### Escopo
+1. **Componente `CopyButton` compartilhado** (`src/components/shared/CopyButton.tsx`)
+   - Adicionar prop opcional `getCleanText?: () => string`.
+   - Manter `onClick` copiando o valor exato (`getText()`).
+   - Adicionar `onDoubleClick` que, quando `getCleanText` for fornecido, copia o valor limpo e exibe toast diferente.
+   - Se `getCleanText` não for fornecido, o duplo clique executa o mesmo comportamento do clique simples.
 
-## Correção
+2. **Componente `Field` em `ClientsPanel.tsx`**
+   - Passar `getCleanText={() => value.replace(/[^a-zA-Z0-9]/g, '')}` para o `CopyButton`.
+   - Isso remove todos os caracteres especiais (pontos, barras, hífens, espaços etc.), mantendo apenas letras e números.
 
-Substituir as sequências corrompidas pelos caracteres corretos em todas as 15 linhas do arquivo:
+3. **Toast diferenciado**
+   - Clique simples: "Copiado"
+   - Clique duplo: "Copiado (sem formatação)"
 
-- `tÃ­tulo` → `título`
-- `recorrÃªncia` / `RecorrÃªncia` → `recorrência` / `Recorrência`
-- `PrÃ³xima ocorrÃªncia` → `Próxima ocorrência`
-- `excluÃ­da` → `excluída`
-- `HistÃ³rico` → `Histórico`
-- `FrequÃªncia` → `Frequência`
-- `serÃ¡` → `será`
-- `concluÃ­da` → `concluída`
+### Fora do escopo
+- Não será alterado o `CopyButton` local de `RequestsPanel.tsx` (não é parte do pedido).
+- Não serão alterados outros painéis (Processos etc.) — o novo prop é opcional, então não há impacto.
 
-Linhas afetadas: 262, 304–306, 347–348, 359, 371, 668, 677, 683, 1205, 1221, 1251, 1266.
-
-Nenhuma lógica é alterada — apenas strings de UI/mensagens.
+### Arquivos a modificar
+- `src/components/shared/CopyButton.tsx`
+- `src/components/clients/ClientsPanel.tsx`
