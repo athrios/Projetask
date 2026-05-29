@@ -411,6 +411,7 @@ export const TasksPanel = ({
   };
 
   const removeSub = async (s: Subtask) => {
+    if (!confirm(`Excluir subtarefa "${s.title}"?`)) return;
     await supabase.from("subtasks").delete().eq("id", s.id);
     await maybeAutoComplete(s.task_id);
     load();
