@@ -801,7 +801,7 @@ export const TasksPanel = ({
               onCheckedChange={(v) => setStatus(t, v ? "feita" : "pendente")}
             />
           </span>
-          <span data-row-stop className="flex-1 min-w-0 flex items-center">
+          <span className="flex-1 min-w-0 flex items-center">
             <TaskTitle t={t} />
           </span>
           {hasSubs && (
