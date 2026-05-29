@@ -189,4 +189,90 @@
   .ring-gold {
     --tw-ring-color: hsl(var(--gold));
   }
+
+  /* ── Spotlight hover (theme-aware) ── */
+  .spotlight,
+  .spotlight-sm {
+    position: relative;
+    isolation: isolate;
+    transition:
+      border-color 0.3s ease,
+      box-shadow 0.35s ease,
+      transform 0.25s ease;
+  }
+  .spotlight::before,
+  .spotlight-sm::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.35s ease;
+    z-index: 0;
+    background: radial-gradient(
+      var(--spotlight-size, 320px) circle at var(--spotlight-x, 50%) var(--spotlight-y, 50%),
+      hsl(var(--primary) / 0.10),
+      hsl(var(--accent) / 0.05) 40%,
+      transparent 70%
+    );
+  }
+  .spotlight-sm::before {
+    background: radial-gradient(
+      var(--spotlight-size, 180px) circle at var(--spotlight-x, 50%) var(--spotlight-y, 50%),
+      hsl(var(--primary) / 0.08),
+      transparent 65%
+    );
+  }
+  .spotlight > *,
+  .spotlight-sm > * {
+    position: relative;
+    z-index: 1;
+  }
+  .spotlight:hover,
+  .spotlight-sm:hover {
+    border-color: hsl(var(--primary) / 0.35);
+    box-shadow:
+      0 1px 2px hsl(var(--foreground) / 0.04),
+      0 8px 24px -12px hsl(var(--primary) / 0.18);
+  }
+  .spotlight-sm:hover {
+    box-shadow: 0 4px 14px -8px hsl(var(--primary) / 0.18);
+  }
+  .spotlight:hover::before,
+  .spotlight-sm:hover::before {
+    opacity: 1;
+  }
+
+  .dark .spotlight::before {
+    background: radial-gradient(
+      var(--spotlight-size, 360px) circle at var(--spotlight-x, 50%) var(--spotlight-y, 50%),
+      hsl(var(--primary) / 0.18),
+      hsl(var(--accent) / 0.10) 40%,
+      transparent 70%
+    );
+  }
+  .dark .spotlight-sm::before {
+    background: radial-gradient(
+      var(--spotlight-size, 200px) circle at var(--spotlight-x, 50%) var(--spotlight-y, 50%),
+      hsl(var(--primary) / 0.14),
+      transparent 65%
+    );
+  }
+  .dark .spotlight:hover,
+  .dark .spotlight-sm:hover {
+    border-color: hsl(var(--primary) / 0.45);
+    box-shadow:
+      0 0 0 1px hsl(var(--primary) / 0.10),
+      0 10px 30px -10px hsl(var(--primary) / 0.35);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .spotlight,
+    .spotlight-sm,
+    .spotlight::before,
+    .spotlight-sm::before {
+      transition: none;
+    }
+  }
 }
