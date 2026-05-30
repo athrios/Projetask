@@ -596,7 +596,7 @@ export const TasksPanel = ({
             const noteOpen = notesOpen[`sub:${s.id}`];
             return (
               <li key={s.id} className="space-y-1">
-                <div className="flex items-center gap-2 group/sub py-0.5">
+                <div className="spotlight-sm flex items-center gap-2 group/sub py-1 px-2 -mx-2 rounded-md border border-transparent">
                   <Checkbox
                     checked={s.done}
                     onCheckedChange={() => toggleSub(s)}
