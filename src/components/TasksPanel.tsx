@@ -596,7 +596,19 @@ export const TasksPanel = ({
             const noteOpen = notesOpen[`sub:${s.id}`];
             return (
               <li key={s.id} className="space-y-1">
-                <div className="spotlight-sm flex items-center gap-2 group/sub py-1 px-2 -mx-2 rounded-md border border-transparent">
+                <div
+                  className={cn(
+                    "spotlight-sm flex items-center gap-2 group/sub py-1 px-2 -mx-2 rounded-md border border-transparent",
+                    !isEditing && "cursor-pointer",
+                  )}
+                  onClick={(e) => {
+                    if (isEditing) return;
+                    const el = e.target as HTMLElement;
+                    if (el.closest("button,input,textarea,a,[role=checkbox]")) return;
+                    toggleNotes(`sub:${s.id}`);
+                  }}
+                >
+
                   <Checkbox
                     checked={s.done}
                     onCheckedChange={() => toggleSub(s)}
